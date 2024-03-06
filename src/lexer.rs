@@ -14,8 +14,8 @@ use nom::{
 use url::Url;
 
 use crate::{
-    data::{AyanoBlock, Token, Tokens},
-    util::PermutatedArray,
+    data::{AyanoBlock, ListType, Token, Tokens},
+    util::{IteratorArrayCollectExt, PermutatedArray},
 };
 
 pub enum LexingError {}
@@ -367,9 +367,51 @@ fn list<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
                 input = &input[(newline + 1)..];
             }
 
-            let indent = non_whitespace; // how many bytes are to be dropped from the start of each line
-            input.lines().take_while(|line| preceded, many1, second))
-            todo!();
+            let indent = &input[..non_whitespace]; // how whitespace indent at the start of each line looks like
+            let (list_type, item_start: dyn &mut FnMut(usize) -> String) = match indent[non_whitespace..].chars().next() {
+                None => {
+                    // there's not a single non-whitespace character -- it's impossible to properly parse a list here.
+                    return Err(nom::Err::Error(E::from_error_kind("can't parse list at the empty location", ErrorKind::Eof)));
+                },
+                Some('1') => {
+                    // that's a numeric list!
+                    (ListType::Num, |i| Some(format!("{}.", i+1)))
+                },
+                Some('a') => {
+                    // that's a latin list!
+                    const SYMBOLS: [char; 26] = ('a'..='z').into_iter().collect_array().expect("There are exactly 2 characters in the alphabet");
+                    (ListType::Latin, move |i| Some(if i >= 26 {
+                        Err(nom::Err::Error(E::from_error_kind("can't have for than 26 elemenets in a regular list", ErrorKind::Char)))
+                    } else {
+                        Ok(SYMBOLS[i])
+                    }))
+                },
+                Some('а') => {
+                    // that's a cyrillic list!
+                    const SYMBOLS: [char; 26] = ('а'..='я').into_iter().collect_array().expect("");
+                    (ListType::Latin, move |i| Some(if i >= 26 {
+                        Err(nom::Err::Error(E::from_error_kind("can't have for than 26 elemenets in a regular list", ErrorKind::Char)))
+                    } else {
+                        Ok(SYMBOLS[i])
+                    }))
+                }
+                Some('-') => {
+                    // that's a bullet list!
+                    (ListType::Num,())
+                }
+                Some('I') => {
+                    // that's a roman list!
+                    unimplemented!()
+                },
+                Some(c) => {
+                    // that's an unknown list type
+                    // FIXME not sure how to use these errors properly, I think I need to study more examples
+                    return Err(nom::Err::Error(E::from_error_kind("unknown list type", ErrorKind::Char)));
+                },
+            };
+            input.lines().enumerate().take_while(|line: &&str| line.starts_with(indent)).map(|line| {
+                let line = line.fin_
+            })
         }),
     )(input)?;
     todo!()
