@@ -1,0 +1,5 @@
+# Build
+/target
+
+# VSCode
+.vscode/settings.json
