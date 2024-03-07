@@ -1,5 +1,5 @@
 use std::{
-    borrow::Cow,
+    borrow::{Borrow, Cow},
     ops::Deref,
     path::{Path, PathBuf},
 };
@@ -123,12 +123,12 @@ pub enum Token<'source> {
     Table {
         header: Tokens<'source>,
         cells: Tokens<'source>,
-        caption: Option<Tokens<'source>>,
+        caption: Option<Box<Token<'source>>>,
         ident: Option<Tx<'source>>,
     },
     Figure {
         src_name: Pth<'source>,
-        caption: Option<Tokens<'source>>,
+        caption: Option<Box<Token<'source>>>,
         ident: Option<Tx<'source>>,
     },
     Href {
@@ -140,14 +140,14 @@ pub enum Token<'source> {
         list_type: ListType,
         content: Tokens<'source>,
     },
-    Formatted(Formatting, Tokens<'source>),
+    Formatted(Formatting, Box<Token<'source>>),
     Text(Tokens<'source>),
     Paragraph(Font, Tx<'source>),
     InlineMathmode(Tx<'source>),
     Reference(Tx<'source>),
     FootNoteReference(Tx<'source>),
     FootNoteContent {
-        content: Tokens<'source>,
+        content: Box<Token<'source>>,
         ident: Tx<'source>,
     },
     CodeBlock {
@@ -160,5 +160,12 @@ pub enum Token<'source> {
 impl<'source> Token<'source> {
     pub fn text(text: impl Into<Cow<'source, str>>) -> Self {
         Self::Paragraph(Font::Normal, text.into())
+    }
+
+    pub fn borrow_ref<'r>(&'r self) -> Token<'r>
+    where
+        'source: 'r,
+    {
+        todo!()
     }
 }

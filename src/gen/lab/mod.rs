@@ -132,7 +132,7 @@ impl<'source, PE: PathEngine> OutputGenerator<'source, SourceMeta<'source, Ayano
                 )?;
                 if let Some(caption) = caption {
                     output.write_str("\n\\caption{")?;
-                    self.write_tokens_to(output, meta, context, caption)?;
+                    self.write_to(output, meta, context, caption)?;
                     output.write_str("}\n")?;
                 }
                 if let Some(ident) = ident.as_ref() {
@@ -155,7 +155,7 @@ impl<'source, PE: PathEngine> OutputGenerator<'source, SourceMeta<'source, Ayano
                 output.write_str("}")?;
                 if let Some(caption) = caption.as_ref() {
                     output.write_str("\\caption{")?;
-                    self.write_tokens_to(output, meta, context, caption)?;
+                    self.write_to(output, meta, context, caption)?;
                     output.write_str("}\n")?;
                 }
                 if let Some(ident) = ident.as_ref() {
@@ -207,7 +207,7 @@ impl<'source, PE: PathEngine> OutputGenerator<'source, SourceMeta<'source, Ayano
                     | crate::data::Formatting::StrikeThrough => " }",
                 };
                 output.write_str(start)?;
-                self.write_tokens_to(output, meta, context, content)?;
+                self.write_to(output, meta, context, content)?;
                 output.write_str(end)?;
             }
             Token::InlineMathmode(content) => {
@@ -238,7 +238,7 @@ impl<'source, PE: PathEngine> OutputGenerator<'source, SourceMeta<'source, Ayano
                     // write out content
                     if let Some(content) = meta.footnotes.get(&ident.borrow()) {
                         write!(output, r"\footnotetext[{}]{{", i + 1)?;
-                        self.write_tokens_to(output, meta, context, content)?;
+                        self.write_to(output, meta, context, content)?;
                         output.write_str("}")?;
                     }
                 }
@@ -351,9 +351,9 @@ mod tests {
     test! {para2, Token::Paragraph(Font::Caption, "content, content!!!".into()), r"\capfnt content, content!!!"}
 
     // Formatting
-    test! {formatting1, Token::Formatted(Formatting::Bold, tokens!(text!("some text, idk"))), r"\textbf{ \fnt some text, idk }"}
-    test! {formatting2, Token::Formatted(Formatting::Italic, tokens!(text!("some text, idk"))), r"\textit{ \fnt some text, idk }"}
-    test! {formatting3, Token::Formatted(Formatting::StrikeThrough, tokens!(text!("some text, idk"))), r"\st{ \fnt some text, idk }"}
+    test! {formatting1, Token::Formatted(Formatting::Bold, Box::new(text!("some text, idk"))), r"\textbf{ \fnt some text, idk }"}
+    test! {formatting2, Token::Formatted(Formatting::Italic, Box::new(text!("some text, idk"))), r"\textit{ \fnt some text, idk }"}
+    test! {formatting3, Token::Formatted(Formatting::StrikeThrough, Box::new(text!("some text, idk"))), r"\st{ \fnt some text, idk }"}
 
     // Hrefs
     test! {href1, Token::Href { url: "https://www.github.com/Dzuchun".parse().unwrap(), display: "My gh page".into() }, r"\href{https://www.github.com/Dzuchun}{My gh page}"}
@@ -379,14 +379,14 @@ mod tests {
     test! {inline_mathmode, Token::InlineMathmode(r"\dfrac{\partial x}{\partial t}".into()), r"$ \dfrac{\partial x}{\partial t} $"}
 
     // Figures
-    test! {fig1, Token::Figure { src_name: Path::new("apple.jpg").into(), caption: Some(tokens![text!("a very realistic-looking apple")]), ident: None }, r"
+    test! {fig1, Token::Figure { src_name: Path::new("apple.jpg").into(), caption: Some(Box::new(text!("a very realistic-looking apple"))), ident: None }, r"
     \begin{figure}[h!]
     \centering
     \includegraphics[width = 0.9 \textwidth]{apple.jpg}
     \caption{\fnt a very realistic-looking apple}
     \end{figure}
     "}
-    test! {fig2, Token::Figure { src_name: Path::new("schema1.jpg").into(), caption: Some(tokens![text!("A schema providing a bunch of very important info on quantum refurbalidzer function")]), ident: Some("schema-1".into()) }, r"
+    test! {fig2, Token::Figure { src_name: Path::new("schema1.jpg").into(), caption: Some(Box::new(text!("A schema providing a bunch of very important info on quantum refurbalidzer function"))), ident: Some("schema-1".into()) }, r"
     \begin{figure}[h!]
     \centering
     \includegraphics[width = 0.9 \textwidth]{schema1.jpg}
@@ -405,7 +405,7 @@ mod tests {
         text!("cell_11"),text!("cell_12"),text!("cell_13"),
         text!("cell_21"),text!("cell_22"),text!("cell_23")
     ],
-    caption: Some(tokens![text!("caption...")]),
+    caption: Some(Box::new(text!("caption..."))),
     ident: Some("example".into()) },
     r"
     \begin{table}[h!]
@@ -469,7 +469,7 @@ mod tests {
     // Footnotes
     test! {footnote_single, Token::Text(tokens![
         Token::FootNoteReference("explanation".into()),
-        Token::FootNoteContent { content: tokens![text!("42")], ident: "explanation".into() }
+        Token::FootNoteContent { content: Box::new(text!("42")), ident: "explanation".into() }
     ]), r"
     \footnotemark[1]
     \footnotetext[1]{\fnt 42}
@@ -482,9 +482,9 @@ mod tests {
         Token::FootNoteReference("explanation2".into()),
         text!(", and the third"),
         Token::FootNoteReference("explanation3".into()),
-        Token::FootNoteContent { content: tokens![text!("There are things in this world that's you're not meant to see")], ident: "explanation1".into() },
-        Token::FootNoteContent { content: tokens![text!("now the voice of a deity permeates")], ident: "explanation2".into() },
-        Token::FootNoteContent { content: tokens![text!("see notes 1 and 2")], ident: "explanation3".into() },
+        Token::FootNoteContent { content: Box::new(text!("There are things in this world that's you're not meant to see")), ident: "explanation1".into() },
+        Token::FootNoteContent { content: Box::new(text!("now the voice of a deity permeates")), ident: "explanation2".into() },
+        Token::FootNoteContent { content: Box::new(text!("see notes 1 and 2")), ident: "explanation3".into() },
         text!(". But notes will not be duplicated here!"),
         Token::FootNoteReference("explanation1".into())
 

@@ -17,7 +17,7 @@ pub enum MetaError {
 
 #[derive(Debug, Default)]
 pub struct SourceMeta<'source, Ayano> {
-    pub footnotes: HashMap<&'source str, Tokens<'source>>,
+    pub footnotes: HashMap<&'source str, Token<'source>>,
     pub refs: HashSet<&'source str>,
     pub ayano: Ayano,
 }
@@ -71,7 +71,7 @@ where
             collect_iterable(header, dest)?;
             collect_iterable(cells, dest)?;
             if let Some(caption) = caption {
-                collect_iterable(caption, dest)?;
+                collect_single(caption, dest)?;
             }
         }
         Token::Figure {
@@ -81,15 +81,15 @@ where
         } => {
             dest.refs.insert(ident);
             if let Some(caption) = caption {
-                collect_iterable(caption, dest)?;
+                collect_single(caption, dest)?;
             }
         }
         Token::Text(text) => {
             collect_iterable(text, dest)?;
         }
         Token::FootNoteContent { content, ident } => {
-            collect_iterable(content, dest)?;
-            dest.footnotes.insert(ident, content.borrowed());
+            collect_single(content, dest)?;
+            dest.footnotes.insert(ident, content.borrow_ref());
         }
         Token::Ayano(block) => {
             dest.ayano
