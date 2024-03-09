@@ -336,34 +336,3 @@ impl<T, I: Sized + Iterator<Item = T>> IteratorArrayCollectExt<T> for I {
         }
     }
 }
-
-pub struct PermutatedArray<'l, T, const N: usize>(pub &'l mut [T; N]);
-
-impl<'l, O, E: ParseError<&'l str>, P: Parser<&'l str, O, E>, const N: usize>
-    Permutation<&'l str, [O; N], E> for PermutatedArray<'_, P, N>
-{
-    fn permutation(&mut self, input: &'l str) -> nom::IResult<&'l str, [O; N], E> {
-        // I'm so done.
-        // TODO implement permutations myself, so that there are no vectors inside
-        (0..N)
-            .into_iter()
-            .permutations(N)
-            .map(|perm| {
-                let mut input = input;
-                perm.into_iter()
-                    .map(|i| {
-                        let (rest, m) = self.0[i].parse(input).ok()?;
-                        input = rest;
-                        Some(m)
-                    })
-                    .filter_map(std::convert::identity)
-                    .collect_array()
-                    .map(|arr| (input, arr))
-            })
-            .find_map(Result::ok)
-            .ok_or(nom::Err::Error(E::from_error_kind(
-                input,
-                nom::error::ErrorKind::Permutation,
-            )))
-    }
-}
