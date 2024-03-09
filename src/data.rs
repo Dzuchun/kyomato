@@ -142,6 +142,8 @@ pub enum Token<'source> {
     },
     Formatted(Formatting, Box<Token<'source>>),
     Text(Tokens<'source>),
+    // TODO move font and formatting exclusively to here
+    // TODO add a flag to indicate, if this paragraph contains escaped chars (if it was parsed from caption, basically)
     Paragraph(Font, Tx<'source>),
     InlineMathmode(Tx<'source>),
     Reference(Tx<'source>),

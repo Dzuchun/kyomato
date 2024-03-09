@@ -1,26 +1,65 @@
 use std::{
     borrow::{Borrow, Cow},
+    num::ParseIntError,
     path::Path,
+    str::FromStr,
+    sync::RwLock,
 };
 
 use itertools::Itertools;
 use nom::{
     branch::{alt, permutation},
-    bytes::complete::{escaped, is_not, tag, take_till1, take_until1, take_while},
-    character::complete::{alpha1, alphanumeric1, char, digit1, multispace0, newline, space0},
-    combinator::{all_consuming, iterator, map_res, not, opt, recognize, success},
+    bytes::{
+        complete::{escaped, is_not, tag, take_till1, take_until, take_until1, take_while},
+        streaming::tag_no_case,
+    },
+    character::{
+        complete::{alpha1, alphanumeric1, anychar, char, digit1, multispace0, newline, space0},
+        is_space,
+    },
+    combinator::{all_consuming, cut, iterator, map_res, not, opt, recognize, success},
     error::{context, ContextError, ErrorKind, FromExternalError, ParseError},
-    multi::{fold_many1, many1_count, separated_list1},
+    multi::{many1, many1_count, separated_list1},
     number::complete::float,
-    sequence::{delimited, preceded, terminated, tuple},
+    sequence::{delimited, pair, preceded, terminated, tuple},
     IResult, Parser,
 };
 use url::Url;
 
 use crate::{
-    data::{AyanoBlock, ListType, Token, Tokens},
+    data::{AyanoBlock, Formatting, ListType, Token, Tokens},
     util::IteratorArrayCollectExt,
 };
+
+/// Matches any sort of whitespace characters, *newline*, and a provided tag at the end
+fn _multispace_line_break<'source, E: ParseError<&'source str>>(
+    tag: &'static str,
+) -> impl Parser<&'source str, (&'source str, &'source str), E> {
+    move |input: &'source str| {
+        // here's a chars iterator
+        let chars = input.char_indices();
+        // now, limit them to fist non-whitespace character
+        let non_whitespace = chars.take_while(|(_, c)| !c.is_whitespace());
+        // then, filter out newline characters only
+        let mut newline = non_whitespace.filter_map(|(ind, c)| (c == '\n').then_some(ind));
+        // lastly, find first newline character that prepends provided tag
+        let Some(res) = newline.find(|ind| input[(ind + 1)..].starts_with(tag)) else {
+            // if there's no such idex, that's an error
+            return Err(nom::Err::Error(E::from_error_kind(
+                input,
+                ErrorKind::MultiSpace,
+            )));
+        };
+
+        // We may now construct the answer
+        let space = &input[..=res]; // space is up to the newline included
+
+        // will return a copy of provided tag, since it was already matched
+        let rest = &input[(res + 1 + tag.len())..];
+
+        Ok((rest, (space, tag)))
+    }
+}
 
 // Conventions:
 // - parsers should only parse empty characters with `empty`
@@ -94,7 +133,8 @@ macro_rules! parse_args {
 /// Quite tricky task, as there can be double quotes -- but escaped.
 /// Apart from single, unescaped quotes, caption can be ANYTHING.
 /// There seems to be just the tool for a job -- `escaped` parser
-/// TODO FIXME add a mention about caption actually TERMINATING after first unescaped double-quote, and where exactly escaping backslashes are removed
+/// TODO FIXME add a mention about caption actually TERMINATING after first unescaped double-quote (and there is no cure),
+/// and where exactly escaping backslashes are removed
 fn caption_kernel<
     'source,
     E: ParseError<&'source str>
@@ -111,6 +151,7 @@ fn caption_kernel<
 
 /// Parses page divider
 /// TODO update it's definition in the manual
+#[inline]
 fn div_page<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
@@ -123,6 +164,7 @@ fn div_page<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
 ///
 /// - Always starts from a blank line
 /// - Comprised of 1-6 '#'-symbols, and includes everything up until last empty space before line break
+#[inline]
 fn header<
     'source,
     E: ParseError<&'source str>
@@ -158,37 +200,26 @@ fn header<
 ///
 /// - Always starts from a blank line with "$$" tag
 /// - Continues up until another unescaped "$$" on a beginning of the line is encountered
-/// - Possible "ref" argument (to refer to this equation) is matched afterwards
+/// - Possible "ref" argument (for referring to this equation) is matched afterwards
 fn equation<
     'source,
-    E: ParseError<&'source str> + ContextError<&'source str> + FromExternalError<&'source str, E>,
+    E: ParseError<&'source str>
+        + ContextError<&'source str>
+        + FromExternalError<&'source str, KyomatoLexErrorKind>,
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
-    let Some(ind) = input
-        .char_indices()
-        .filter_map(|(ind, c)| (c == '\n').then_some(ind))
-        .find(|ind| input[*ind..].starts_with("\n$$"))
-    else {
-        return Err(nom::Err::Error(E::from_external_error(
-            input,
-            ErrorKind::CrLf,
-            KyomatoLexErrorKind::BadSyntax {
-                reason: "Display mathmode should start with a new line",
-            },
-        )));
-    };
-    
-    let trimmed_input = &input[ind];
-    let (rest, (_, _, content, _, (ident,))) = context(
+    let (rest, (content, _, (ident,))) = context(
         "display mathmode",
-        tuple((
-            multispace0,
-            tag("$$"),
-            take_until1("\n$$"),
-            tag("\n$$"),
-            parse_args!["ref" = alphanumeric1],
-        )),
+        preceded(
+            _multispace_line_break("$$"),
+            // if mathmode opening found, lock into equation match
+            cut(tuple((
+                take_until1("\n$$"),
+                tag("\n$$"),
+                parse_args!["ref" = alphanumeric1],
+            ))),
+        ),
     )(input)?;
     Ok((
         rest,
@@ -199,6 +230,13 @@ fn equation<
     ))
 }
 
+/// Parses table
+///
+/// - Always starts from a newline followed by '|' char
+/// - First line is always interpreted as header
+/// TODO - Next line is skipped for now; all tables are formatted with centered columns
+/// - Following lines starting with '|' are interpreted as table cells
+/// - Lastly, optional "ref" and "caption" arguments are parsed
 fn table<
     'source,
     E: ParseError<&'source str>
@@ -207,36 +245,35 @@ fn table<
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
-    let (rest, (header, _, cells, (ident, caption))) = context(
+    let (rest, (_, headers, (_, _, cells, (ident, caption)))) = context(
         "table",
         tuple((
-            // first, parse the header
-            preceded(
-                char('\n'),
-                delimited(
-                    char('|'),
-                    separated_list1(char('|'), delimited(space0, inner_lex, space0)),
-                    char('|'),
+            // first, find the start
+            _multispace_line_break("|"),
+            terminated(separated_list1(char('|'), inner_lex), char('|')),
+            // at this point this is guaranteed to be a table token, so we lock in
+            cut(tuple((
+                // first, match until the end of this line
+                pair(take_until("\n"), char('\n')),
+                // then, match format line (it's discarded right now)
+                pair(take_until("\n"), char('\n')),
+                // from here, match table cells
+                // while this is possible to do by just per-line collection of them into a vectors
+                // (and merge them afterwards),
+                // I can't stand unnecessary heap allocations, so here is my solution:
+                separated_list1(
+                    preceded(preceded(space0, char('|')), opt(pair(space0, tag("\n|")))),
+                    inner_lex,
                 ),
-            ),
-            tuple((space0, char('\n'), take_until1("\n"))),
-            // next, parse the cells
-            preceded(
-                char('\n'),
-                delimited(
-                    char('|'),
-                    separated_list1(char('|'), delimited(space0, inner_lex, space0)),
-                    char('|'),
-                ),
-            ),
-            // finally, here come arguments
-            parse_args!["ref" = alphanumeric1, "caption" = caption_kernel],
+                // finally, here come the arguments
+                parse_args!["ref" = alphanumeric1, "caption" = caption_kernel],
+            ))),
         )),
     )(input)?;
     Ok((
         rest,
         Token::Table {
-            header: Tokens::new(header),
+            header: Tokens::new(headers),
             cells: Tokens::new(cells),
             caption: caption.map(Box::new),
             ident: ident.map(Cow::from),
@@ -244,6 +281,11 @@ fn table<
     ))
 }
 
+/// Matches figure
+///
+/// - Always starts from a newline followed by "![[" sequence (that's obsidian's image inclusion syntax or th)
+/// - Everything up to "]]" sequence is interpreted as path to the image
+/// - Lastly, optional "ref", "caption" and "width" arguments follow. Can supplied now, and will be recognized, but it's not supported yet
 fn figure<
     'source,
     E: ParseError<&'source str>
@@ -253,19 +295,24 @@ fn figure<
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
     // TODO add width parameter to figure, I guess
-    let (rest, (_, _, path, _, (ident, caption, _width))) = context(
+    let (rest, (_, (path, _, (ident, caption, _width)))) = context(
         "figure",
-        tuple((
-            multispace0,
-            tag("![["),
-            take_until1("]]"),
-            tag("]]"),
-            parse_args![
-                "ref" = alphanumeric1,
-                "caption" = caption_kernel,
-                "width" = float
-            ],
-        )),
+        pair(
+            // first, match syntax start
+            _multispace_line_break("![["),
+            // at this point, it's supposed to be figure exclusively, so lock into this syntax
+            cut(tuple((
+                // that's gonna be a path to image
+                take_until1("]]"),
+                tag("]]"),
+                // and here come the args
+                parse_args![
+                    "ref" = alphanumeric1,
+                    "caption" = caption_kernel,
+                    "width" = float
+                ],
+            ))),
+        ),
     )(input)?;
     let token = Token::Figure {
         src_name: Path::new(path).into(),
@@ -275,25 +322,26 @@ fn figure<
     Ok((rest, token))
 }
 
-fn href<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
+/// Parses markdown's hyper reference syntax
+///
+/// Basic syntax is [DISPLAY](URL)
+fn href<
+    'source,
+    E: ParseError<&'source str>
+        + ContextError<&'source str>
+        + FromExternalError<&'source str, KyomatoLexErrorKind>,
+>(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
     let (rest, (display, url)) = context(
         "href",
         tuple((
-            delimited(char('['), take_till1(|c| c != ']'), char(']')),
-            delimited(char('('), take_till1(|c| c != ')'), char(')')).and_then(|url: &str| {
-                Ok((
-                    "",
-                    Url::parse(url).map_err(|_err| {
-                        // TODO make a proper error
-                        nom::Err::Error(E::from_error_kind(
-                            "failed to parse url",
-                            nom::error::ErrorKind::Verify,
-                        ))
-                    })?,
-                ))
-            }),
+            delimited(char('['), take_until("]"), char(']')),
+            // url should be parsed into proper format
+            map_res(
+                delimited(char('('), take_until(")"), char(')')),
+                |url: &str| Url::from_str(url).map_err(KyomatoLexErrorKind::BadUrl),
+            ),
         )),
     )(input)?;
     Ok((
@@ -305,29 +353,58 @@ fn href<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
     ))
 }
 
+/// Parses code block
+///
+/// *WARNING!* This parser CAN parse Ayano code blocks, which (obviously) wont execute them.
+/// Consider attempting to parse for Ayano block BEFORE running this parser
+///
+/// - Always starts with a newline followed by "```" sequence
+/// - Everything up to the end of this very line (stripped from whitespace) will be considered specified language
+/// - All lines up to a newline followed by "```" sequence will be considered as code to include
 fn code_block<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
-    let (rest, (_, (lang, _, _, code))) = context(
+    let (rest, (lang, code)) = context(
         "code block",
-        tuple((
-            char('\n'),
-            delimited(
-                tag("```\n"),
-                tuple((opt(alpha1), space0, char('\n'), take_until1("\n```"))),
-                tag("\n```"),
-            ),
-        )),
+        pair(
+            delimited(_multispace_line_break("```"), take_until("\n"), char('\n')),
+            // At this point, this is a code block syntax for sure, so we lock in
+            cut(terminated(take_until("\n```"), tag("\n```"))),
+        ),
     )(input)?;
+    // Trim the language name
+    let lang = lang.trim();
+    // If the language name turns out to be empty, it's as good as unspecified
+    let language = if lang.is_empty() {
+        None
+    } else {
+        Some(Cow::from(lang))
+    };
     Ok((
         rest,
         Token::CodeBlock {
             code: code.into(),
-            language: lang.map(Cow::from),
+            language,
         },
     ))
 }
 
+/// Parses an Ayano block
+///
+/// *because Ayano loves Kyoko*
+///
+/// There's quite a lot of syntax to cover:
+/// - First, this token starts from a newline followed by "```" sequence.
+/// - Next, "python, Ayano" is matched with various spacing options
+/// - Next comes a permutation of various block parameters, like
+///     - * "<CAPTION>" for display block with optional caption (can be omitted)
+///     - ~ <PATH> for insert-path. WARN: PATH SHOULD NOT CONTAIN SPACES
+///     - # <u16> ident of a block. Unused, as of now.
+///         Was intended to make blocks more unique, but think about it -
+///         same blocks can have shared representation in python code; this code is still executed twice).
+///     - ! used to mark block as static, i.e. - it's code will be executed statically,
+///         and nothing would be displayed in place of it in the output
+/// - Everything following this line and up to a newline followed by "\n```" will be considered a Python code to execute
 fn ayano<
     'source,
     E: ParseError<&'source str>
@@ -336,57 +413,55 @@ fn ayano<
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
-    // python, Ayano * <description> ~ <path> # <id>
     // TODO add tests for escaping backslashes removal (generation-side)
-    let (rest, (_, _, _, _, _, _, _, (display, insert, ident, is_static), _, code, _)) =
-        context(
-            "ayano",
+    let (rest, ((display, insert, _ident, is_static), code)) = context(
+        "ayano",
+        preceded(
             tuple((
-                char('\n'),
-                tag("```"),
+                _multispace_line_break("```"),
                 space0,
-                tag("python,"),
+                tag_no_case("python,"),
                 space0,
                 tag("Ayano"),
                 space0,
-                permutation((
-                    opt(tuple((
-                        char('*'),
-                        space0,
-                        opt(terminated(caption_kernel, space0)),
-                    ))),
-                    opt(tuple((char('~'), space0, alphanumeric1, space0))),
-                    opt(tuple((
-                        char('#'),
-                        space0,
-                        digit1.and_then(|number: &str| {
-                            Ok::<(&str, u16), nom::Err<E>>((
-                                "",
-                                number.parse().map_err(|_| {
-                                    nom::Err::Error(E::from_error_kind(
-                                        "Identifier must be parseable into u16",
-                                        ErrorKind::Digit,
-                                    ))
-                                })?,
-                            ))
-                        }),
-                        space0,
-                    ))),
-                    opt(terminated(char('!'), space0)),
-                )),
-                char('\n'),
-                take_until1("\n```"),
-                tag("\n```"),
             )),
-        )(input)?;
+            // This is guaranteed to be Ayano block at this point, so we lock in
+            cut(pair(
+                terminated(
+                    permutation((
+                        opt(preceded(
+                            pair(char('*'), space0),
+                            opt(terminated(caption_kernel, space0)),
+                        )),
+                        opt(preceded(
+                            pair(char('~'), space0),
+                            terminated(take_till1(char::is_whitespace), space0),
+                        )),
+                        opt(preceded(
+                            pair(char('#'), space0),
+                            terminated(
+                                map_res(digit1, |n| {
+                                    u16::from_str(n).map_err(KyomatoLexErrorKind::BadIdent)
+                                }),
+                                space0,
+                            ),
+                        )),
+                        opt(terminated(char('!'), space0)),
+                    )),
+                    char('\n'),
+                ),
+                terminated(take_until("\n```"), tag("\n```")),
+            )),
+        ),
+    )(input)?;
     // type might be a bit confusing, but basically:
     // - outer None means this block is not meant to be displayed
     // - outer Some means this block is to be displayed
     // - inner None means this block has no display caption
     // - inner Some means this block has display caption
-    let display: Option<Option<Token<'source>>> = display.map(|(_, _, caption)| caption); // TODO add code captions support
-    let insert: Option<&'source Path> = insert.map(|(_, _, path, _)| Path::new(path));
-    let _ident: Option<u16> = ident.map(|(_, _, ident, _)| ident); // TODO add support for codeblock identifiers
+    // TODO add code captions support
+    let insert: Option<&'source Path> = insert.map(Path::new);
+    // TODO add support for codeblock identifiers
     let code: Cow<'_, str> = Cow::from(code);
     Ok((
         rest,
@@ -399,6 +474,12 @@ fn ayano<
     ))
 }
 
+/// Creates static character array from supplied character range.
+///
+/// Utilizes `once_cell` to do so.
+///
+/// ### Panics
+/// if collection into array was not successful (i.e. wrong length was specified)
 macro_rules! char_array {
     ($from:literal .. $to:literal, $length:literal, $alphabet:literal) => {{
         static CHARS: ::once_cell::sync::Lazy<[char; $length]> =
@@ -412,95 +493,118 @@ macro_rules! char_array {
     }};
 }
 
+/// Yeah, there is some leaking happening here....
+///
+/// Don't worry about it, I guess (?)
+/// (*why would I create and format these strings each time??!*)
+/// TODO I guess, #[cached] macro would do better here, or th
+fn _list_item_generator<'scope>(
+    list_type: &'scope ListType,
+) -> Box<dyn Iterator<Item = &'scope str> + 'scope> {
+    match list_type {
+        ListType::Bullet => Box::new(std::iter::repeat("-")),
+        ListType::Num => {
+            static STRS: RwLock<Vec<&'static str>> = RwLock::new(Vec::new());
+            Box::new((1..).into_iter().map(|i| {
+                // First, try get already generated string
+                let read = STRS.read().unwrap();
+                if let Some(res) = read.get(i) {
+                    return &**res;
+                }
+                // Hmmm, that didn't worked.
+                // Give away read lock, and ask for modification
+                drop(read);
+                let mut write = STRS.write().unwrap();
+                // Append all necessary strings for the array
+                while write.len() <= i {
+                    let j = write.len() + 1;
+                    write.push(format!("{}.", j).leak());
+                }
+                write
+                    .get(i)
+                    .expect("Should be present now, we should've just pushed it")
+            }))
+        }
+        ListType::Latin => {
+            static STRS: once_cell::sync::Lazy<[&'static str; 26]> =
+                once_cell::sync::Lazy::new(|| {
+                    char_array!('a'..'z', 26, "latin")
+                        .map(|l| format!("{l}.").leak() as &'static str)
+                });
+            Box::new((*STRS).into_iter().map(|b| &*b))
+        }
+        ListType::Cyrillic => {
+            static STRS: once_cell::sync::Lazy<[&'static str; 32]> =
+                once_cell::sync::Lazy::new(|| {
+                    char_array!('а'..'я', 32, "cyrillic")
+                        .map(|l| format!("{l}.").leak() as &'static str)
+                });
+            Box::new((*STRS).into_iter().map(|b| &*b))
+        }
+        ListType::Roman => unimplemented!("Roman numerated lists are not supported yet"),
+    }
+}
+
 fn _list_inner<
     'source,
     E: ParseError<&'source str>
         + ContextError<&'source str>
         + FromExternalError<&'source str, KyomatoLexErrorKind>,
 >(
-    mut input: &'source str,
+    input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
-    let mut newline = 1;
-    let mut non_whitespace = 0;
-    while newline > non_whitespace {
-        newline = input.find('\n').unwrap_or(input.len());
-        non_whitespace = input
-            .find(|c: char| !c.is_whitespace())
-            .unwrap_or(input.len());
-        input = &input[(newline + 1)..];
-    }
+    // First, we need to actually detect list type
 
-    let indent = &input[..non_whitespace]; // how whitespace indent at the start of each line looks like
-    let (list_type, item_start): (ListType, fn(usize) -> Option<Cow<'static, str>>) =
-        match indent[non_whitespace..].chars().next() {
-            None => {
-                // there's not a single non-whitespace character -- it's impossible to properly parse a list here.
-                return Err(nom::Err::Error(E::from_error_kind(
-                    "can't parse list at the empty location",
-                    ErrorKind::Eof,
-                )));
-            }
-            Some('1') => {
-                // that's a numeric list!
-                (ListType::Num, |i| Some(format!("{}.", i + 1).into()))
-            }
-            Some('a') => {
-                // that's a latin list!
-                (ListType::Latin, move |i| {
-                    char_array!('a'..'z', 26, "latin")
-                        .get(i)
-                        .map(char::to_string)
-                        .map(Cow::from)
-                })
-            }
-            Some('а') => {
-                // that's a cyrillic list!
-                (ListType::Latin, move |i| {
-                    char_array!('а'..'я', 32, "cyrillic")
-                        .get(i)
-                        .map(char::to_string)
-                        .map(Cow::from)
-                })
-            }
-            Some('-') => {
-                // that's a bullet list!
-                (ListType::Num, |_| Some("-".into()))
-            }
-            Some('I') => {
-                // that's a roman list!
-                unimplemented!("Roman numerals list is not supported yet")
-                // TODO add support, I guess
-            }
-            Some(_c) => {
-                // that's an unknown list type
-                // FIXME not sure how to use these errors properly, I think I need to study more examples
-                return Err(nom::Err::Error(E::from_error_kind(
-                    "unknown list type",
-                    ErrorKind::Char,
-                )));
-            }
+    let (_, first_discriminator) = recognize(take_till1(char::is_whitespace))(input)?;
+    let list_type = match first_discriminator {
+        "1." => ListType::Num,
+        "a." => ListType::Latin,
+        "а." => ListType::Cyrillic,
+        "-" => ListType::Bullet,
+        "I" => unimplemented!("Roman numerated lists are not supported yet"),
+        _ => {
+            // that's an unknown list type
+            return Err(nom::Err::Error(E::from_external_error(
+                input,
+                ErrorKind::Char,
+                KyomatoLexErrorKind::UnknownListType,
+            )));
+        }
+    };
+    let mut start_generator = _list_item_generator(&list_type);
+
+    let (rest, items) = many1(move |input| {
+        let Some(this_start) = start_generator.next() else {
+            // I'm not sure if this error is possible to happen under current implementation, but whatever :idk:
+            return Err(nom::Err::Error(E::from_external_error(
+                input,
+                ErrorKind::IsA,
+                KyomatoLexErrorKind::TooLongList,
+            )));
         };
-    let items: Vec<_> = input
-        .lines()
-        .take_while(|line: &&str| line.starts_with(indent))
-        .enumerate()
-        .map(|(i, line): (usize, &str)| {
-            let line = line.trim_start_matches::<&str>(
-                item_start(i)
-                    .ok_or(nom::Err::Error(E::from_error_kind(
-                        "List has too much elements",
-                        ErrorKind::Fix,
-                    )))?
-                    .borrow(),
-            );
-            let (_, item) = all_consuming(inner_lex::<'_, E>)(line)?;
-            Ok::<_, nom::Err<E>>(item)
-        })
-        .try_collect()?;
-    let content = Tokens::new(items);
-    Ok(("", Token::List { list_type, content }))
+        // Match current item start and item itself
+        preceded(pair(tag(this_start), space0), inner_lex)(input)
+    })(input)?;
+    // Unfortunately, we can't use `map` function here, since it accepts `Fn` (not `FnOnce`),
+    // and I'd like to avoid giving `Copy` to every single thing in existence
+    Ok((
+        rest,
+        Token::List {
+            list_type,
+            content: Tokens::new(items),
+        },
+    ))
 }
 
+/// Parses list
+///
+/// There are multiple types of lists supported:
+/// - bullet: every line is prepended with '-'
+/// - num: every line is prepended with a number and a dot following it
+/// - latin: every line is prepended with a latin letter and a dot following it. Number of entries is limited.
+/// - cyrillic: every line is prepended with a cyrillic letter and a dot following it. Number of entries is limited.
+///
+/// Roman numerals lack support as of now, but I plan to support them in the future too
 fn list<
     'source,
     E: ParseError<&'source str>
@@ -509,7 +613,7 @@ fn list<
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
-    context("list", preceded(char('\n'), _list_inner))(input)
+    context("list", preceded(_multispace_line_break(""), _list_inner))(input)
 }
 
 fn _formatting_inner<
@@ -525,6 +629,17 @@ fn _formatting_inner<
     Ok(Token::Formatted(style, Box::new(content)))
 }
 
+/// Parses formatting declaration (or whatever you wanna call that)
+///
+/// **WARNING**: I expect this parse to be kinda-heavy. Consider using it *as late as possible*, but not before regular text parser, obviously.
+///
+/// Basically, there are 3 types of formatting:
+/// - Italic: indicated by single '*' or '_'
+/// - Bold: indicated by double '*' or '_'
+/// - Strikethrough: indicated by double '~'
+///
+/// Note: this parser will try to parse multiple times.
+/// So PLEASE: be careful with the way you use '*' and '_', as it may prolong parsing time.
 fn formatting<
     'source,
     E: ParseError<&'source str>
@@ -533,56 +648,60 @@ fn formatting<
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
-    use crate::data::Formatting;
-    context(
+    let (rest, delimiter) = preceded(
+        pair(opt(char('\n')), space0),
+        alt((tag("**"), tag("__"), tag("*"), tag("_"), tag("~~"))),
+    )(input)?;
+    // Anything starting from these characters IS a formatting token.
+    // Committed to parsing after this point
+    let formatting = match delimiter {
+        "**" | "__" => Formatting::Bold,
+        "*" | "_" => Formatting::Italic,
+        "~~" => Formatting::StrikeThrough,
+        _ => unreachable!(),
+    };
+    let possible_ends = rest
+        .char_indices()
+        .filter_map(|(ind, _)| (rest[ind..].starts_with(delimiter)).then_some(ind));
+    for end_candidate in possible_ends {
+        let inner_tokens = &rest[..end_candidate];
+        if let Ok((_, inner)) = all_consuming(inner_lex::<'source, E>)(inner_tokens) {
+            return Ok((
+                &rest[(end_candidate + delimiter.len())..],
+                Token::Formatted(formatting, Box::new(inner)),
+            ));
+        }
+    }
+    // If this point was reached, there is no correct variant for pairing delimiter.
+    Err(nom::Err::Failure(E::add_context(
+        input,
         "formatting",
-        alt((
-            delimited(
-                tag("**"),
-                take_until1("**").and_then(all_consuming(inner_lex)),
-                tag("**"),
-            )
-            .map(|input| (Box::new(input), Formatting::Bold)),
-            delimited(
-                tag("__"),
-                take_until1("__").and_then(all_consuming(inner_lex)),
-                tag("__"),
-            )
-            .map(|input| (Box::new(input), Formatting::Bold)),
-            delimited(
-                tag("*"),
-                take_until1("*").and_then(all_consuming(inner_lex)),
-                tag("*"),
-            )
-            .map(|input| (Box::new(input), Formatting::Italic)),
-            delimited(
-                tag("_"),
-                take_until1("__").and_then(all_consuming(inner_lex)),
-                tag("_"),
-            )
-            .map(|input| (Box::new(input), Formatting::Italic)),
-            delimited(
-                tag("~~"),
-                take_until1("~~").and_then(all_consuming(inner_lex)),
-                tag("~~"),
-            )
-            .map(|input| (Box::new(input), Formatting::StrikeThrough)),
-        )),
-    )
-    .map(|(token, style)| Token::Formatted(style, token))
-    .parse(input)
+        E::from_error_kind(input, ErrorKind::Eof),
+    )))
 }
 
+/// Parses inline math, delimited by '$'
 fn inline_math<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
-    let (rest, formula) = context(
+    context(
         "inline math",
         delimited(char('$'), take_until1("$"), char('$')),
-    )(input)?;
-    Ok((rest, Token::InlineMathmode(formula.into())))
+    )
+    .map(|content: &str| Token::InlineMathmode(content.into()))
+    .parse(input)
 }
 
+/// Parses object reference, inside a document
+///
+/// Basic syntax: [@<REF>], where <REF> can be
+/// - fig:<IDENT> for figure
+/// - tab:<IDENT> for table
+/// - eq:<IDENT> for equation
+///
+/// In fact, these are not validated. Any sort of missing object would be detected and reported during document generation
+///
+/// Also note that any whitespace at the beginning and the end would be trimmed away
 fn reference<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
@@ -590,7 +709,7 @@ fn reference<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
         "reference",
         delimited(tag("[@"), take_until1("]"), char(']')),
     )(input)?;
-    Ok((rest, Token::Reference(ident.into())))
+    Ok((rest, Token::Reference(ident.trim().into())))
 }
 
 fn footnote_reference<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
@@ -664,6 +783,10 @@ pub enum KyomatoLexErrorKind {
     BadSyntax {
         reason: &'static str,
     },
+    BadUrl(url::ParseError),
+    BadIdent(ParseIntError),
+    UnknownListType,
+    TooLongList,
 }
 
 // TODO wrap outer-layer combinator into `complete`
@@ -799,62 +922,10 @@ fn forbid<
     }
 }
 
-/// Auxiliary entry point into the lexer
+/// Auxiliary entry point into the lexer, used to lex inner fields
 ///
 /// Functions similarly to `lex`, but forbids certain token types
 pub fn inner_lex<
-    'source,
-    E: ParseError<&'source str>
-        + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexErrorKind>,
->(
-    input: &'source str,
-) -> IResult<&'source str, Token<'source>, E> {
-    context(
-        "inner lex",
-        tokens_many1({
-            alt((
-                // Some tokens must be forbidden
-                // I'd like parser to actually tell the user that token is forbidden in this context,
-                // to avoid unnecessary confusion of "why wouldn't it see a figure here?!"
-                forbid(
-                    div_page,
-                    "page divider",
-                    "pages can only be divided in the outer layer",
-                ),
-                forbid(header, "header", "you are not supposed to do that"),
-                forbid(
-                    equation,
-                    "display equation",
-                    "LaTeX does not support display math inside captions/footnotes",
-                ),
-                forbid(table, "table", "table can only be outer element"),
-                forbid(figure, "figure", "figure can only be outer element"),
-                forbid(code_block, "code block", "you are not supposed to do that"),
-                forbid(
-                    list,
-                    "list",
-                    "LaTeX does not support lists inside captions and footnotes well",
-                ),
-                // Rest are ok to be parsed!
-                href,
-                ayano,
-                formatting,
-                inline_math,
-                reference,
-                footnote_content,
-                footnote_reference,
-                paragraph,
-            ))
-        }),
-    )
-    .parse(input)
-}
-
-/// Auxiliary entry point into the lexer, used to lex inner fields of Ayano-outputted tokens
-///
-/// Functions similarly to `lex`, but forbids certain token types
-pub fn static_inner_lex<
     'source,
     E: ParseError<&'source str>
         + ContextError<&'source str>
@@ -880,8 +951,8 @@ pub fn static_inner_lex<
                     "display equation",
                     "LaTeX does not support display math inside captions/footnotes",
                 ),
-                forbid(table, "table", "table can only be outer element"),
-                forbid(figure, "figure", "figure can only be outer element"),
+                forbid(table, "table", "table can only be an outer element"),
+                forbid(figure, "figure", "figure can only be an outer element"),
                 forbid(code_block, "code block", "you are not supposed to do that"),
                 forbid(
                     list,
@@ -891,14 +962,12 @@ pub fn static_inner_lex<
                 forbid(
                     ayano,
                     "ayano",
-                    "Ayano inside Ayano is not supported, you are not supposed to do that",
+                    "Ayano on the inner layer is not supported, as of now",
                 ),
                 forbid(
                     footnote_content,
                     "footnote content",
-                    r"All footnote content must be static and available right away.
-If you want to create a footnote with Ayano-defined content,
-please include Ayano block *inside* you footnote definition.",
+                    "All footnote content must be outer-layer definitions",
                 ),
                 // Rest are ok to be parsed!
                 href,
