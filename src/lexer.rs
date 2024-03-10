@@ -17,7 +17,7 @@ use nom::{
         complete::{alpha1, alphanumeric1, anychar, char, digit1, multispace0, newline, space0},
         is_space,
     },
-    combinator::{all_consuming, cut, iterator, map_res, not, opt, recognize, success},
+    combinator::{all_consuming, cut, eof, iterator, map_res, not, opt, recognize, success},
     error::{context, ContextError, ErrorKind, FromExternalError, ParseError},
     multi::{many1, many1_count, separated_list1},
     number::complete::float,
@@ -27,7 +27,7 @@ use nom::{
 use url::Url;
 
 use crate::{
-    data::{AyanoBlock, Formatting, ListType, Token, Tokens},
+    data::{AyanoBlock, Font, Formatting, ListType, Token, Tokens},
     util::IteratorArrayCollectExt,
 };
 
@@ -555,7 +555,10 @@ fn _list_inner<
 ) -> IResult<&'source str, Token<'source>, E> {
     // First, we need to actually detect list type
 
-    let (_, first_discriminator) = recognize(take_till1(char::is_whitespace))(input)?;
+    let (new_input, first_discriminator) = preceded(
+        _multispace_line_break(""),
+        recognize(take_till1(char::is_whitespace)),
+    )(input)?;
     let list_type = match first_discriminator {
         "1." => ListType::Num,
         "a." => ListType::Latin,
@@ -565,7 +568,7 @@ fn _list_inner<
         _ => {
             // that's an unknown list type
             return Err(nom::Err::Error(E::from_external_error(
-                input,
+                new_input,
                 ErrorKind::Char,
                 KyomatoLexErrorKind::UnknownListType,
             )));
@@ -584,7 +587,7 @@ fn _list_inner<
         };
         // Match current item start and item itself
         preceded(pair(tag(this_start), space0), inner_lex)(input)
-    })(input)?;
+    })(new_input)?;
     // Unfortunately, we can't use `map` function here, since it accepts `Fn` (not `FnOnce`),
     // and I'd like to avoid giving `Copy` to every single thing in existence
     Ok((
@@ -701,27 +704,37 @@ fn inline_math<'source, E: ParseError<&'source str> + ContextError<&'source str>
 ///
 /// In fact, these are not validated. Any sort of missing object would be detected and reported during document generation
 ///
-/// Also note that any whitespace at the beginning and the end would be trimmed away
+/// Also note that any whitespace at the beginning and the end (of the text inside brackets) would be trimmed away
 fn reference<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
     let (rest, ident) = context(
         "reference",
-        delimited(tag("[@"), take_until1("]"), char(']')),
+        delimited(pair(space0, tag("[@")), cut(take_until1("]")), char(']')),
     )(input)?;
     Ok((rest, Token::Reference(ident.trim().into())))
 }
 
+/// Parses a footnote reference
+///
+/// Acts basically the same as regular reference, but uses different symbol for identification
+/// (since this sort of reference is actually supported by markdown!)
 fn footnote_reference<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
     let (rest, ident) = context(
         "footnote reference",
-        delimited(tag("[^"), take_until1("]"), char(']')),
+        delimited(pair(space0, tag("[^")), cut(take_until1("]")), char(']')),
     )(input)?;
-    Ok((rest, Token::FootNoteReference(ident.into())))
+    Ok((rest, Token::FootNoteReference(ident.trim().into())))
 }
 
+/// Parses definition of a footnote content
+///
+/// WARNING! This parser must be checked BEFORE `footnote_reference` one.
+/// This is a consequence of footnote reference and footnote definition having potentially the same syntax, but footnote definition having more of it.
+///
+/// basic syntax: \n[^<NAME>]:<CONTENT>\n
 fn footnote_content<
     'source,
     E: ParseError<&'source str>
@@ -730,42 +743,120 @@ fn footnote_content<
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
-    let (rest, (ident, content)) = context(
+    context(
         "footnote context",
-        delimited(tag("[^"), take_until1("]:"), tag("]:")).and(preceded(
+        delimited(
+            _multispace_line_break("[^"),
+            cut(take_until1("]")),
+            tag("]:"),
+        )
+        .and(preceded(
             space0,
-            take_until1("\n").and_then(all_consuming(inner_lex)),
+            // Content can end at the end of this line, or at the end of file
+            alt((take_until1("\n"), take_while(|_| true))).and_then(cut(all_consuming(inner_lex))),
         )),
     )
-    .parse(input)?;
-    Ok((
-        rest,
-        Token::FootNoteContent {
-            content: Box::new(content),
-            ident: ident.into(),
-        },
-    ))
+    .map(|(ident, content)| Token::FootNoteContent {
+        content: Box::new(content),
+        ident: ident.into(),
+    })
+    .parse(input)
 }
 
-fn paragraph<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
+/// Parses plaintext paragraph, up to at most the end of input/line
+///
+/// WARNING: must be used AFTER ALL OTHER PARSERS.
+/// This parser is able to parse virtually anything, but in most cases you expect input being interpreted in some other way.
+///
+/// This is the most tricky of the parsers, since it must stop, if any other parser *might* be possible to use.
+/// The only way to check, if any other parser may be used - is to ask it directly, "Ok" result meaning that it had succeeded.
+///
+/// I don't feel like discarding potentially-allocating and deeply-nested parsed tokens.
+/// Because of that, this parser actually outputs one OR two tokens: one is always the paragraph one, and the other - some sort of different token it had managed to parse.
+fn paragraph<
+    'source,
+    E: ParseError<&'source str>
+        + ContextError<&'source str>
+        + FromExternalError<&'source str, KyomatoLexErrorKind>,
+>(
     input: &'source str,
-) -> IResult<&'source str, Token<'source>, E> {
-    // This is the most tricky component. It must stop matching AS SOON AS any sort-of syntax is encountered.
-    // Should be noted, that this parsed is forward-blind, meaning it has no idea what element EXACTLY will be matched next.
-    let bad_index = input
+) -> IResult<&'source str, (Token<'source>, Option<Token<'source>>), E> {
+    // TODO wrap into preceded(multispace0, ...)
+
+    // At this point we assume, that whitespace before was parsed, including any possible newlines
+
+    // Any token starting with a newline is out of the question
+    // However, this still leaves a couple of candidates:
+    // - href (starting with '[')
+    // - formatting (starting with '*', '_' or '~')
+    // - inline_math (starting with '$')
+    // - reference (starting with "[@")
+    // - footnote_reference (starting with "[^")
+
+    // First, let's isolate input to a newline (if there is no newline, stop at last char)
+    let interrupt_ind = input.find('\n').unwrap_or(input.len() - 1);
+    let cut_input = &input[..=interrupt_ind];
+
+    // Now, let's try finding interrupting token
+    let interuption = cut_input
         .char_indices()
-        .filter_map(|(ind, c)| matches!(c, '|' | '\n' | '$' | '`').then_some(ind))
-        .find(|&ind| {
-            ["|", "||||||", "\n#", "$", "$$", "`", "```"]
-                .into_iter()
-                .any(|p| input[ind..].starts_with(p))
+        // Parsing continues until newline is reached
+        .take_while(|(_, c)| c != &'\n')
+        // Possible breakpoints are at characters '[', '*', '_', '~', and '$'
+        .filter(|(_, c)| ['[', '*', '_', '~', '$'].contains(c))
+        // Now, try a proper parser for each one
+        .map(|(ind, c)| {
+            let cut_cut_input = &cut_input[ind..];
+            let parse_res = match c {
+                '[' => {
+                    if cut_input[ind..].starts_with("[@") {
+                        reference(cut_cut_input)
+                    } else if cut_input[ind..].starts_with("[^") {
+                        footnote_reference(cut_cut_input)
+                    } else {
+                        href(cut_cut_input)
+                    }
+                }
+                '*' | '_' | '~' => formatting(cut_cut_input),
+                '$' => inline_math(cut_cut_input),
+                _ => unreachable!(),
+            };
+            (ind, parse_res)
         })
-        .unwrap_or(input.len());
-    let (this_text, rest) = input.split_at(bad_index);
-    Ok((
-        rest,
-        Token::Paragraph(crate::data::Font::Normal, this_text.into()),
-    ))
+        .try_fold((), |_, (ind, parse_res)| match parse_res {
+            // if there is a match for the following token -- return this "Ok" wrapped into "Err", forcing iterator to stop
+            Ok(ok) => Err(Ok((ind, ok))),
+            // if there is not a match, but a FAUILURE -- return it as "Err" wrapped in "Err", forcing iterator to stop
+            Err(nom::Err::Failure(err)) => Err(Err(nom::Err::Failure(err))),
+            // if parsing had failed, continue driving iterator by returning "Ok"
+            Err(_) => Ok(()),
+        })
+        .err();
+
+    let interruption = if let Some(interruption) = interuption {
+        // there was an interruption!
+        // but it might be a FAILURE ONE. That should bubble up
+        Some(interruption?)
+    } else {
+        None
+    };
+
+    // Now, construct the output
+    let this_token_end = interruption
+        .as_ref()
+        .map(|(ind, _)| *ind)
+        .unwrap_or(interrupt_ind);
+    let this_token = Token::Paragraph(Font::Normal, Cow::from(&cut_input[..this_token_end]));
+    let rest_input = interruption
+        .as_ref()
+        .map(|(_, (rest, _))| *rest)
+        .unwrap_or(&cut_input[this_token_end..]);
+    let follower = interruption.map(|(_, (_, f))| f);
+    Ok((rest_input, (this_token, follower)))
+}
+
+fn __equalizer(token: Token<'_>) -> (Token<'_>, Option<Token<'_>>) {
+    (token, None)
 }
 
 pub enum KyomatoLexErrorKind {
@@ -806,7 +897,8 @@ fn tokens_many1<
         + FromExternalError<&'source str, KyomatoLexErrorKind>
         + 'kernel,
 >(
-    mut tokens_kernel: impl FnMut(&'source str) -> IResult<&'source str, Token<'source>, E> + 'kernel,
+    mut tokens_kernel: impl FnMut(&'source str) -> IResult<&'source str, (Token<'source>, Option<Token<'source>>), E>
+        + 'kernel,
 ) -> impl Parser<&'source str, Token<'source>, E> + 'kernel {
     enum InnerResult<'source> {
         None, // Will be converted into `KyomatoLexErrorKind::NoTokens`
@@ -822,7 +914,7 @@ fn tokens_many1<
             let mut iterator = iterator(input, &mut tokens_kernel);
 
             // First, let's try getting first token
-            let Some(first_token) = (&mut iterator).next() else {
+            let Some((first_token, first_follower)) = (&mut iterator).next() else {
                 // There is no first token!
                 // Let's give iterator a chance to explain itself:
                 let (rest, _) = iterator.finish()?;
@@ -832,19 +924,45 @@ fn tokens_many1<
                 return Ok((rest, InnerResult::None));
             };
 
-            // Now, let's try getting a second one
-            let Some(second_token) = (&mut iterator).next() else {
-                // Well, I suppose single token is enough
-                // Still allow iterator to explain any problem
-                let (rest, _) = iterator.finish()?;
-                // Return single variant
-                return Ok((rest, InnerResult::Single(first_token)));
+            // Here's a little tricky part: we'll need to check is there are multiple tokens in the input,
+            // but there are two variants for that: follower of the first token (we have now),
+            // or just the second token iterator would yield.
+            // That said, I find it natural to make this check in one go with `match`.
+            // The following block will continue execution if and only there are multiple tokens,
+            // and there are (possibly) more tokens to parse
+            let t1 = first_token;
+            let mut tokens = match (first_follower, (&mut iterator).next()) {
+                // Meaning there are no more tokens (or iterator failed) - return single result
+                (None, None) => {
+                    let (rest, _) = iterator.finish()?;
+                    return Ok((rest, InnerResult::Single(t1)));
+                }
+                // There are exactly two tokens (or iterator failed) - return exactly two tokens
+                (Some(t2), None) => {
+                    let (rest, _) = iterator.finish()?;
+                    return Ok((rest, InnerResult::Multiple(vec![t1, t2])));
+                }
+                // There are at least two tokens
+                (None, Some((t2, None))) => {
+                    vec![t1, t2]
+                }
+                // There are at least three tokens
+                (None, Some((t2, Some(t3)))) | (Some(t2), Some((t3, None))) => {
+                    vec![t1, t2, t3]
+                }
+                // There are at least four tokens
+                (Some(t2), Some((t3, Some(t4)))) => {
+                    vec![t1, t2, t3, t4]
+                }
             };
 
-            // Ok so there are at least two tokens now.
-            // Heap allocation is unavoidable
-            let mut tokens = vec![first_token, second_token];
-            tokens.extend(&mut iterator);
+            // Parse rest of the tokens
+            for (token, follower) in &mut iterator {
+                tokens.push(token);
+                if let Some(follower) = follower {
+                    tokens.push(follower);
+                }
+            }
             // Iterator might have failed silently, so let them a chance to tell about it
             let (rest, _) = iterator.finish()?;
             // Return multiple variant
@@ -876,20 +994,20 @@ pub fn lex<
         "unlimited lex",
         tokens_many1(alt((
             // Allow them all!
-            div_page,
-            header,
-            equation,
-            table,
-            figure,
-            href,
-            code_block,
-            ayano,
-            list,
-            formatting,
-            inline_math,
-            reference,
-            footnote_content,
-            footnote_reference,
+            div_page.map(__equalizer),
+            header.map(__equalizer),
+            equation.map(__equalizer),
+            table.map(__equalizer),
+            figure.map(__equalizer),
+            href.map(__equalizer),
+            code_block.map(__equalizer),
+            ayano.map(__equalizer),
+            list.map(__equalizer),
+            formatting.map(__equalizer),
+            inline_math.map(__equalizer),
+            reference.map(__equalizer),
+            footnote_content.map(__equalizer),
+            footnote_reference.map(__equalizer),
             paragraph,
         ))),
     )
@@ -944,37 +1062,43 @@ pub fn inner_lex<
                     div_page,
                     "page divider",
                     "pages can only be divided in the outer layer",
-                ),
-                forbid(header, "header", "you are not supposed to do that"),
+                )
+                .map(__equalizer),
+                forbid(header, "header", "you are not supposed to do that").map(__equalizer),
                 forbid(
                     equation,
                     "display equation",
                     "LaTeX does not support display math inside captions/footnotes",
-                ),
-                forbid(table, "table", "table can only be an outer element"),
-                forbid(figure, "figure", "figure can only be an outer element"),
-                forbid(code_block, "code block", "you are not supposed to do that"),
+                )
+                .map(__equalizer),
+                forbid(table, "table", "table can only be an outer element").map(__equalizer),
+                forbid(figure, "figure", "figure can only be an outer element").map(__equalizer),
+                forbid(code_block, "code block", "you are not supposed to do that")
+                    .map(__equalizer),
                 forbid(
                     list,
                     "list",
                     "LaTeX does not support lists inside captions and footnotes well",
-                ),
+                )
+                .map(__equalizer),
                 forbid(
                     ayano,
                     "ayano",
                     "Ayano on the inner layer is not supported, as of now",
-                ),
+                )
+                .map(__equalizer),
                 forbid(
                     footnote_content,
                     "footnote content",
                     "All footnote content must be outer-layer definitions",
-                ),
+                )
+                .map(__equalizer),
                 // Rest are ok to be parsed!
-                href,
-                formatting,
-                inline_math,
-                reference,
-                footnote_reference,
+                href.map(__equalizer),
+                formatting.map(__equalizer),
+                inline_math.map(__equalizer),
+                reference.map(__equalizer),
+                footnote_reference.map(__equalizer),
                 paragraph,
             ))
         }),
