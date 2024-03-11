@@ -1,20 +1,13 @@
-use std::{
-    borrow::{Borrow, Cow},
-    num::ParseIntError,
-    path::Path,
-    str::FromStr,
-    sync::RwLock,
-};
+use std::{borrow::Cow, num::ParseIntError, path::Path, str::FromStr, sync::RwLock};
 
-use itertools::Itertools;
 use nom::{
     branch::{alt, permutation},
     bytes::{
-        complete::{escaped, is_not, tag, take_till1, take_until, take_until1, take_while},
+        complete::{escaped, tag, take_till1, take_until, take_until1, take_while},
         streaming::tag_no_case,
     },
     character::{
-        complete::{alpha1, alphanumeric1, anychar, char, digit1, multispace0, newline, space0},
+        complete::{alphanumeric1, char, digit1, multispace0, newline, space0},
         is_space,
     },
     combinator::{all_consuming, cut, eof, iterator, map_res, not, opt, recognize, success},
@@ -39,9 +32,9 @@ fn _multispace_line_break<'source, E: ParseError<&'source str>>(
         // here's a chars iterator
         let chars = input.char_indices();
         // now, limit them to fist non-whitespace character
-        let non_whitespace = chars.take_while(|(_, c)| !c.is_whitespace());
+        let whitespace = chars.take_while(|(_, c)| c.is_whitespace());
         // then, filter out newline characters only
-        let mut newline = non_whitespace.filter_map(|(ind, c)| (c == '\n').then_some(ind));
+        let mut newline = whitespace.filter_map(|(ind, c)| (c == '\n').then_some(ind));
         // lastly, find first newline character that prepends provided tag
         let Some(res) = newline.find(|ind| input[(ind + 1)..].starts_with(tag)) else {
             // if there's no such idex, that's an error
@@ -155,7 +148,7 @@ fn caption_kernel<
 fn div_page<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
-    context("page divider", tuple((multispace0, tag("------"))))
+    context("page divider", _multispace_line_break("------"))
         .map(|_| Token::PageDiv)
         .parse(input)
 }
@@ -779,80 +772,80 @@ fn paragraph<
         + ContextError<&'source str>
         + FromExternalError<&'source str, KyomatoLexErrorKind>,
 >(
-    input: &'source str,
+    outer_input: &'source str,
 ) -> IResult<&'source str, (Token<'source>, Option<Token<'source>>), E> {
-    // TODO wrap into preceded(multispace0, ...)
+    preceded(multispace0, |input: &'source str| {
+        // At this point we assume, that whitespace before was parsed, including any possible newlines
 
-    // At this point we assume, that whitespace before was parsed, including any possible newlines
+        // Any token starting with a newline is out of the question
+        // However, this still leaves a couple of candidates:
+        // - href (starting with '[')
+        // - formatting (starting with '*', '_' or '~')
+        // - inline_math (starting with '$')
+        // - reference (starting with "[@")
+        // - footnote_reference (starting with "[^")
 
-    // Any token starting with a newline is out of the question
-    // However, this still leaves a couple of candidates:
-    // - href (starting with '[')
-    // - formatting (starting with '*', '_' or '~')
-    // - inline_math (starting with '$')
-    // - reference (starting with "[@")
-    // - footnote_reference (starting with "[^")
+        // First, let's isolate input to a newline (if there is no newline, stop at last char)
+        let interrupt_ind = input.find('\n').unwrap_or(input.len() - 1);
+        let cut_input = &input[..=interrupt_ind];
 
-    // First, let's isolate input to a newline (if there is no newline, stop at last char)
-    let interrupt_ind = input.find('\n').unwrap_or(input.len() - 1);
-    let cut_input = &input[..=interrupt_ind];
-
-    // Now, let's try finding interrupting token
-    let interuption = cut_input
-        .char_indices()
-        // Parsing continues until newline is reached
-        .take_while(|(_, c)| c != &'\n')
-        // Possible breakpoints are at characters '[', '*', '_', '~', and '$'
-        .filter(|(_, c)| ['[', '*', '_', '~', '$'].contains(c))
-        // Now, try a proper parser for each one
-        .map(|(ind, c)| {
-            let cut_cut_input = &cut_input[ind..];
-            let parse_res = match c {
-                '[' => {
-                    if cut_input[ind..].starts_with("[@") {
-                        reference(cut_cut_input)
-                    } else if cut_input[ind..].starts_with("[^") {
-                        footnote_reference(cut_cut_input)
-                    } else {
-                        href(cut_cut_input)
+        // Now, let's try finding interrupting token
+        let interuption = cut_input
+            .char_indices()
+            // Parsing continues until newline is reached
+            .take_while(|(_, c)| c != &'\n')
+            // Possible breakpoints are at characters '[', '*', '_', '~', and '$'
+            .filter(|(_, c)| ['[', '*', '_', '~', '$'].contains(c))
+            // Now, try a proper parser for each one
+            .map(|(ind, c)| {
+                let cut_cut_input = &cut_input[ind..];
+                let parse_res = match c {
+                    '[' => {
+                        if cut_input[ind..].starts_with("[@") {
+                            reference(cut_cut_input)
+                        } else if cut_input[ind..].starts_with("[^") {
+                            footnote_reference(cut_cut_input)
+                        } else {
+                            href(cut_cut_input)
+                        }
                     }
-                }
-                '*' | '_' | '~' => formatting(cut_cut_input),
-                '$' => inline_math(cut_cut_input),
-                _ => unreachable!(),
-            };
-            (ind, parse_res)
-        })
-        .try_fold((), |_, (ind, parse_res)| match parse_res {
-            // if there is a match for the following token -- return this "Ok" wrapped into "Err", forcing iterator to stop
-            Ok(ok) => Err(Ok((ind, ok))),
-            // if there is not a match, but a FAUILURE -- return it as "Err" wrapped in "Err", forcing iterator to stop
-            Err(nom::Err::Failure(err)) => Err(Err(nom::Err::Failure(err))),
-            // if parsing had failed, continue driving iterator by returning "Ok"
-            Err(_) => Ok(()),
-        })
-        .err();
+                    '*' | '_' | '~' => formatting(cut_cut_input),
+                    '$' => inline_math(cut_cut_input),
+                    _ => unreachable!(),
+                };
+                (ind, parse_res)
+            })
+            .try_fold((), |_, (ind, parse_res)| match parse_res {
+                // if there is a match for the following token -- return this "Ok" wrapped into "Err", forcing iterator to stop
+                Ok(ok) => Err(Ok((ind, ok))),
+                // if there is not a match, but a FAUILURE -- return it as "Err" wrapped in "Err", forcing iterator to stop
+                Err(nom::Err::Failure(err)) => Err(Err(nom::Err::Failure(err))),
+                // if parsing had failed, continue driving iterator by returning "Ok"
+                Err(_) => Ok(()),
+            })
+            .err();
 
-    let interruption = if let Some(interruption) = interuption {
-        // there was an interruption!
-        // but it might be a FAILURE ONE. That should bubble up
-        Some(interruption?)
-    } else {
-        None
-    };
+        let interruption = if let Some(interruption) = interuption {
+            // there was an interruption!
+            // but it might be a FAILURE ONE. That should bubble up
+            Some(interruption?)
+        } else {
+            None
+        };
 
-    // Now, construct the output
-    let this_token_end = interruption
-        .as_ref()
-        .map(|(ind, _)| *ind)
-        .unwrap_or(interrupt_ind);
-    let this_token = Token::Paragraph(Font::Normal, Cow::from(&cut_input[..this_token_end]));
-    let rest_input = interruption
-        .as_ref()
-        .map(|(_, (rest, _))| *rest)
-        .unwrap_or(&cut_input[this_token_end..]);
-    let follower = interruption.map(|(_, (_, f))| f);
-    Ok((rest_input, (this_token, follower)))
+        // Now, construct the output
+        let this_token_end = interruption
+            .as_ref()
+            .map(|(ind, _)| *ind)
+            .unwrap_or(interrupt_ind);
+        let this_token = Token::Paragraph(Font::Normal, Cow::from(&cut_input[..this_token_end]));
+        let rest_input = interruption
+            .as_ref()
+            .map(|(_, (rest, _))| *rest)
+            .unwrap_or(&cut_input[this_token_end..]);
+        let follower = interruption.map(|(_, (_, f))| f);
+        Ok((rest_input, (this_token, follower)))
+    })(outer_input)
 }
 
 fn __equalizer(token: Token<'_>) -> (Token<'_>, Option<Token<'_>>) {
@@ -1104,4 +1097,68 @@ pub fn inner_lex<
         }),
     )
     .parse(input)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    macro_rules! _assert_inner {
+        ($result:expr, $expected:pat, $message:literal) => {};
+        ($result:expr, $expected:expr, $message:literal) => {
+            assert_eq!($result, $expected, $message)
+        };
+    }
+
+    macro_rules! test {
+        {$name:ident, $parser:expr, $input:literal, e: $expected:expr} => {
+            #[test]
+            fn $name() {
+                // arrange
+
+                // act
+                let result: Result<_, nom::Err<nom::error::VerboseError<&'static str>>>;
+                result = $parser.parse($input);
+
+                // assert
+                assert_eq!(result, $expected, "Parser did not produce expected result");
+            }
+        };
+        {$name:ident, $parser:expr, $input:literal, p: $expected:pat} => {
+            #[test]
+            fn $name() {
+                // arrange
+
+                // act
+                let result: Result<_, nom::Err<nom::error::VerboseError<&'static str>>>;
+                result = $parser.parse($input);
+
+                // assert
+                if !matches!(result, $expected) {
+                    panic!("{}: {:?}", "Parser did not produce complying result:", result);
+                }
+            }
+        };
+    }
+
+    // `_multispace_line_break` tests
+    test! {multispace_line_break1, _multispace_line_break(""), "\n", e: Ok(("", ("\n", "")))}
+    test! {multispace_line_break2, _multispace_line_break("1"), "\n", p: Err(_)}
+    test! {multispace_line_break3, _multispace_line_break("1"), "    \t\t\n1benzene", e: Ok(("benzene", ("    \t\t\n", "1")))}
+    test! {multispace_line_break4, _multispace_line_break("ben"), "    \t\t\nbenzene", e: Ok(("zene", ("    \t\t\n", "ben")))}
+    test! {multispace_line_break5, _multispace_line_break("ben"), "l    \t\t\nbenzene", p: Err(_)}
+
+    // `parse_args!` tests
+    test! {parse_args1, parse_args!["a" = digit1], "", p: Err(_)}
+    test! {parse_args2, parse_args!["a" = digit1], "{}", p: Err(_)}
+    test! {parse_args3, parse_args!["a" = digit1], "\n{a = 34522}", e: Ok(("", (Some("34522"), )))}
+    test! {parse_args3_2, parse_args!["a" = digit1], "{a = 34522}", p: Err(_)}
+
+    // `div_page` tests
+    test! {div_page1, div_page, "", p: Err(_)}
+    test! {div_page2, div_page, "---", p: Err(_)}
+    test! {div_page3, div_page, "\n------", e: Ok(("", Token::PageDiv))}
+    test! {div_page3_2, div_page, "------", p: Err(_)}
+    test! {div_page4, div_page, "\n   ------", p: Err(_)}
+    test! {div_page5, div_page, "    \t\n------\t\n", e: Ok(("\t\n", Token::PageDiv))}
 }
