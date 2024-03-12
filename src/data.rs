@@ -168,6 +168,55 @@ impl<'source> Token<'source> {
     where
         'source: 'r,
     {
-        todo!()
+        match self {
+            Token::PageDiv => Token::PageDiv,
+            Token::Header { order, content } => Token::Header {
+                order: *order,
+                content: Cow::Borrowed(content),
+            },
+            Token::Equation { content, ident } => Token::Equation {
+                content: Cow::Borrowed(&content),
+                ident: ident.as_ref().map(|s| Cow::<'r, str>::Borrowed(s)),
+            },
+            Token::Table {
+                header,
+                cells,
+                caption,
+                ident,
+            } => Token::Table {
+                header: header.borrowed(),
+                cells: cells.borrowed(),
+                caption: caption.as_ref().map(|t| Box::new(Token::borrow_ref(t))),
+                ident: ident.as_ref().map(|s| Cow::<'r, str>::Borrowed(s)),
+            },
+            Token::Figure {
+                src_name,
+                caption,
+                ident,
+            } => Token::Figure {
+                src_name: Cow::Borrowed(src_name),
+                caption: caption.as_ref().map(|t| Box::new(Token::borrow_ref(t))),
+                ident: ident.as_ref().map(|s| Cow::<'r, str>::Borrowed(s)),
+            },
+            Token::Href { url, display } => {
+                todo!()
+            }
+            Token::Ayano(_) => todo!(),
+            Token::List { list_type, content } => todo!(),
+            Token::Formatted(_, _) => todo!(),
+            Token::Text(_) => todo!(),
+            Token::Paragraph(font, content) => {
+                Token::Paragraph(font.clone(), Cow::Borrowed(content))
+            }
+            Token::InlineMathmode(_) => todo!(),
+            Token::Reference(_) => todo!(),
+            Token::FootNoteReference(ident) => Token::FootNoteReference(Cow::Borrowed(ident)),
+            Token::FootNoteContent { content, ident } => Token::FootNoteContent {
+                content: Box::new(content.borrow_ref()),
+                ident: Cow::Borrowed(ident),
+            },
+            Token::CodeBlock { code, language } => todo!(),
+            Token::Error(_) => todo!(),
+        }
     }
 }

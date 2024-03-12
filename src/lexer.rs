@@ -1251,10 +1251,11 @@ mod tests {
     test! {multispace_line_break5, _multispace_line_break("ben"), "l    \t\t\nbenzene", p: Err(_)}
 
     // `parse_args!` tests
-    test! {parse_args1, parse_args!["a" = digit1], "", p: Err(_)}
-    test! {parse_args2, parse_args!["a" = digit1], "{}", p: Err(_)}
+    test! {parse_args1, parse_args!["a" = digit1], "", e: Ok(("", (None,)))}
+    test! {parse_args2, parse_args!["a" = digit1], "{}", e: Ok(("{}", (None,)))}
     test! {parse_args3, parse_args!["a" = digit1], "\n{a = 34522}", e: Ok(("", (Some("34522"), )))}
-    test! {parse_args3_2, parse_args!["a" = digit1], "{a = 34522}", p: Err(_)}
+    test! {parse_args3_2, parse_args!["a" = digit1], "{a = 34522}", e: Ok(("{a = 34522}", (None,)))}
+    test! {parse_args3_3, parse_args!["a" = digit1], "\n{a = ", p: Err(_)}
     test! {parse_args4, parse_args!["a" = digit1, "b" = alphanumeric1], "\n{b = abc12, a = 34522 }abc", e: Ok(("abc", (Some("34522"), Some("abc12"))))}
 
     // `div_page` tests
@@ -1334,5 +1335,5 @@ $$
 y = x^2   
 $$
 {} якийсь текст тому що чому ні"#, e: Ok((" якийсь текст тому що чому ні", Token::Equation { content: "y = x^2   ".into(), ident: None }))}
-        // You can explicitly provide no args - fun fact
+    // You can explicitly provide no args - fun fact
 }
