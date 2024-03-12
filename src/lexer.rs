@@ -1,7 +1,7 @@
 use std::{borrow::Cow, num::ParseIntError, path::Path, str::FromStr, sync::RwLock};
 
 use nom::{
-    branch::{alt, permutation},
+    branch::alt,
     bytes::{
         complete::{escaped, tag, take_till1, take_until, take_until1, take_while},
         streaming::tag_no_case,
@@ -9,6 +9,7 @@ use nom::{
     character::{
         complete::{alphanumeric1, char, digit1, multispace0, newline, space0},
         is_space,
+        streaming::line_ending,
     },
     combinator::{all_consuming, cut, eof, iterator, map_res, not, opt, recognize, success},
     error::{context, ContextError, ErrorKind, FromExternalError, ParseError},
@@ -54,70 +55,172 @@ fn _multispace_line_break<'source, E: ParseError<&'source str>>(
     }
 }
 
+fn _optional_permutation<'parsers, 'source, E: ParseError<&'source str>, const N: usize>(
+    parsers: [&'parsers mut dyn Parser<&'source str, &'source str, E>; N],
+) -> impl Parser<&'source str, [Option<&'source str>; N], E> + 'parsers {
+    move |mut input| {
+        // the end result
+        let mut parsed = [None::<&'source str>; N];
+        'outer: for _ in 0..N {
+            for i in 0..N {
+                if parsed[i].is_none() {
+                    match parsers[i].parse(input) {
+                        Ok((rest, res)) => {
+                            // this parser succeeded, advance forward
+                            parsed[i] = Some(res);
+                            input = rest;
+                            continue 'outer; // continue outer iteration
+                        }
+                        Err(nom::Err::Failure(err)) => {
+                            // propagate a failure
+                            return Err(nom::Err::Failure(err));
+                        }
+                        Err(_) => {
+                            // well, do nothing
+                        }
+                    }
+                }
+            }
+            // all parser had failed to parse (success would've continued outer cycle)
+            // break out of outer cycle
+            break 'outer;
+        }
+        // return the result (input variable was updated to be rest of the input, on successful parses)
+        Ok((input, parsed))
+    }
+}
+
 // Conventions:
 // - parsers should only parse empty characters with `empty`
 // - parsers should only parse empty space at the beginning, not the end
 // - newline parsing should be carefully managed
 
-// TODO probably move that to util or th
-// I won't include the entire tuple operation library, while I can perfectly implement this myself.
-mod remove_last_unit {
-
-    pub trait Trait {
-        type Output;
-        fn remove_last_unit(self) -> Self::Output;
+// TODO probably move to util, or even try committing to `nom` :idk:
+mod optional_permutation {
+    pub trait OptionalPermutation<In, Out, E> {
+        fn optional_permutation(&mut self, input: In) -> super::IResult<In, Out, E>;
     }
 
-    macro_rules! impl_tuple_remove_last_unit {
-        {$A0:ident} => {
-            impl<$A0> Trait for ($A0, ()) { type Output = ($A0, );
-
-                #[allow(non_snake_case)]
-                #[inline]
-                fn remove_last_unit(self) -> Self::Output {
-                    let ($A0, _) = self;
-                    ($A0, )
+    macro_rules! impl_optional_permutation {
+        {$Count:expr, $type_ident:ident: $out_ident:ident} => {
+            // base case
+            impl<'source, Err, $out_ident, $type_ident> OptionalPermutation<&'source str, (Option<$out_ident>,), Err> for ($type_ident,)
+            where
+                Err: super::ParseError<&'source str>,
+                $type_ident: super::Parser<&'source str, $out_ident, Err>,
+            {
+                fn optional_permutation(&mut self, input: &'source str) -> super::IResult<&'source str, (Option<$out_ident>,), Err>
+                {
+                    // in a debug build, let's assert that we've passed a correct type count
+                    debug_assert!($Count == 1, "Should parse number equal to number of arguments");
+                    // for a single variant, just try parsing it, and propagate any sort of failure
+                    match self.0.parse(input) {
+                        Ok((rest, result)) => Ok((rest, (Some(result), ))),
+                        Err(nom::Err::Failure(err)) => Err(nom::Err::Failure(err)),
+                        Err(_) => Ok((input, (None, )))
+                    }
                 }
             }
         };
-        {$A0:ident $($Ai:ident) +} => {
-            impl<$A0, $($Ai), +> Trait for ($A0, $($Ai), +, ()) {
-                type Output = ($A0, $($Ai),+);
+        {$Count:expr, $type_ident0:ident: $out_ident0:ident, $($type_ident:ident: $out_ident:ident), *} => {
+            impl<'source, Err, $out_ident0, $($out_ident), *, $type_ident0, $($type_ident), *> OptionalPermutation<&'source str, (Option<$out_ident0>, $(Option<$out_ident>, ) *), Err>
+                for ($type_ident0, $($type_ident, ) *)
+            where
+                Err: super::ParseError<&'source str>,
+                $type_ident0: super::Parser<&'source str, $out_ident0, Err>,
+                $(
+                    $type_ident: super::Parser<&'source str, $out_ident, Err>
+                ), *
+            {
+                fn optional_permutation(&mut self, mut input: &'source str) -> super::IResult<&'source str, (Option<$out_ident0>, $(Option<$out_ident>), *), Err> {
+                    // for multiple variants, here comes chaos:
+                    // we can't create any sort of array or vector to hold the results -
+                    // they have different types, that's the point!
+                    // So we are bound to creating a BUNCH of variables
+                    let mut $out_ident0: Option<$out_ident0> = None;
+                    $(
+                        let mut $out_ident: Option<$out_ident> = None;
+                    ) *
+                    // Also, since we can't index tuples, we'll need to "deconstruct self"
+                    // I don't feel like creating separate identifiers for that, so I guess compiler IS to complain :idk:
+                    let ($type_ident0, $($type_ident, ) *) = self;
+                    // Now we can use `$type_ident` as corresponding parser, and `$out_ident` as a output variable!
+                    // Amazing! (not really; I imagine that would be a nightmare to read)
 
-                #[allow(non_snake_case)]
-                #[inline]
-                fn remove_last_unit(self) -> Self::Output {
-                    let ($A0, $($Ai), *, ()) = self;
-                    ($A0, $($Ai), +)
+                    // This is a max number of iterations we're gonna need
+                    const Count: usize = $Count;
+                    for _ in 0..Count {
+                        if $out_ident0.is_none() {
+                            match $type_ident0.parse(input) {
+                                Ok((rest, result)) => {
+                                    input = rest;
+                                    $out_ident0 = Some(result);
+                                    continue; // continues parsing attempts from the beginning
+                                },
+                                Err(nom::Err::Failure(err)) => return Err(nom::Err::Failure(err)),
+                                Err(_) => {}
+                            }
+                        }
+                        $(
+                            if $out_ident.is_none() {
+                                match $type_ident.parse(input) {
+                                    Ok((rest, result)) => {
+                                        input = rest;
+                                        $out_ident = Some(result);
+                                        continue; // continues parsing attempts from the beginning
+                                    },
+                                    Err(nom::Err::Failure(err)) => return Err(nom::Err::Failure(err)),
+                                    Err(_) => {}
+                                }
+                            }
+                        ) *
+                        // All parsing attempts had failed?
+                        // Break out, we're done here.
+                        break;
+                    }
+
+                    Ok((input, ($out_ident0, $($out_ident, ) *)))
                 }
             }
 
-            impl_tuple_remove_last_unit!{$($Ai) +}
+            // forward to N-1
+            impl_optional_permutation!{$Count - 1, $($type_ident: $out_ident), *}
         };
     }
 
-    impl_tuple_remove_last_unit! {A B C D E F G H I J K L M N O P Q R S T U V W}
+    impl_optional_permutation! {16, A: A_Out, B: B_Out, C: C_Out, D: D_Out, E: E_Out, F: F_Out, G: G_Out, H: H_Out, I: I_Out, J: J_Out, K: K_Out, L: L_Out, M: M_Out, N: N_Out, O: O_Out, P: P_Out}
+}
+
+fn optional_permutation<'parsers, 'source: 'parsers, In, Out, E: ParseError<&'source str>>(
+    mut parsers: impl optional_permutation::OptionalPermutation<In, Out, E> + 'parsers,
+) -> impl Parser<In, Out, E> + 'parsers {
+    move |input| parsers.optional_permutation(input)
 }
 
 /// Generates argument parser that accounts for all necessary syntax
 macro_rules! parse_args {
     [$($argument_name:literal = $argument_kernel:expr), +] => {
-        tuple((
+        preceded(
+            pair(
             space0,
             tag("\n{"), // NOTE: arguments must start from an empty line
-            permutation((
+            ),
+            cut(terminated(
+            optional_permutation((
                 $(
-                    opt(tuple((
+                    tuple((
                         space0,
                         tuple((tag($argument_name), space0, char('='), space0, context("arg", context($argument_name, $argument_kernel)))),
                         space0,
                         alt((char(','), nom::combinator::peek(char('}')))), // this can have unexpected consequences, but whatever :idk:
-                    ))).map(|value| value.map(|(_, (_, _, _, _, v), _, _)| v))
+                    )).map(|(_, (_, _, _, _, v), _, _)| v)
                 ), +,
-                success(())
             )),
-            char('}'),
-        )).map(|(_, _, out, _)| <_ as remove_last_unit::Trait>::remove_last_unit(out))
+            char('}'))),
+        )
+        // If parser above had failed - it's alright, arguments are optional anyway
+        // Return `None` variant for everyone in this case
+        .or(|input| Ok((input, ($({let _ = $argument_name; None},) +))))
     };
 }
 
@@ -169,8 +272,7 @@ fn header<
     context(
         "header",
         tuple((
-            multispace0::<&'source str, E>,
-            newline,
+            _multispace_line_break(""),
             map_res(many1_count(char('#')), |count| {
                 if count <= 6 {
                     Ok(count)
@@ -182,7 +284,7 @@ fn header<
             take_until1("\n"),
         )),
     )
-    .map(|(_, _, order, _, content)| Token::Header {
+    .map(|(_, order, _, content)| Token::Header {
         order,
         content: content.trim_end().into(), // kinda sad I'm forced to do this here, but whatever
     })
@@ -205,7 +307,7 @@ fn equation<
     let (rest, (content, _, (ident,))) = context(
         "display mathmode",
         preceded(
-            _multispace_line_break("$$"),
+            _multispace_line_break("$$\n"),
             // if mathmode opening found, lock into equation match
             cut(tuple((
                 take_until1("\n$$"),
@@ -421,16 +523,16 @@ fn ayano<
             // This is guaranteed to be Ayano block at this point, so we lock in
             cut(pair(
                 terminated(
-                    permutation((
-                        opt(preceded(
+                    optional_permutation((
+                        preceded(
                             pair(char('*'), space0),
                             opt(terminated(caption_kernel, space0)),
-                        )),
-                        opt(preceded(
+                        ),
+                        preceded(
                             pair(char('~'), space0),
                             terminated(take_till1(char::is_whitespace), space0),
-                        )),
-                        opt(preceded(
+                        ),
+                        preceded(
                             pair(char('#'), space0),
                             terminated(
                                 map_res(digit1, |n| {
@@ -438,8 +540,8 @@ fn ayano<
                                 }),
                                 space0,
                             ),
-                        )),
-                        opt(terminated(char('!'), space0)),
+                        ),
+                        terminated(char('!'), space0),
                     )),
                     char('\n'),
                 ),
@@ -1118,7 +1220,7 @@ mod tests {
 
                 // act
                 let result: Result<_, nom::Err<nom::error::VerboseError<&'static str>>>;
-                result = $parser.parse($input);
+                result =  $parser.parse($input);
 
                 // assert
                 assert_eq!(result, $expected, "Parser did not produce expected result");
@@ -1153,6 +1255,7 @@ mod tests {
     test! {parse_args2, parse_args!["a" = digit1], "{}", p: Err(_)}
     test! {parse_args3, parse_args!["a" = digit1], "\n{a = 34522}", e: Ok(("", (Some("34522"), )))}
     test! {parse_args3_2, parse_args!["a" = digit1], "{a = 34522}", p: Err(_)}
+    test! {parse_args4, parse_args!["a" = digit1, "b" = alphanumeric1], "\n{b = abc12, a = 34522 }abc", e: Ok(("abc", (Some("34522"), Some("abc12"))))}
 
     // `div_page` tests
     test! {div_page1, div_page, "", p: Err(_)}
@@ -1161,4 +1264,75 @@ mod tests {
     test! {div_page3_2, div_page, "------", p: Err(_)}
     test! {div_page4, div_page, "\n   ------", p: Err(_)}
     test! {div_page5, div_page, "    \t\n------\t\n", e: Ok(("\t\n", Token::PageDiv))}
+
+    // `header` tests
+    test! {header1, header, "", p: Err(_)}
+    test! {header2, header, "\n#Ababa\n", e: Ok(("\n", Token::Header { order: 1, content: "Ababa".into() }))}
+    test! {header3, header, "\n#       Ababa    \t  \t\n", e: Ok(("\n", Token::Header { order: 1, content: "Ababa".into() }))}
+    test! {header4, header, "\n###  Ababa  \n", e: Ok(("\n", Token::Header { order: 3, content: "Ababa".into() }))}
+    test! {header5, header, "\n######  Заголовок українською \n", e: Ok(("\n", Token::Header { order: 6, content: "Заголовок українською".into() }))}
+    test! {header6, header, "\n#######  Заголовок українською \n", p: Err(_)}
+
+    // `equation` tests
+    test! {equation1, equation, "", p: Err(_)}
+    test! {equation2, equation, "$$", p: Err(_)}
+    test! {equation3, equation, "$$$$", p: Err(_)} // NOTE: this thing is technically allowed in markdown, but you probably shouldn't do it
+    test! {equation4, equation, r"
+    $$
+    y = x^2
+    $$
+    ", p: Err(_)} // NOTE: same here. Please start your equations at the start of the line
+    test! {equation5, equation, r"
+$$
+y = x^2
+$$
+12344", e: Ok(("\n12344", Token::Equation { content: Cow::Borrowed("y = x^2"), ident: None }))}
+    // Like that!
+    test! {equation6, equation, r"
+$$y = x^2
+z = y;
+$$
+12344", p: Err(_)} // Don't do this and the following, too
+    test! {equation7, equation, r"
+$$
+y = x^2
+z = y$$;
+12344", p: Err(_)}
+    test! {equation8, equation, r"
+$$
+y = x^2
+z = y
+$$;12344", e: Ok((";12344", Token::Equation { content: "y = x^2\nz = y".into(), ident: None }))}
+    // This is alright, though
+    test! {equation9, equation, r#"
+$$
+y = x^2
+$$
+{ref = parabola}"#, e: Ok(("", Token::Equation { content: "y = x^2".into(), ident: Some("parabola".into()) }))}
+    // Equation ident example
+    test! {equation10, equation, r#"
+$$
+y = x^2
+$$
+{ref = parabola_1}"#, p: Err(_)}
+    // This is not ok
+    // TODO although that's subject to change
+    test! {equation11, equation, r#"
+    $$
+    y = x^2
+    $$
+    {tel = +4204206969}"#, p: Err(_)}
+    // Don't put random garbage there!
+    test! {equation12, equation, r#"
+$$
+y = x^2   
+$$
+{ref=11    } якийсь текст тому що чому ні"#, e: Ok((" якийсь текст тому що чому ні", Token::Equation { content: "y = x^2   ".into(), ident: Some("11".into()) }))}
+    // Any sort of whitespaces are preserved
+    test! {equation13, equation, r#"
+$$
+y = x^2   
+$$
+{} якийсь текст тому що чому ні"#, e: Ok((" якийсь текст тому що чому ні", Token::Equation { content: "y = x^2   ".into(), ident: None }))}
+        // You can explicitly provide no args - fun fact
 }
