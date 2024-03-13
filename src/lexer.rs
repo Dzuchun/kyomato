@@ -428,24 +428,25 @@ fn href<
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
-    let (rest, (display, url)) = context(
+    context(
         "href",
-        tuple((
-            delimited(char('['), take_until("]"), char(']')),
-            // url should be parsed into proper format
-            map_res(
-                delimited(char('('), take_until(")"), char(')')),
-                |url: &str| Url::from_str(url).map_err(KyomatoLexErrorKind::BadUrl),
+        preceded(
+            multispace0,
+            pair(
+                delimited(char('['), take_until("]"), char(']')),
+                // url should be parsed into proper format
+                map_res(
+                    delimited(char('('), take_until(")"), char(')')),
+                    |url: &str| Url::from_str(url).map_err(KyomatoLexErrorKind::BadUrl),
+                ),
             ),
-        )),
-    )(input)?;
-    Ok((
-        rest,
-        Token::Href {
-            url,
-            display: display.into(),
-        },
-    ))
+        ),
+    )
+    .map(|(display, url)| Token::Href {
+        url,
+        display: display.into(),
+    })
+    .parse(input)
 }
 
 /// Parses code block
@@ -771,7 +772,7 @@ fn formatting<
         }
     }
     // If this point was reached, there is no correct variant for pairing delimiter.
-    Err(nom::Err::Failure(E::add_context(
+    Err(nom::Err::Error(E::add_context(
         input,
         "formatting",
         E::from_error_kind(input, ErrorKind::Eof),
@@ -784,9 +785,12 @@ fn inline_math<'source, E: ParseError<&'source str> + ContextError<&'source str>
 ) -> IResult<&'source str, Token<'source>, E> {
     context(
         "inline math",
-        delimited(char('$'), take_until1("$"), char('$')),
+        preceded(
+            multispace0,
+            delimited(char('$'), take_until1("$"), char('$')),
+        ),
     )
-    .map(|content: &str| Token::InlineMathmode(content.into()))
+    .map(|content: &str| Token::InlineMathmode(content.trim().into()))
     .parse(input)
 }
 
@@ -805,7 +809,11 @@ fn reference<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
 ) -> IResult<&'source str, Token<'source>, E> {
     let (rest, ident) = context(
         "reference",
-        delimited(pair(space0, tag("[@")), cut(take_until1("]")), char(']')),
+        delimited(
+            pair(multispace0, tag("[@")),
+            cut(preceded(space0, take_until1("]"))),
+            char(']'),
+        ),
     )(input)?;
     Ok((rest, Token::Reference(ident.trim().into())))
 }
@@ -819,7 +827,11 @@ fn footnote_reference<'source, E: ParseError<&'source str> + ContextError<&'sour
 ) -> IResult<&'source str, Token<'source>, E> {
     let (rest, ident) = context(
         "footnote reference",
-        delimited(pair(space0, tag("[^")), cut(take_until1("]")), char(']')),
+        delimited(
+            pair(multispace0, tag("[^")),
+            cut(preceded(space0, take_until1("]"))),
+            char(']'),
+        ),
     )(input)?;
     Ok((rest, Token::FootNoteReference(ident.trim().into())))
 }
@@ -879,6 +891,11 @@ fn paragraph<
     preceded(multispace0, |input: &'source str| {
         // At this point we assume, that whitespace before was parsed, including any possible newlines
 
+        // If input turns out empty after that, return error
+        if input.is_empty() {
+            return Err(nom::Err::Error(E::from_error_kind(input, ErrorKind::Eof)));
+        }
+
         // Any token starting with a newline is out of the question
         // However, this still leaves a couple of candidates:
         // - href (starting with '[')
@@ -892,7 +909,7 @@ fn paragraph<
         let cut_input = &input[..=interrupt_ind];
 
         // Now, let's try finding interrupting token
-        let interuption = cut_input
+        let interruption = cut_input
             .char_indices()
             // Parsing continues until newline is reached
             .take_while(|(_, c)| c != &'\n')
@@ -927,7 +944,7 @@ fn paragraph<
             })
             .err();
 
-        let interruption = if let Some(interruption) = interuption {
+        let interruption = if let Some(interruption) = interruption {
             // there was an interruption!
             // but it might be a FAILURE ONE. That should bubble up
             Some(interruption?)
@@ -944,7 +961,7 @@ fn paragraph<
         let rest_input = interruption
             .as_ref()
             .map(|(_, (rest, _))| *rest)
-            .unwrap_or(&cut_input[this_token_end..]);
+            .unwrap_or(&input[this_token_end..]);
         let follower = interruption.map(|(_, (_, f))| f);
         Ok((rest_input, (this_token, follower)))
     })(outer_input)
@@ -1243,6 +1260,8 @@ mod tests {
         };
     }
 
+    // Tests were written in order they depend on each other
+
     // `_multispace_line_break` tests
     test! {multispace_line_break1, _multispace_line_break(""), "\n", e: Ok(("", ("\n", "")))}
     test! {multispace_line_break2, _multispace_line_break("1"), "\n", p: Err(_)}
@@ -1265,6 +1284,8 @@ mod tests {
     test! {div_page3_2, div_page, "------", p: Err(_)}
     test! {div_page4, div_page, "\n   ------", p: Err(_)}
     test! {div_page5, div_page, "    \t\n------\t\n", e: Ok(("\t\n", Token::PageDiv))}
+
+    // TODO add caption kernel tests
 
     // `header` tests
     test! {header1, header, "", p: Err(_)}
@@ -1335,5 +1356,151 @@ $$
 y = x^2   
 $$
 {} якийсь текст тому що чому ні"#, e: Ok((" якийсь текст тому що чому ні", Token::Equation { content: "y = x^2   ".into(), ident: None }))}
-    // You can explicitly provide no args - fun fact
+    // You can explicitly provide no args - fun fact :idk:
+
+    // TODO add table tests
+
+    // TODO add figure tests
+
+    // `href` tests
+    mod href {
+        use super::*;
+
+        macro_rules! href_ok {
+        {$name:ident, $input:expr, $output_url:expr, $output_display:expr, $left_over:literal} => {
+            test! {$name, href, $input, e: Ok(($left_over, Token::Href { url: $output_url.parse().expect("This is a valid url"), display: $output_display.into() }))}
+        };
+    }
+        test! {href1, href, "[link text]()", p: Err(_)} // empty url is not ok
+        test! {href2, href, "[](homepage.com)", p: Err(_)} // empty display is not ok too
+        test! {href3, href, "[невалідне посилання](http://ref    ?????)", p: Err(_)} // random garbage instead of url is not accepted
+        href_ok! {href4, "[link text](ftp://somewebsite/files/01234)", "ftp://somewebsite/files/01234", "link text", ""} // url example
+        href_ok! {href5, "[текст посилання](ftp://somewebsite/files/01234)", "ftp://somewebsite/files/01234", "текст посилання", ""} // cyrillic test
+        href_ok! {href6, "[link text](ftp://somewebsite/files/01234), ще текст після нього", "ftp://somewebsite/files/01234", "link text", ", ще текст після нього"}
+        // text after url is alright
+        href_ok! {href7, "       [link text](ftp://somewebsite/files/01234), ще текст після нього", "ftp://somewebsite/files/01234", "link text", ", ще текст після нього"}
+        // space before url is ignored
+    }
+
+    // `code_block` tests
+    mod code_block {
+        use super::*;
+        macro_rules! test_ok {
+            {$name:ident, $input:expr, $output_lang:expr, $output_code:expr, $left_over:expr} => {
+                test!{$name, code_block, $input, e: Ok(($left_over, Token::CodeBlock {code: $output_code.into(), language: $output_lang.map(Cow::from)} ))}
+            };
+        }
+
+        macro_rules! test_err {
+            {$name:ident, $input:literal} => {
+                test!{$name, code_block, $input, p: Err(_)}
+            };
+        }
+
+        test_ok! {ok_empty, "   \n```\n\n```\n", None::<&'static str>, "", "\n"} // a single empty line is ok
+        test_err! {err_no_line, "    \n```\n```\n"} // no lines in the block at all - that's bad
+        test_ok! {ok_lang, "    \n```C sus sus\n\t senpai, you are sus!\n```", Some("C sus sus"), "\t senpai, you are sus!", ""}
+        // you may specify whatever language you want
+        test_ok! {ok_cyrillic, "    \n```C sus sus\n\t тиск = сила / площа;\n// (і мотивація то є сильна)\n```",
+        Some("C sus sus"), "\t тиск = сила / площа;\n// (і мотивація то є сильна)", ""}
+        // you may write whatever you want inside
+        test_ok! {ok_text_after, "    \n```C sus sus\n\t тиск = сила / площа;\n// (і мотивація то є сильна)\n``` It's dangerous - being alone",
+        Some("C sus sus"), "\t тиск = сила / площа;\n// (і мотивація то є сильна)", " It's dangerous - being alone"}
+        // text just after the code block is ok too
+    }
+
+    // TODO add Ayano block tests
+
+    // TODO add list tests
+
+    // `formatting` tests
+    mod formatting {
+        macro_rules! test_ok {
+            {$name:ident, $input:literal} => {
+
+            };
+        }
+        // TODO add formatting tests
+    }
+
+    // `inline math` tests
+    mod inline_math {
+        use super::*;
+
+        macro_rules! test_ok {
+            {$name:ident, $input:literal, $formula:literal, $left_over:literal} => {
+                test!{$name, inline_math, $input, e: Ok(($left_over, Token::InlineMathmode($formula.into())))}
+            };
+        }
+
+        test! {err_empty, inline_math, "$$", p: Err(_)}
+        // completely empty inline math is not ok (as it's ambiguous with display math)
+        test_ok! {ok_space, "$ $", "", ""} // empty space is ok though (but it will be stripped)
+        test_ok! {ok_char, "$     x     $", "x", ""}
+        // you can specify a single character, but empty spaces would be tripped
+        test! {err_unclosed, inline_math, "$ x", p: Err(_)}
+        // unclosed mathmode is obviously disallowed
+        test_ok! {ok_cyrillic, "$  текст українською $", "текст українською", ""}
+        // you can put there whatever you want, however pay attention to latex's rules
+        test_ok! {ok_spaces, "\t   \n\t  \n    \t $   x $", "x", ""}
+        // got some spaces before? don't care
+        test_ok! {ok_text_after, "$   x$some text after it, українською в тому числі",
+        "x", "some text after it, українською в тому числі"}
+        // text after is is ok
+    }
+
+    // tests for `reference`
+    mod reference {
+        use super::*;
+
+        macro_rules! test_ok {
+            {$name:ident, $input:literal, $reference:literal, $left_over:literal} => {
+                test!{$name, reference, $input, e: Ok(($left_over, Token::Reference($reference.into())))}
+            };
+        }
+
+        test! {err_empty, reference, "[@      ]", p: Err(_)} // empty reference is not ok
+        test_ok! {ok_char, "[@ s]", "s", ""} // single char as identifier is ok
+        test_ok! {ok_eq, "[@ eq:parabola]", "eq:parabola", ""} // equation ref example
+        test_ok! {ok_fig, "[@ fig:my_best_drawing   ]", "fig:my_best_drawing", ""} // figure ref example
+        test_ok! {ok_tab, "[@ tab:boring_stat     ]", "tab:boring_stat", ""} // table ref example
+        test_ok! {ok_space_before, "    \n \t  [@ ref]", "ref", ""}
+        test_ok! {ok_text_after, "    \n \t  [@ ref] кирилиця or th", "ref", " кирилиця or th"}
+    }
+
+    // tests for `footnote reference`
+    mod footnote_reference {
+        use super::*;
+
+        macro_rules! test_ok {
+            {$name:ident, $input:literal, $reference:literal, $left_over:literal} => {
+                test!{$name, footnote_reference, $input, e: Ok(($left_over, Token::FootNoteReference($reference.into())))}
+            };
+        }
+
+        test! {err_empty, reference, "[^      ]", p: Err(_)} // empty reference is not ok
+        test_ok! {ok_char, "[^s]", "s", ""} // single char as identifier is ok
+        test_ok! {ok_space_before, "    \n \t  [^explanation_of_42]", "explanation_of_42", ""}
+        test_ok! {ok_text_after, "    \n \t  [^y_u_do_dis_2_me] кирилиця or th", "y_u_do_dis_2_me", " кирилиця or th"}
+    }
+
+    // TODO add footnote content tests
+
+    // tests for `paragraph`
+    mod paragraph {
+        use super::*;
+
+        macro_rules! test_ok {
+            {$name:ident, $input:literal, $paragraph:literal, $follower_token:expr, $left_over:literal} => {
+                test!{$name, paragraph, $input, e: Ok(($left_over, (Token::Paragraph(Font::Normal, $paragraph.into()), $follower_token)))}
+            };
+        }
+
+        test! {err_empty, paragraph, "", p: Err(_)} // paragraph won't be parsed where it's empty
+        test! {err_whitespace, paragraph, "   \t   \n\n \t", p: Err(_)} // nor if it's all whitespace
+        test_ok! {ok_char, "  \t\n c\nfff", "c", None, "\nfff"} // single char is ok as a paragraph
+        test_ok! {ok_sentence, "\t    \n I'm absolutely increative, so here's a bunch of garbage: ]42[t5(2[24tj4-0)jt3_94j03\nand some rest",
+        "I'm absolutely increative, so here's a bunch of garbage: ]42[t5(2[24tj4-0)jt3_94j03", None, "\nand some rest"}
+        test_ok! {ok_formatting, "\t    \n You can use *bold*!", "You can use ", Some(Token::Formatted(Formatting::Italic, Box::new(Token::text("bold")))), "!"}
+    }
 }
