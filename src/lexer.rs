@@ -22,7 +22,7 @@ use nom::{
         is_space,
         streaming::line_ending,
     },
-    combinator::{all_consuming, cut, eof, iterator, map_res, not, opt, recognize, success},
+    combinator::{all_consuming, cut, eof, iterator, map_res, not, opt, peek, recognize, success},
     error::{context, ContextError, ErrorKind, FromExternalError, ParseError},
     multi::{fold_many1, many1, many1_count, separated_list1},
     number::complete::float,
@@ -159,8 +159,8 @@ mod optional_permutation {
                     // Amazing! (not really; I imagine that would be a nightmare to read)
 
                     // This is a max number of iterations we're gonna need
-                    const Count: usize = $Count;
-                    for _ in 0..Count {
+                    const COUNT: usize = $Count;
+                    for _ in 0..COUNT {
                         if $out_ident0.is_none() {
                             match $type_ident0.parse(input) {
                                 Ok((rest, result)) => {
@@ -169,10 +169,7 @@ mod optional_permutation {
                                     continue; // continues parsing attempts from the beginning
                                 },
                                 Err(nom::Err::Failure(err)) => return Err(nom::Err::Failure(err)),
-                                Err(err) => {
-                                    let _ = err;
-                                    println!("2");
-                                }
+                                Err(_) => { }
                             }
                         }
                         $(
@@ -184,10 +181,7 @@ mod optional_permutation {
                                         continue; // continues parsing attempts from the beginning
                                     },
                                     Err(nom::Err::Failure(err)) => return Err(nom::Err::Failure(err)),
-                                    Err(err) => {
-                                        let _ = err;
-                                        println!("2");
-                                    }
+                                    Err(_) => { }
                                 }
                             }
                         ) *
@@ -288,6 +282,12 @@ fn div_page<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
     context("page divider", _multispace_line_break("------"))
         .map(|_| Token::PageDiv)
         .parse(input)
+}
+
+fn ident_kernel<'source, E: ParseError<&'source str>>(
+    input: &'source str,
+) -> IResult<&'source str, &'source str, E> {
+    take_till1(|c: char| !matches!(c, 'a'..='z' | 'A'..='Z' | '_')).parse(input)
 }
 
 /// Parses header
@@ -468,10 +468,7 @@ fn table<
                     },
                 ),
                 // finally, here come the arguments
-                parse_args![
-                    "ref" = take_till1(|c: char| c.is_whitespace() || c == ','),
-                    "caption" = caption_kernel
-                ],
+                parse_args!["ref" = ident_kernel, "caption" = caption_kernel],
             ))),
         )),
     )(input)?;
@@ -513,7 +510,7 @@ fn figure<
                 tag("]]"),
                 // and here come the args
                 parse_args![
-                    "ref" = alphanumeric1,
+                    "ref" = ident_kernel,
                     "caption" = caption_kernel,
                     "width" = float
                 ],
@@ -719,7 +716,7 @@ fn _list_item_generator<'scope>(
             Box::new((1..).into_iter().map(|i| {
                 // First, try get already generated string
                 let read = STRS.read().unwrap();
-                if let Some(res) = read.get(i) {
+                if let Some(res) = read.get(i - 1) {
                     return &**res;
                 }
                 // Hmmm, that didn't worked.
@@ -727,12 +724,12 @@ fn _list_item_generator<'scope>(
                 drop(read);
                 let mut write = STRS.write().unwrap();
                 // Append all necessary strings for the array
-                while write.len() <= i {
+                while write.len() < i {
                     let j = write.len() + 1;
                     write.push(format!("{}.", j).leak());
                 }
                 write
-                    .get(i)
+                    .get(i - 1)
                     .expect("Should be present now, we should've just pushed it")
             }))
         }
@@ -766,11 +763,9 @@ fn _list_inner<
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
     // First, we need to actually detect list type
+    let (input, _) = _multispace_line_break("").parse(input)?;
 
-    let (new_input, first_discriminator) = preceded(
-        _multispace_line_break(""),
-        recognize(take_till1(char::is_whitespace)),
-    )(input)?;
+    let (_, first_discriminator) = recognize(take_till1(char::is_whitespace))(input)?;
     let list_type = match first_discriminator {
         "1." => ListType::Num,
         "a." => ListType::Latin,
@@ -780,7 +775,7 @@ fn _list_inner<
         _ => {
             // that's an unknown list type
             return Err(nom::Err::Error(E::from_external_error(
-                new_input,
+                input,
                 ErrorKind::Char,
                 KyomatoLexError::unknown_list_type(input),
             )));
@@ -799,7 +794,7 @@ fn _list_inner<
         };
         // Match current item start and item itself
         preceded(pair(tag(this_start), space0), inner_lex)(input)
-    })(new_input)?;
+    })(input)?;
     // Unfortunately, we can't use `map` function here, since it accepts `Fn` (not `FnOnce`),
     // and I'd like to avoid giving `Copy` to every single thing in existence
     Ok((
@@ -829,7 +824,7 @@ fn list<
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
-    context("list", preceded(_multispace_line_break(""), _list_inner))(input)
+    context("list", _list_inner)(input)
 }
 
 fn _formatting_inner<
@@ -1232,7 +1227,7 @@ fn tokens_many1<
     }
     move |outer_input| {
         map_res(
-            all_consuming(|input| {
+            |input| {
                 // This iterator it kinda tricky to operate.
                 // Basically, as far as I can see - it won't return error at each step.
                 // Instead, error will be silently stored inside it, until it's `finish` function is called to extract it.
@@ -1293,7 +1288,7 @@ fn tokens_many1<
                 let (rest, _) = iterator.finish()?;
                 // Return multiple variant
                 Ok((rest, InnerResult::Multiple(tokens)))
-            }),
+            },
             // Lastly, map this inner result into a single actual token.
             // Oh, and if there were no tokens - that's an error, so might return it as well.
             |inner_result| match inner_result {
@@ -1885,18 +1880,79 @@ $$
             eq!(!"cell_{21}"), tks![tx!("cell"), rf!(@"tab:22")];;
             {ref = Some("example_table"), caption = Some(tx!("This table can be seen as an \\\"example\\\""))}), ""}
     }
-    // TODO add table tests
-    // TODO add figure tests
-    // TODO add Ayano block tests
-    // TODO add list tests
-    // `formatting` tests
-    mod formatting {
-        macro_rules! test_ok {
-            {$name:ident, $input:literal} => {
 
+    macro_rules! fig {
+        ($path:literal) => {
+            fig!($path, {ref = None::<&'static str>, caption = None})
+        };
+        ($path:literal, {ref = $ident:expr, caption = $caption:expr}) => {
+            Token::Figure {
+                src_name: Cow::Borrowed(Path::new($path)),
+                ident: $ident.map(Cow::from),
+                caption: $caption.map(Box::new),
+            }
+        };
+    }
+    mod figure {
+        use super::*;
+
+        macro_rules! test_ok {
+            {$name:ident, $input:literal, $output:expr, $left_over:literal} => {
+                test!{$name, figure, $input, e: Ok(($left_over, $output))}
             };
         }
-        // TODO add formatting tests
+
+        macro_rules! test_err {
+            {$name:ident, $input:literal} => {
+                test!{$name, figure, $input, p: Err(_)}
+            };
+        }
+
+        test_err! {err_empty, ""}
+        test_err! {err_unclosed, "\n![[path/to/file]"}
+        // test_err! {err_bad_path, "\n![[/path/to////////]]"} // not sure about that?
+        test_ok! {ok, "\n![[path/to/file.jpg]]", fig!("path/to/file.jpg"), ""}
+        test_ok! {ok_empty_before, "\t\t\t\n   \n\n![[path/to/file.jpg]]", fig!("path/to/file.jpg"), ""}
+        test_ok! {ok_text_after, "\t\t\t\n   \n\n![[path/to/file.jpg]] і ще щось написане", fig!("path/to/file.jpg"), " і ще щось написане"}
+        test_ok! {ok_explicit_no_params, "\n![[path/to/file.jpg]]\n{}\n", fig!("path/to/file.jpg"), "\n"}
+        test_ok! {ok_ident, "\n![[path/to/file.jpg]]\n{ref = figure_of_doom    }\n", fig!("path/to/file.jpg", {ref = Some("figure_of_doom"), caption = None}), "\n"}
+        test_ok! {ok_caption, "\n![[path/to/file.jpg]]\n{caption = \"Ця картинка показує графік рівняння $y = x^2$\"    }\n",
+        fig!("path/to/file.jpg", {ref = None::<&str>, caption = Some(tks![tx!("Ця картинка показує графік рівняння"), eq!(!"y = x^2")])}), "\n"}
+        test_ok! {ok_both, "\n![[path/to/file.jpg]]\n{   ref = mc_erat, caption = \"This is a mee from our $\\text{Nomifactory}^{2*}$ world.\"    }\n",
+        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a mee from our"), eq!(!"\\text{Nomifactory}^{2*}"), tx!("world.")))}), "\n"}
+        test_ok! {ok_both_reversed, "\n![[path/to/file.jpg]]\n{   caption = \"This is a meme from our $\\text{Nomifactory}^{2*}$ world.\" ,    ref = mc_erat    }\n",
+        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a meme from our"), eq!(!"\\text{Nomifactory}^{2*}"), tx!("world.")))}), "\n"}
+        test_ok! {ok_both_left_over, "\n![[path/to/file.jpg]]\n{   caption = \"This is a meme from our $\\text{Nomifactory}^{2*}$ world.\" ,    ref = mc_erat    }\nІще трохи тексту",
+        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a meme from our"), eq!(!"\\text{Nomifactory}^{2*}"), tx!("world.")))}), "\nІще трохи тексту"}
+    }
+
+    macro_rules! ls {
+        [1 $($item:expr), +] => {
+            ls![ListType::Num; $($item), +]
+        };
+        [$list_type:expr; $($item:expr), +] => {
+            Token::List {list_type: $list_type, content: Tokens::new([$($item), +])}
+        };
+    }
+    mod list {
+        use super::*;
+        macro_rules! test_ok {
+            {$name:ident, $input:literal, $output:expr, $left_over:expr} => {
+                test!{$name, list, $input, e: Ok(($left_over, $output))}
+            };
+        }
+
+        macro_rules! test_err {
+            {$name:ident, $input:literal} => {
+                test!{$name, list, $input, p: Err(_)}
+            };
+        }
+
+        test_err! {err_empty, ""}
+        test_ok! {ok_single, "\n1. Item 1\n", ls!(1 tx!("Item 1")), "\n"}
     }
     // TODO add footnote content tests
+    // TODO add Ayano block tests
+    // FIXME EXPL: `formatting` tests are not to be done, since this token type will be removed soon anyways
+    // TODO add `lex` tests (basically, whole parser tests)
 }

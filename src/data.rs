@@ -140,6 +140,7 @@ pub enum Token<'source> {
         list_type: ListType,
         content: Tokens<'source>,
     },
+    #[deprecated = "`Font`-thing inside paragraph token does similar thing, so it would be wise to merge them"]
     Formatted(Formatting, Box<Token<'source>>),
     Text(Tokens<'source>),
     // TODO move font and formatting exclusively to here
