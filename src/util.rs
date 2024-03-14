@@ -336,3 +336,53 @@ impl<T, I: Sized + Iterator<Item = T>> IteratorArrayCollectExt<T> for I {
         }
     }
 }
+
+pub trait VecTryExtendExt<T, E> {
+    fn try_extend(&mut self, iter: impl Iterator<Item = Result<T, E>>) -> Result<(), E>;
+}
+
+impl<T, E> VecTryExtendExt<T, E> for Vec<T> {
+    fn try_extend(&mut self, iter: impl Iterator<Item = Result<T, E>>) -> Result<(), E> {
+        for el in iter {
+            self.push(el?);
+        }
+        Ok(())
+    }
+}
+
+macro_rules! fn_ref {
+    ($input:expr) => {{
+        fn focus_pokus_amogus<I, O>(input: fn(I) -> O) -> fn(I) -> O {
+            input
+        }
+        focus_pokus_amogus(|i| $input(&i))
+    }};
+}
+macro_rules! fn_mut {
+    ($input:expr) => {{
+        fn focus_pokus_amogus<I, O>(input: fn(I) -> O) -> fn(I) -> O {
+            input
+        }
+        focus_pokus_amogus(|mut i| $input(&mut i))
+    }};
+}
+
+macro_rules! fn_chain {
+    ($fn1:expr, $fn2:expr) => {{
+        fn focus_pokus_amogus<I, O>(input: fn(I) -> O) -> fn(I) -> O {
+            input
+        }
+        focus_pokus_amogus(|input| $fn2($fn1(input)))
+    }};
+}
+
+#[cfg(test)]
+mod fn_ref_tests {
+    #[test]
+    fn works() {
+        // act
+        let _ref_pointer = fn_ref!(String::len);
+        let _mut_pointer = fn_mut!(Vec::<i32>::pop);
+        let _chain_pointer = fn_chain!(fn_mut!(Vec::<i32>::pop), Option::unwrap);
+    }
+}

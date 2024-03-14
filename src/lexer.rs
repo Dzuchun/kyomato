@@ -1,19 +1,30 @@
-use std::{borrow::Cow, num::ParseIntError, path::Path, str::FromStr, sync::RwLock};
+use std::{
+    any::Any,
+    borrow::Cow,
+    cmp::Ordering,
+    error::Error,
+    fmt::{Debug, Display},
+    num::ParseIntError,
+    path::Path,
+    str::FromStr,
+    sync::RwLock,
+};
 
+use itertools::Itertools;
 use nom::{
     branch::alt,
     bytes::{
-        complete::{escaped, tag, take_till1, take_until, take_until1, take_while},
+        complete::{tag, take_till1, take_until, take_until1, take_while},
         streaming::tag_no_case,
     },
     character::{
-        complete::{alphanumeric1, char, digit1, multispace0, newline, space0},
+        complete::{alphanumeric1, char, digit1, multispace0, newline, none_of, space0},
         is_space,
         streaming::line_ending,
     },
     combinator::{all_consuming, cut, eof, iterator, map_res, not, opt, recognize, success},
     error::{context, ContextError, ErrorKind, FromExternalError, ParseError},
-    multi::{many1, many1_count, separated_list1},
+    multi::{fold_many1, many1, many1_count, separated_list1},
     number::complete::float,
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult, Parser,
@@ -22,7 +33,7 @@ use url::Url;
 
 use crate::{
     data::{AyanoBlock, Font, Formatting, ListType, Token, Tokens},
-    util::IteratorArrayCollectExt,
+    util::{Equivalent, IteratorArrayCollectExt, VecTryExtendExt},
 };
 
 /// Matches any sort of whitespace characters, *newline*, and a provided tag at the end
@@ -158,7 +169,10 @@ mod optional_permutation {
                                     continue; // continues parsing attempts from the beginning
                                 },
                                 Err(nom::Err::Failure(err)) => return Err(nom::Err::Failure(err)),
-                                Err(_) => {}
+                                Err(err) => {
+                                    let _ = err;
+                                    println!("2");
+                                }
                             }
                         }
                         $(
@@ -170,7 +184,10 @@ mod optional_permutation {
                                         continue; // continues parsing attempts from the beginning
                                     },
                                     Err(nom::Err::Failure(err)) => return Err(nom::Err::Failure(err)),
-                                    Err(_) => {}
+                                    Err(err) => {
+                                        let _ = err;
+                                        println!("2");
+                                    }
                                 }
                             }
                         ) *
@@ -178,7 +195,7 @@ mod optional_permutation {
                         // Break out, we're done here.
                         break;
                     }
-
+                    let _ = 2;
                     Ok((input, ($out_ident0, $($out_ident, ) *)))
                 }
             }
@@ -202,8 +219,8 @@ macro_rules! parse_args {
     [$($argument_name:literal = $argument_kernel:expr), +] => {
         preceded(
             pair(
-            space0,
-            tag("\n{"), // NOTE: arguments must start from an empty line
+                space0,
+                tag("\n{"), // NOTE: arguments must start from an empty line
             ),
             cut(terminated(
             optional_permutation((
@@ -212,7 +229,7 @@ macro_rules! parse_args {
                         space0,
                         tuple((tag($argument_name), space0, char('='), space0, context("arg", context($argument_name, $argument_kernel)))),
                         space0,
-                        alt((char(','), nom::combinator::peek(char('}')))), // this can have unexpected consequences, but whatever :idk:
+                        alt((char(','), nom::combinator::peek(char('}')))), // this has unexpected consequences, but whatever :idk:
                     )).map(|(_, (_, _, _, _, v), _, _)| v)
                 ), +,
             )),
@@ -226,23 +243,40 @@ macro_rules! parse_args {
 
 /// Parses caption (just the literal) part
 ///
-/// Quite tricky task, as there can be double quotes -- but escaped.
-/// Apart from single, unescaped quotes, caption can be ANYTHING.
-/// There seems to be just the tool for a job -- `escaped` parser
-/// TODO FIXME add a mention about caption actually TERMINATING after first unescaped double-quote (and there is no cure),
-/// and where exactly escaping backslashes are removed
+/// Quite a tricky task, as there can be double quotes -- but escaped.
+/// Apart from double unescaped quotes, caption can be ANYTHING.
+/// TODO FIXME add a mention about caption attempting to parse after EACH unescaped double quote. First one to succeed will be the output
 fn caption_kernel<
     'source,
     E: ParseError<&'source str>
         + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexErrorKind>,
+        + FromExternalError<&'source str, KyomatoLexError<'source>>
+        + 'source,
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
+    // first, match opening quote
+    let (input, _) = char('"')(input)?;
+    // then, let's filter all double quotes
+    let double_quotes = input.char_indices().filter(|(_, c)| c == &'"');
+    // out of them, choose unescaped ones
+    let unescaped_quotes = double_quotes.filter(|(i, _)| !&input[..*i].ends_with('\\'));
+    // lastly, try parsing each of them
+    let mut parsed = unescaped_quotes
+        .map(|(i, _)| inner_lex::<'source, E>(dbg!(&input[..i])).map(|(_, t)| (&input[i..], t)));
+    let (input, token) =
+        parsed
+            .find_map(Result::ok)
+            .ok_or(nom::Err::Error(E::from_external_error(
+                input,
+                ErrorKind::Escaped,
+                KyomatoLexError::no_tokens(input),
+            )))?;
+
     // FIXME add `terminated(_, space0)` to all `all_consuming`
-    escaped(not(char('"')), '\\', char('"'))
-        .and_then(all_consuming(inner_lex::<'source, E>))
-        .parse(input)
+    // lastly, match the actual closing quote
+    let (input, _) = cut(char('"'))(input)?;
+    Ok((input, token))
 }
 
 /// Parses page divider
@@ -265,7 +299,7 @@ fn header<
     'source,
     E: ParseError<&'source str>
         + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexErrorKind>,
+        + FromExternalError<&'source str, KyomatoLexError<'source>>,
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
@@ -277,7 +311,7 @@ fn header<
                 if count <= 6 {
                     Ok(count)
                 } else {
-                    Err(KyomatoLexErrorKind::TooDeepHeader { fold: count })
+                    Err(KyomatoLexError::too_deep_header(input, count))
                 }
             }),
             space0,
@@ -300,7 +334,7 @@ fn equation<
     'source,
     E: ParseError<&'source str>
         + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexErrorKind>,
+        + FromExternalError<&'source str, KyomatoLexError<'source>>,
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
@@ -325,6 +359,70 @@ fn equation<
     ))
 }
 
+/// Parses table row
+///
+/// Parses ALL of it's input
+fn _parse_table_row<
+    'source,
+    E: ParseError<&'source str>
+        + ContextError<&'source str>
+        + FromExternalError<&'source str, KyomatoLexError<'source>>
+        + 'source,
+>(
+    input: &'source str,
+) -> IResult<
+    &'source str,
+    impl Iterator<Item = IResult<&'source str, Token<'source>, E>> + 'source,
+    E,
+> {
+    let pipes = input.char_indices().filter(|(_, c)| c == &'|');
+    let unescaped_pipes =
+        pipes.filter(|(ind, _)| ind > &0 && !input[(ind - 1)..].starts_with(r"\|"));
+    let mut dividers = unescaped_pipes.map(|(ind, _)| ind);
+    let mut last_ind = dividers
+        .next()
+        .ok_or(nom::Err::Error(E::from_external_error(
+            input,
+            ErrorKind::Eof,
+            KyomatoLexError::no_tokens(input),
+        )))?;
+    let slices = std::iter::once(&input[..last_ind]).chain(dividers.filter_map(move |ind| {
+        if ind == last_ind {
+            return None;
+        }
+        let slice = &input[(last_ind + 1)..ind];
+        last_ind = ind;
+        Some(slice)
+    }));
+    let tokens = slices.map(all_consuming(inner_lex));
+    Ok(("", tokens))
+}
+
+fn try_fold_many1<I: Clone, Inner, O, E>(
+    mut parser: impl Parser<I, Inner, E>,
+    mut init: impl FnMut() -> O,
+    mut combiner: impl FnMut(O, Inner) -> Result<O, nom::Err<E>>,
+) -> impl Parser<I, O, E> {
+    move |mut input: I| {
+        let mut output = init();
+        loop {
+            // first, try parse the main token
+            // any error should break the loop
+            // failure should break with a failure
+            let res = match parser.parse(input.clone()) {
+                Ok(res) => res,
+                Err(nom::Err::Failure(fail)) => return Err(nom::Err::Failure(fail)),
+                Err(_) => break,
+            };
+            input = res.0;
+            let next = res.1;
+            // then, attempt to combine it
+            output = combiner(output, next)?;
+        }
+        Ok((input, output))
+    }
+}
+
 /// Parses table
 ///
 /// - Always starts from a newline followed by '|' char
@@ -336,7 +434,8 @@ fn table<
     'source,
     E: ParseError<&'source str>
         + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexErrorKind>,
+        + FromExternalError<&'source str, KyomatoLexError<'source>>
+        + 'source,
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
@@ -345,23 +444,34 @@ fn table<
         tuple((
             // first, find the start
             _multispace_line_break("|"),
-            terminated(separated_list1(char('|'), inner_lex), char('|')),
+            take_until1("\n").and_then(|input| {
+                let (_, headers) = _parse_table_row(input)?;
+                let headers: Vec<_> = headers.map_ok(|(_, t)| t).try_collect()?;
+                Ok(("", headers))
+            }),
             // at this point this is guaranteed to be a table token, so we lock in
             cut(tuple((
                 // first, match until the end of this line
                 pair(take_until("\n"), char('\n')),
                 // then, match format line (it's discarded right now)
-                pair(take_until("\n"), char('\n')),
+                take_until("\n"),
                 // from here, match table cells
                 // while this is possible to do by just per-line collection of them into a vectors
                 // (and merge them afterwards),
                 // I can't stand unnecessary heap allocations, so here is my solution:
-                separated_list1(
-                    preceded(preceded(space0, char('|')), opt(pair(space0, tag("\n|")))),
-                    inner_lex,
+                try_fold_many1(
+                    preceded(tag("\n|"), take_until("\n").and_then(_parse_table_row)),
+                    Vec::<Token<'source>>::new,
+                    |mut acc, next| {
+                        acc.try_extend(next.map_ok(|(_, t)| t))?;
+                        Ok(acc)
+                    },
                 ),
                 // finally, here come the arguments
-                parse_args!["ref" = alphanumeric1, "caption" = caption_kernel],
+                parse_args![
+                    "ref" = take_till1(|c: char| c.is_whitespace() || c == ','),
+                    "caption" = caption_kernel
+                ],
             ))),
         )),
     )(input)?;
@@ -385,7 +495,8 @@ fn figure<
     'source,
     E: ParseError<&'source str>
         + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexErrorKind>,
+        + FromExternalError<&'source str, KyomatoLexError<'source>>
+        + 'source,
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
@@ -424,7 +535,7 @@ fn href<
     'source,
     E: ParseError<&'source str>
         + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexErrorKind>,
+        + FromExternalError<&'source str, KyomatoLexError<'source>>,
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
@@ -437,14 +548,16 @@ fn href<
                 // url should be parsed into proper format
                 map_res(
                     delimited(char('('), take_until(")"), char(')')),
-                    |url: &str| Url::from_str(url).map_err(KyomatoLexErrorKind::BadUrl),
+                    |url: &str| {
+                        Url::from_str(url).map_err(|err| KyomatoLexError::bad_url(input, err))
+                    },
                 ),
             ),
         ),
     )
     .map(|(display, url)| Token::Href {
         url,
-        display: display.into(),
+        display: display.trim().into(),
     })
     .parse(input)
 }
@@ -505,7 +618,8 @@ fn ayano<
     'source,
     E: ParseError<&'source str>
         + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexErrorKind>,
+        + FromExternalError<&'source str, KyomatoLexError<'source>>
+        + 'source,
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
@@ -537,7 +651,8 @@ fn ayano<
                             pair(char('#'), space0),
                             terminated(
                                 map_res(digit1, |n| {
-                                    u16::from_str(n).map_err(KyomatoLexErrorKind::BadIdent)
+                                    u16::from_str(n)
+                                        .map_err(|err| KyomatoLexError::bad_indent(input, err))
                                 }),
                                 space0,
                             ),
@@ -645,7 +760,8 @@ fn _list_inner<
     'source,
     E: ParseError<&'source str>
         + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexErrorKind>,
+        + FromExternalError<&'source str, KyomatoLexError<'source>>
+        + 'source,
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
@@ -666,7 +782,7 @@ fn _list_inner<
             return Err(nom::Err::Error(E::from_external_error(
                 new_input,
                 ErrorKind::Char,
-                KyomatoLexErrorKind::UnknownListType,
+                KyomatoLexError::unknown_list_type(input),
             )));
         }
     };
@@ -678,7 +794,7 @@ fn _list_inner<
             return Err(nom::Err::Error(E::from_external_error(
                 input,
                 ErrorKind::IsA,
-                KyomatoLexErrorKind::TooLongList,
+                KyomatoLexError::too_long_list(input),
             )));
         };
         // Match current item start and item itself
@@ -708,7 +824,8 @@ fn list<
     'source,
     E: ParseError<&'source str>
         + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexErrorKind>,
+        + FromExternalError<&'source str, KyomatoLexError<'source>>
+        + 'source,
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
@@ -719,7 +836,8 @@ fn _formatting_inner<
     'source,
     E: ParseError<&'source str>
         + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexErrorKind>,
+        + FromExternalError<&'source str, KyomatoLexError<'source>>
+        + 'source,
 >(
     input: &'source str,
     style: crate::data::Formatting,
@@ -743,7 +861,8 @@ fn formatting<
     'source,
     E: ParseError<&'source str>
         + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexErrorKind>,
+        + FromExternalError<&'source str, KyomatoLexError<'source>>
+        + 'source,
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
@@ -846,7 +965,8 @@ fn footnote_content<
     'source,
     E: ParseError<&'source str>
         + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexErrorKind>,
+        + FromExternalError<&'source str, KyomatoLexError<'source>>
+        + 'source,
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
@@ -884,7 +1004,8 @@ fn paragraph<
     'source,
     E: ParseError<&'source str>
         + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexErrorKind>,
+        + FromExternalError<&'source str, KyomatoLexError<'source>>
+        + 'source,
 >(
     outer_input: &'source str,
 ) -> IResult<&'source str, (Token<'source>, Option<Token<'source>>), E> {
@@ -905,8 +1026,8 @@ fn paragraph<
         // - footnote_reference (starting with "[^")
 
         // First, let's isolate input to a newline (if there is no newline, stop at last char)
-        let interrupt_ind = input.find('\n').unwrap_or(input.len() - 1);
-        let cut_input = &input[..=interrupt_ind];
+        let interrupt_ind = input.find('\n').unwrap_or(input.len());
+        let cut_input = &input[..interrupt_ind];
 
         // Now, let's try finding interrupting token
         let interruption = cut_input
@@ -957,7 +1078,8 @@ fn paragraph<
             .as_ref()
             .map(|(ind, _)| *ind)
             .unwrap_or(interrupt_ind);
-        let this_token = Token::Paragraph(Font::Normal, Cow::from(&cut_input[..this_token_end]));
+        let this_token =
+            Token::Paragraph(Font::Normal, Cow::from(cut_input[..this_token_end].trim()));
         let rest_input = interruption
             .as_ref()
             .map(|(_, (rest, _))| *rest)
@@ -971,7 +1093,61 @@ fn __equalizer(token: Token<'_>) -> (Token<'_>, Option<Token<'_>>) {
     (token, None)
 }
 
-pub enum KyomatoLexErrorKind {
+#[derive(Debug, PartialEq, thiserror::Error)]
+pub enum KyomatoLexError<'source> {
+    #[error("{}", .0)]
+    Single(&'source str, KyomatoLexErrorStackEntry<'source>),
+    #[error("STACK: {:?}", .0)]
+    Multiple(Vec<(&'source str, KyomatoLexErrorStackEntry<'source>)>),
+    #[error("ALT: {:?}", .0)]
+    Alt(Vec<KyomatoLexError<'source>>),
+}
+
+impl<'source> KyomatoLexError<'source> {
+    fn no_tokens(pos: &'source str) -> Self {
+        Self::Single(pos, KyomatoLexErrorStackEntry::NoTokens)
+    }
+
+    fn forbidden_token(pos: &'source str, token: &'static str, reason: &'static str) -> Self {
+        Self::Single(
+            pos,
+            KyomatoLexErrorStackEntry::ForbiddenToken { token, reason },
+        )
+    }
+
+    fn bad_indent(pos: &'source str, error: ParseIntError) -> Self {
+        Self::Single(pos, KyomatoLexErrorStackEntry::BadIdent(error))
+    }
+
+    fn too_long_list(pos: &'source str) -> Self {
+        Self::Single(pos, KyomatoLexErrorStackEntry::TooLongList)
+    }
+
+    fn unknown_list_type(pos: &'source str) -> Self {
+        Self::Single(pos, KyomatoLexErrorStackEntry::UnknownListType)
+    }
+
+    fn bad_url(pos: &'source str, err: url::ParseError) -> Self {
+        Self::Single(pos, KyomatoLexErrorStackEntry::BadUrl(err))
+    }
+
+    fn too_deep_header(pos: &'source str, fold: usize) -> Self {
+        Self::Single(pos, KyomatoLexErrorStackEntry::TooDeepHeader { fold })
+    }
+
+    fn _stack(self) -> Vec<(&'source str, KyomatoLexErrorStackEntry<'source>)> {
+        match self {
+            KyomatoLexError::Single(pos, entry) => vec![(pos, entry)],
+            KyomatoLexError::Multiple(stack) => stack,
+            err @ KyomatoLexError::Alt(_) => {
+                vec![("ALT", KyomatoLexErrorStackEntry::Inner(Box::new(err)))]
+            }
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum KyomatoLexErrorStackEntry<'source> {
     /// Tokens were expected, but none were found.
     NoTokens,
     /// Headers only up to 6-fold are supported, but even more folded one was found
@@ -983,13 +1159,50 @@ pub enum KyomatoLexErrorKind {
         token: &'static str,
         reason: &'static str,
     },
-    BadSyntax {
-        reason: &'static str,
-    },
     BadUrl(url::ParseError),
     BadIdent(ParseIntError),
     UnknownListType,
     TooLongList,
+    External(Equivalent<Box<dyn Error + 'source>>),
+    Nom(ErrorKind),
+    Context(&'static str),
+    Inner(Box<KyomatoLexError<'source>>),
+}
+
+impl<'source> ParseError<&'source str> for KyomatoLexError<'source> {
+    fn from_error_kind(input: &'source str, kind: ErrorKind) -> Self {
+        Self::Single(input, KyomatoLexErrorStackEntry::Nom(kind))
+    }
+
+    fn append(input: &'source str, kind: ErrorKind, other: Self) -> Self {
+        let mut stack = other._stack();
+        stack.push((input, KyomatoLexErrorStackEntry::Nom(kind)));
+        Self::Multiple(stack)
+    }
+
+    fn or(self, other: Self) -> Self {
+        Self::Alt(vec![self, other])
+    }
+}
+
+impl<'source> ContextError<&'source str> for KyomatoLexError<'source> {
+    fn add_context(input: &'source str, ctx: &'static str, other: Self) -> Self {
+        let mut stack = other._stack();
+        stack.push((input, KyomatoLexErrorStackEntry::Context(ctx)));
+        Self::Multiple(stack)
+    }
+}
+
+impl<'source, E: Error + 'source> FromExternalError<&'source str, E> for KyomatoLexError<'source> {
+    fn from_external_error(input: &'source str, kind: ErrorKind, e: E) -> Self {
+        Self::Multiple(vec![
+            (input, KyomatoLexErrorStackEntry::Nom(kind)),
+            (
+                "EXTERNAL",
+                KyomatoLexErrorStackEntry::External(Equivalent(Box::new(e) as _)),
+            ),
+        ])
+    }
 }
 
 // TODO wrap outer-layer combinator into `complete`
@@ -1006,7 +1219,7 @@ fn tokens_many1<
     'source: 'kernel,
     E: ParseError<&'source str>
         + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexErrorKind>
+        + FromExternalError<&'source str, KyomatoLexError<'source>>
         + 'kernel,
 >(
     mut tokens_kernel: impl FnMut(&'source str) -> IResult<&'source str, (Token<'source>, Option<Token<'source>>), E>
@@ -1017,77 +1230,80 @@ fn tokens_many1<
         Single(Token<'source>),
         Multiple(Vec<Token<'source>>),
     }
-    map_res(
-        all_consuming(move |input| {
-            // This iterator it kinda tricky to operate.
-            // Basically, as far as I can see - it won't return error at each step.
-            // Instead, error will be silently stored inside it, until it's `finish` function is called to extract it.
-            // Basically, this means that each return from this function MUST INVOLVE `tokens.finish()?`!!!
-            let mut iterator = iterator(input, &mut tokens_kernel);
+    move |outer_input| {
+        map_res(
+            all_consuming(|input| {
+                // This iterator it kinda tricky to operate.
+                // Basically, as far as I can see - it won't return error at each step.
+                // Instead, error will be silently stored inside it, until it's `finish` function is called to extract it.
+                // Basically, this means that each return from this function MUST INVOLVE `tokens.finish()?`!!!
+                let mut iterator = iterator(input, &mut tokens_kernel);
 
-            // First, let's try getting first token
-            let Some((first_token, first_follower)) = (&mut iterator).next() else {
-                // There is no first token!
-                // Let's give iterator a chance to explain itself:
+                // First, let's try getting first token
+                let Some((first_token, first_follower)) = (&mut iterator).next() else {
+                    // There is no first token!
+                    // Let's give iterator a chance to explain itself:
+                    let (rest, _) = iterator.finish()?;
+                    // Well, seems like there are no tokens and no error
+                    // (most likely input is just empty or th)
+                    // Return empty variant
+                    return Ok((rest, InnerResult::None));
+                };
+
+                // Here's a little tricky part: we'll need to check is there are multiple tokens in the input,
+                // but there are two variants for that: follower of the first token (we have now),
+                // or just the second token iterator would yield.
+                // That said, I find it natural to make this check in one go with `match`.
+                // The following block will continue execution if and only there are multiple tokens,
+                // and there are (possibly) more tokens to parse
+                let t1 = first_token;
+                let mut tokens = match (first_follower, (&mut iterator).next()) {
+                    // Meaning there are no more tokens (or iterator failed) - return single result
+                    (None, None) => {
+                        let (rest, _) = iterator.finish()?;
+                        return Ok((rest, InnerResult::Single(t1)));
+                    }
+                    // There are exactly two tokens (or iterator failed) - return exactly two tokens
+                    (Some(t2), None) => {
+                        let (rest, _) = iterator.finish()?;
+                        return Ok((rest, InnerResult::Multiple(vec![t1, t2])));
+                    }
+                    // There are at least two tokens
+                    (None, Some((t2, None))) => {
+                        vec![t1, t2]
+                    }
+                    // There are at least three tokens
+                    (None, Some((t2, Some(t3)))) | (Some(t2), Some((t3, None))) => {
+                        vec![t1, t2, t3]
+                    }
+                    // There are at least four tokens
+                    (Some(t2), Some((t3, Some(t4)))) => {
+                        vec![t1, t2, t3, t4]
+                    }
+                };
+
+                // Parse rest of the tokens
+                for (token, follower) in &mut iterator {
+                    tokens.push(token);
+                    if let Some(follower) = follower {
+                        tokens.push(follower);
+                    }
+                }
+                // Iterator might have failed silently, so let them a chance to tell about it
                 let (rest, _) = iterator.finish()?;
-                // Well, seems like there are no tokens and no error
-                // (most likely input is just empty or th)
-                // Return empty variant
-                return Ok((rest, InnerResult::None));
-            };
-
-            // Here's a little tricky part: we'll need to check is there are multiple tokens in the input,
-            // but there are two variants for that: follower of the first token (we have now),
-            // or just the second token iterator would yield.
-            // That said, I find it natural to make this check in one go with `match`.
-            // The following block will continue execution if and only there are multiple tokens,
-            // and there are (possibly) more tokens to parse
-            let t1 = first_token;
-            let mut tokens = match (first_follower, (&mut iterator).next()) {
-                // Meaning there are no more tokens (or iterator failed) - return single result
-                (None, None) => {
-                    let (rest, _) = iterator.finish()?;
-                    return Ok((rest, InnerResult::Single(t1)));
-                }
-                // There are exactly two tokens (or iterator failed) - return exactly two tokens
-                (Some(t2), None) => {
-                    let (rest, _) = iterator.finish()?;
-                    return Ok((rest, InnerResult::Multiple(vec![t1, t2])));
-                }
-                // There are at least two tokens
-                (None, Some((t2, None))) => {
-                    vec![t1, t2]
-                }
-                // There are at least three tokens
-                (None, Some((t2, Some(t3)))) | (Some(t2), Some((t3, None))) => {
-                    vec![t1, t2, t3]
-                }
-                // There are at least four tokens
-                (Some(t2), Some((t3, Some(t4)))) => {
-                    vec![t1, t2, t3, t4]
-                }
-            };
-
-            // Parse rest of the tokens
-            for (token, follower) in &mut iterator {
-                tokens.push(token);
-                if let Some(follower) = follower {
-                    tokens.push(follower);
-                }
-            }
-            // Iterator might have failed silently, so let them a chance to tell about it
-            let (rest, _) = iterator.finish()?;
-            // Return multiple variant
-            Ok((rest, InnerResult::Multiple(tokens)))
-        }),
-        // Lastly, map this inner result into a single actual token.
-        // Oh, and if there were no tokens - that's an error, so might return it as well.
-        |inner_result| match inner_result {
-            InnerResult::None => Err(KyomatoLexErrorKind::NoTokens),
-            InnerResult::Single(token) => Ok(token),
-            InnerResult::Multiple(tokens) => Ok(Token::Text(Tokens::new(tokens))),
-        },
-    )
+                // Return multiple variant
+                Ok((rest, InnerResult::Multiple(tokens)))
+            }),
+            // Lastly, map this inner result into a single actual token.
+            // Oh, and if there were no tokens - that's an error, so might return it as well.
+            |inner_result| match inner_result {
+                InnerResult::None => Err(KyomatoLexError::no_tokens(outer_input)),
+                InnerResult::Single(token) => Ok(token),
+                InnerResult::Multiple(tokens) => Ok(Token::Text(Tokens::new(tokens))),
+            },
+        )
+        .parse(outer_input)
+    }
 }
 
 /// Main entry point into the lexer
@@ -1098,7 +1314,8 @@ pub fn lex<
     'source,
     E: ParseError<&'source str>
         + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexErrorKind>,
+        + FromExternalError<&'source str, KyomatoLexError<'source>>
+        + 'source,
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
@@ -1133,7 +1350,7 @@ fn forbid<
     'source,
     E: ParseError<&'source str>
         + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexErrorKind>,
+        + FromExternalError<&'source str, KyomatoLexError<'source>>,
 >(
     mut parser: impl Parser<&'source str, Token<'source>, E>,
     token: &'static str,
@@ -1147,7 +1364,7 @@ fn forbid<
         Err(nom::Err::Failure(E::from_external_error(
             input,
             ErrorKind::MapRes,
-            KyomatoLexErrorKind::ForbiddenToken { token, reason },
+            KyomatoLexError::forbidden_token(input, token, reason),
         )))
     }
 }
@@ -1159,12 +1376,13 @@ pub fn inner_lex<
     'source,
     E: ParseError<&'source str>
         + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexErrorKind>,
+        + FromExternalError<&'source str, KyomatoLexError<'source>>
+        + 'source,
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
     context(
-        "static inner lex",
+        "inner lex",
         tokens_many1({
             alt((
                 // Some tokens must be forbidden
@@ -1236,11 +1454,14 @@ mod tests {
                 // arrange
 
                 // act
-                let result: Result<_, nom::Err<nom::error::VerboseError<&'static str>>>;
+                let result: Result<_, nom::Err<KyomatoLexError>>;
                 result =  $parser.parse($input);
 
                 // assert
-                assert_eq!(result, $expected, "Parser did not produce expected result");
+                let expected = $expected;
+                if result != expected {
+                    panic!("Parser did not produce expected result. Structure comparison:\n\tExpected:{:#?}\n\n\tActual:{:#?}\n\nPlain comparison:\nE:{:?}\nR:{:?}", expected, result, expected, result);
+                }
             }
         };
         {$name:ident, $parser:expr, $input:literal, p: $expected:pat} => {
@@ -1284,8 +1505,6 @@ mod tests {
     test! {div_page3_2, div_page, "------", p: Err(_)}
     test! {div_page4, div_page, "\n   ------", p: Err(_)}
     test! {div_page5, div_page, "    \t\n------\t\n", e: Ok(("\t\n", Token::PageDiv))}
-
-    // TODO add caption kernel tests
 
     // `header` tests
     test! {header1, header, "", p: Err(_)}
@@ -1358,10 +1577,6 @@ $$
 {} якийсь текст тому що чому ні"#, e: Ok((" якийсь текст тому що чому ні", Token::Equation { content: "y = x^2   ".into(), ident: None }))}
     // You can explicitly provide no args - fun fact :idk:
 
-    // TODO add table tests
-
-    // TODO add figure tests
-
     // `href` tests
     mod href {
         use super::*;
@@ -1380,6 +1595,8 @@ $$
         // text after url is alright
         href_ok! {href7, "       [link text](ftp://somewebsite/files/01234), ще текст після нього", "ftp://somewebsite/files/01234", "link text", ", ще текст після нього"}
         // space before url is ignored
+        href_ok! {href8, "[    link text](ftp://somewebsite/files/01234).", "ftp://somewebsite/files/01234", "link text", "."}
+        // display text will be trimmed
     }
 
     // `code_block` tests
@@ -1407,20 +1624,6 @@ $$
         test_ok! {ok_text_after, "    \n```C sus sus\n\t тиск = сила / площа;\n// (і мотивація то є сильна)\n``` It's dangerous - being alone",
         Some("C sus sus"), "\t тиск = сила / площа;\n// (і мотивація то є сильна)", " It's dangerous - being alone"}
         // text just after the code block is ok too
-    }
-
-    // TODO add Ayano block tests
-
-    // TODO add list tests
-
-    // `formatting` tests
-    mod formatting {
-        macro_rules! test_ok {
-            {$name:ident, $input:literal} => {
-
-            };
-        }
-        // TODO add formatting tests
     }
 
     // `inline math` tests
@@ -1484,8 +1687,6 @@ $$
         test_ok! {ok_text_after, "    \n \t  [^y_u_do_dis_2_me] кирилиця or th", "y_u_do_dis_2_me", " кирилиця or th"}
     }
 
-    // TODO add footnote content tests
-
     // tests for `paragraph`
     mod paragraph {
         use super::*;
@@ -1501,6 +1702,201 @@ $$
         test_ok! {ok_char, "  \t\n c\nfff", "c", None, "\nfff"} // single char is ok as a paragraph
         test_ok! {ok_sentence, "\t    \n I'm absolutely increative, so here's a bunch of garbage: ]42[t5(2[24tj4-0)jt3_94j03\nand some rest",
         "I'm absolutely increative, so here's a bunch of garbage: ]42[t5(2[24tj4-0)jt3_94j03", None, "\nand some rest"}
-        test_ok! {ok_formatting, "\t    \n You can use *bold*!", "You can use ", Some(Token::Formatted(Formatting::Italic, Box::new(Token::text("bold")))), "!"}
+        test_ok! {ok_formatting, "\t    \n You can use *bold*!", "You can use", Some(Token::Formatted(Formatting::Italic, Box::new(Token::text("bold")))), "!"}
+        test_ok! {ok_formatting_in_formatting, "\t    \n You can even use ~~__double-formatted__~~ things!", "You can even use",
+        Some(Token::Formatted(Formatting::StrikeThrough, Box::new(Token::Formatted(Formatting::Bold, Box::new(Token::text("double-formatted")))))), " things!"}
+        test_ok! {ok_equation, "    \t Inline math is fine too: $y = x_{\text{поч}} + x_0$.", "Inline math is fine too:",
+        Some(Token::InlineMathmode("y = x_{\text{поч}} + x_0".into())), "."}
+        test_ok! {ok_href, "   \t\t\n You can even [залишити посилання на свою сторінку на Гітхабі   ](https://www.github.com/Dzuchun)!", "You can even",
+        Some(Token::Href { url: "https://www.github.com/Dzuchun".parse().expect("That's a valid url"), display: "залишити посилання на свою сторінку на Гітхабі".into() }), "!"}
+        test_ok! {ok_footnote_ref, "\t Footnote refs[^1] are also ok too!", "Footnote refs", Some(Token::FootNoteReference("1".into())), " are also ok too!"}
+        test_ok! {ok_obj_ref, "\n\t Thi[[ngs lik_e tables* ([@tab:results]) can also be referenced", "Thi[[ngs lik_e tables* (",
+        Some(Token::Reference("tab:results".into())), ") can also be referenced"}
     }
+
+    // `inner_lex` tests
+    // this is one of open interfaces, so extensive testing is required here
+    // to achieve that, here are some macro to simplify token creation:
+    macro_rules! div {
+        () => {
+            Token::PageDiv
+        };
+    }
+    macro_rules! head {
+        [# $header:literal] => {
+            head![1, $header]
+        };
+        [## $header:literal] => {
+            head![2, $header]
+        };
+        [### $header:literal] => {
+            head![3, $header]
+        };
+        [#### $header:literal] => {
+            head![4, $header]
+        };
+        [##### $header:literal] => {
+            head![5, $header]
+        };
+        [###### $header:literal] => {
+            head![6, $header]
+        };
+        [$order:literal, $header:literal] => {
+            Token::Header {order: $order, content: Cow::Borrowed($header)}
+        };
+    }
+    macro_rules! eq {
+        ($eq:literal) => {
+            eq!($eq, None)
+        };
+        ($eq:literal, ref = $ident:literal) => {
+            eq!($eq, Some(Cow::Borrowed($ident)))
+        };
+        ($eq:literal, $ident:expr) => {
+            Token::Equation {
+                content: Cow::Borrowed($eq),
+                ident: $ident,
+            }
+        };
+        (!$eq:literal) => {
+            Token::InlineMathmode(Cow::Borrowed($eq))
+        };
+    }
+    macro_rules! hr {
+        ([$display:literal]($url:literal)) => {
+            Token::Href {
+                url: Url::from_str($url).expect("Should be a valid url"),
+                display: Cow::Borrowed($display),
+            }
+        };
+    }
+    macro_rules! code {
+        ($code:literal, lang = $lang:literal) => {
+            code!($code, Some(Cow::Borrowed($lang)))
+        };
+        ($code:literal) => {
+            code!($code, None)
+        };
+        ($code:literal, $lang:expr) => {
+            Token::CodeBlock {
+                code: Cow::Borrowed($code),
+                language: $lang,
+            }
+        };
+    }
+    macro_rules! rf {
+        (@ $ident:literal) => {
+            Token::Reference(Cow::Borrowed($ident))
+        };
+        (^ $ident:literal) => {
+            Token::FootNoteReference(Cow::Borrowed($ident))
+        };
+    }
+    macro_rules! tx {
+        ($text:literal) => {
+            Token::Paragraph(Font::Normal, Cow::Borrowed($text))
+        };
+    }
+    macro_rules! tks {
+        [$($token:expr), +] => {
+            Token::Text(Tokens::new([$($token), +]))
+        };
+    }
+    mod inner_lex {
+        use super::*;
+
+        macro_rules! test_ok {
+            ($name:ident, $input:literal, $expected:expr) => {
+                test! {$name, inner_lex, $input, e: Ok(("", $expected))}
+            };
+        }
+
+        macro_rules! test_err {
+            ($name:ident, $input:literal) => {
+                test! {$name, inner_lex, $input, p: Err(_)}
+            };
+        }
+
+        test_err! {err_empty, ""}
+        test_ok! {ok_char_para, "a", tx!("a")}
+        test_ok! {ok_formatted, "*виділений текст * і ще щось потім",
+        tks![Token::Formatted(Formatting::Italic, Box::new(tx!("виділений текст"))), tx!("і ще щось потім")]}
+        test_ok! {ok_inline_math, "дивіться! ось формула для параболи: $y = x^2$",
+        tks![tx!("дивіться! ось формула для параболи:"), eq!(! "y = x^2")]}
+        test_err! {err_display_math, "якась страшна штука:\n$$\nf(x) = \\int\\lms_{0}^{x} \\log(x - 2) dx\n$$\n{ref = scary}\n\tКраще не чіпати її"}
+        // display math is not allowed in the inner_lex
+        test_ok! {ok_href, "посилання на мою [Github сторінку](https://www.example.com) - ха-ха, жартую;\tОсь вам рівняння: $x^4 + 5x^2 - 100 = 0$.",
+        tks![tx!("посилання на мою"), hr!(["Github сторінку"]("https://www.example.com")), tx!("- ха-ха, жартую;\tОсь вам рівняння:"), eq!(!"x^4 + 5x^2 - 100 = 0"), tx!(".")]}
+        test_ok! {ok_ref, "розрахунки наведено у таблиці ([@tab:calc])[^3].",
+        tks![tx!("розрахунки наведено у таблиці ("), rf!(@"tab:calc"), tx!(")"), rf!(^"3"), tx!(".")]}
+    }
+
+    macro_rules! tab {
+        ($($header:expr), +; $($($cell:expr), +;), +) => {
+            tab!($($header), +; $($($cell), +;), +; {ref = None::<&'_ str>, caption = None})
+        };
+        ($($header:expr), +; $($($cell:expr), +;), +; {ref = $ident:expr, caption = $caption:expr}) => {
+            Token::Table {header: Tokens::new([$($header), +]), cells: Tokens::new([$($($cell), +), +]), ident: $ident.map(Cow::from), caption: $caption.map(Box::new)}
+        };
+    }
+    mod table {
+        use super::*;
+        macro_rules! test_ok {
+            {$name:ident, $input:literal, $output:expr, $left_over:literal} => {
+                test!{$name, table, $input, e: Ok(($left_over, $output))}
+            };
+        }
+
+        macro_rules! test_err {
+            {$name:ident, $input:literal} => {
+                test!{$name, table, $input, p: Err(_)}
+            };
+        }
+
+        test_err! {err_empty, ""}
+        test_err! {err_no_rows, "|header|\n"}
+        test_ok! {ok_one_row, "\n\t\n|header|\n|:---:|\n|cell|\n", tab!(tx!("header"); tx!("cell");), "\n"}
+        test_ok! {ok_more_rows, "   \n|header1 |     header_2 |\n|:---:|:---:|\n|cell 11|cell[^12]|\n|$cell_{21}$|cell[@tab:22]|\n",
+        tab!(tx!("header1"), tx!("header_2");
+            tx!("cell 11"), tks![tx!("cell"), rf!(^ "12")];,
+            eq!(!"cell_{21}"), tks![tx!("cell"), rf!(@"tab:22")];), "\n"}
+        test_ok! {ok_empty_args, "   \n|header1 |     header_2 |\n|:---:|:---:|\n|cell 11|cell[^12]|\n|$cell_{21}$|cell[@tab:22]|\n{}",
+        tab!(tx!("header1"), tx!("header_2");
+            tx!("cell 11"), tks![tx!("cell"), rf!(^ "12")];,
+            eq!(!"cell_{21}"), tks![tx!("cell"), rf!(@"tab:22")];), ""}
+        test_ok! {ok_ident, "   \n|header1 |     header_2 |\n|:---:|:---:|\n|cell 11|cell[^12]|\n|$cell_{21}$|cell[@tab:22]|\n{  ref = example}",
+        tab!(tx!("header1"), tx!("header_2");
+            tx!("cell 11"), tks![tx!("cell"), rf!(^ "12")];,
+            eq!(!"cell_{21}"), tks![tx!("cell"), rf!(@"tab:22")];;
+            {ref = Some("example"), caption = None}), ""}
+        test_ok! {ok_caption, "   \n|header1 |     header_2 |\n|:---:|:---:|\n|cell 11|cell[^12]|\n|$cell_{21}$|cell[@tab:22]|\n{caption = \"This table can be seen as an \\\"example\\\"\"}",
+        tab!(tx!("header1"), tx!("header_2");
+            tx!("cell 11"), tks![tx!("cell"), rf!(^ "12")];,
+            eq!(!"cell_{21}"), tks![tx!("cell"), rf!(@"tab:22")];;
+            {ref = None::<&str>, caption = Some(tx!("This table can be seen as an \\\"example\\\""))}), ""}
+        test_ok! {ok_both, "   \n|header1 |     header_2 |\n|:---:|:---:|\n|cell 11|cell[^12]|\n|$cell_{21}$|cell[@tab:22]|\n{ref = example_table, caption = \"This table can be seen as an \\\"example\\\"\"}",
+        tab!(tx!("header1"), tx!("header_2");
+            tx!("cell 11"), tks![tx!("cell"), rf!(^ "12")];,
+            eq!(!"cell_{21}"), tks![tx!("cell"), rf!(@"tab:22")];;
+            {ref = Some("example_table"), caption = Some(tx!("This table can be seen as an \\\"example\\\""))}), ""}
+        test_ok! {ok_both_reversed, "   \n|header1 |     header_2 |\n|:---:|:---:|\n|cell 11|cell[^12]|\n|$cell_{21}$|cell[@tab:22]|\n{caption = \"This table can be seen as an \\\"example\\\"\", ref = example_table    }",
+        tab!(tx!("header1"), tx!("header_2");
+            tx!("cell 11"), tks![tx!("cell"), rf!(^ "12")];,
+            eq!(!"cell_{21}"), tks![tx!("cell"), rf!(@"tab:22")];;
+            {ref = Some("example_table"), caption = Some(tx!("This table can be seen as an \\\"example\\\""))}), ""}
+    }
+    // TODO add table tests
+    // TODO add figure tests
+    // TODO add Ayano block tests
+    // TODO add list tests
+    // `formatting` tests
+    mod formatting {
+        macro_rules! test_ok {
+            {$name:ident, $input:literal} => {
+
+            };
+        }
+        // TODO add formatting tests
+    }
+    // TODO add footnote content tests
 }
