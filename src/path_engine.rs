@@ -20,7 +20,7 @@ pub trait PathEngineError: Error {
 }
 
 /// An error type with no state - It's only mission is to report an error happening
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, PartialEq)]
 #[error("Could not resolve a path")]
 pub struct MarkerError;
 
@@ -61,6 +61,13 @@ impl PathEngineError for InformativeError {
     }
 }
 
+#[cfg(test)]
+impl PartialEq for InformativeError {
+    fn eq(&self, other: &Self) -> bool {
+        format!("{self:?}") == format!("{other:?}")
+    }
+}
+
 type CheckType = fn(&Path) -> Result<(), Box<dyn Error>>;
 
 /// A trait representing a `thing` that controls file path finding for `OutputGenerator`.
@@ -95,18 +102,24 @@ pub trait PathEngineExt<E>: PathEngine<E> + Sized {
         WithExecutionFolder(self, folder.into())
     }
 
-    fn with_check(mut self, new_check: CheckType) -> impl PathEngine<E> {
+    fn with_source_folder(self, folder: impl Into<PathBuf>) -> WithSourceFolder<Self> {
+        WithSourceFolder(self, folder.into())
+    }
+
+    fn with_check(mut self, new_check: CheckType) -> impl PathEngine<E> + Sized {
         self.set_check(new_check);
         self
     }
 
-    fn with_error_type<NewE: PathEngineError>(self) -> impl PathEngine<NewE>
+    fn with_error_type<NewE: PathEngineError>(self) -> impl PathEngine<NewE> + Sized
     where
         Self: PathEngine<NewE>,
     {
         self
     }
 }
+
+impl<E, PE> PathEngineExt<E> for PE where PE: PathEngine<E> {}
 
 /// A primitive path engine, that returns, well, exact paths it's given. It literally does nothing.
 pub struct Engine(CheckType);
@@ -297,7 +310,7 @@ impl<E: PathEngineError, PE: PathEngine<E>> PathEngine<E> for WithExecutionFolde
         path: impl Into<Cow<'p, Path>>,
         ayano_insert: Option<&Path>,
     ) -> Result<Cow<'p, Path>, E> {
-        try_variant!(Some(&self.1), Source, self, image, path, ayano_insert)
+        try_variant!(Some(&self.1), Execution, self, image, path, ayano_insert)
     }
 
     fn csv<'p>(
@@ -305,11 +318,11 @@ impl<E: PathEngineError, PE: PathEngine<E>> PathEngine<E> for WithExecutionFolde
         path: impl Into<Cow<'p, Path>>,
         ayano_insert: Option<&Path>,
     ) -> Result<Cow<'p, Path>, E> {
-        try_variant!(Some(&self.1), Source, self, csv, path, ayano_insert)
+        try_variant!(Some(&self.1), Execution, self, csv, path, ayano_insert)
     }
 
     fn ayano_insert<'p>(&self, path: impl Into<Cow<'p, Path>>) -> Result<Cow<'p, Path>, E> {
-        try_variant!(Some(&self.1), Source, self, ayano_insert, path)
+        try_variant!(Some(&self.1), Execution, self, ayano_insert, path)
     }
     impl_check_delegate! {}
 }
@@ -318,16 +331,179 @@ impl<E: PathEngineError, PE: PathEngine<E>> PathEngine<E> for WithExecutionFolde
 ///
 /// Generic method. Rust will most likely complain about type inference if you use it directly;
 /// Make sure to add at least one `with_th_error`.
-pub fn base_gen<E: PathEngineError>() -> impl PathEngine<E> {
+pub fn base_gen<E: PathEngineError>() -> impl PathEngine<E> + Sized {
     Engine(no_check)
 }
 
 /// The most primitive engine setup, performs no checks and has no special folders
-pub fn primitive() -> impl PathEngine<MarkerError> {
+pub fn primitive() -> impl PathEngine<MarkerError> + Sized {
     base_gen()
 }
 
 /// A primitive engine, but with informative error and `fs_check`
-pub fn primitive_dbg() -> impl PathEngine<InformativeError> {
+pub fn primitive_dbg() -> impl PathEngine<InformativeError> + Sized {
     base_gen()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[derive(Debug, thiserror::Error)]
+    #[error("A path {} does not exist", .0.to_string_lossy())]
+    struct DontExist(PathBuf);
+
+    macro_rules! test_check {
+        ($($existing_path:literal), *) => {{
+            fn test_check(path: &Path) -> Result<(), Box<dyn Error>> {
+                const EXISTING_PATHS: &[&str] = &[$($existing_path), *]; // elided array sizes are unstable :(
+                if EXISTING_PATHS.contains(&&*path.to_string_lossy()) {
+                    Ok(())
+                } else {
+                    Err(Box::new(DontExist(path.to_owned())))
+                }
+            }
+            test_check
+        }};
+    }
+
+    macro_rules! test_ok {
+        {$name:ident, $engine:expr, $method:ident, $test_path:literal, $ayano_path:expr, $expected_res:expr} => {
+            test_ok!{$name, $engine.$method(Path::new($test_path), $ayano_path.map(|p: &str| Path::new(p).into())), $expected_res}
+        };
+        {$name:ident, $engine:expr, $test_path:literal, $expected_res:expr} => {
+            test_ok!{$name, $engine.ayano_insert(Path::new($test_path)), $expected_res}
+        };
+        {$name:ident, $call_expr:expr, $expected_res:expr} => {
+            #[test]
+            fn $name() {
+                // arrange
+
+                // act
+                let engine_result = $call_expr.expect("Should be ok");
+
+                // assert
+                assert_eq!(Path::new($expected_res), engine_result, "Path engine should produce expected result");
+            }
+        };
+    }
+
+    macro_rules! test_expr {
+        {$name:ident, $engine:expr, $method:ident, $test_path:literal, $ayano_path:expr, $expected_res:expr} => {
+            test_expr!{$name, $engine.$method(Path::new($test_path), $ayano_path.map(|p: &str| Path::new(p).into())), $expected_res}
+        };
+        {$name:ident, $engine:expr, $test_path:literal, $expected_res:expr} => {
+            test_expr!{$name, $engine.ayano_insert(Path::new($test_path)), $expected_res}
+        };
+        {$name:ident, $call_expr:expr, $expected_res:expr} => {
+            #[test]
+            fn $name() {
+                // arrange
+
+                // act
+                let engine_result = $call_expr;
+
+                // assert
+                assert_eq!($expected_res, engine_result, "Path engine should produce expected result");
+            }
+        };
+    }
+    macro_rules! test_pat {
+        {$name:ident, $engine:expr, $method:ident, $test_path:literal, $ayano_path:expr, $expected_res:pat} => {
+            test_pat!{$name, $engine.$method(Path::new($test_path), $ayano_path.map(|p: &str| Path::new(p).into())), $expected_res}
+        };
+        {$name:ident, $engine:expr, $test_path:literal, $expected_res:pat} => {
+            test_pat!{$name, $engine.ayano_insert(Path::new($test_path)), $expected_res}
+        };
+        {$name:ident, $call_expr:expr, $expected_res:pat} => {
+            #[test]
+            fn $name() {
+                // arrange
+
+                // act
+                let engine_result = $call_expr;
+
+                // assert
+                if !matches!(engine_result, $expected_res) {
+                    panic!("Path engine should produce matching result: {engine_result:?}");
+                }
+            }
+        };
+    }
+
+    test_ok! {ok_simple_ayano, primitive(), "scripts/calc.py", "scripts/calc.py"}
+    test_pat! {err_deny_ayano, primitive().with_check(test_check!()), "scripts/calc.py", Err(_)}
+    macro_rules! paths_set_engine {
+        ($($existing_path:literal), *) => {
+            primitive_dbg()
+                .with_check(test_check!($($existing_path), *))
+                .with_execution_folder(PathBuf::from_str("/execution").unwrap())
+                .with_source_folder(PathBuf::from_str("/source").unwrap())
+                .with_image_folder(PathBuf::from_str("/image").unwrap())
+                .with_ayano()
+        };
+    }
+    test_ok! {ok_find_ayano_correct1, paths_set_engine!("/execution/calc.py", "/image/calc.py"), "calc.py", "/execution/calc.py"}
+    test_ok! {ok_find_ayano_correct2, paths_set_engine!("/execution/calc.py", "/image/calc.py", "/source/calc.py"), image, "calc.py", None, "/image/calc.py"}
+    test_ok! {ok_find_ayano_correct2_2, paths_set_engine!("/execution/calc.py", "/source/calc.py"), image, "calc.py", None, "/source/calc.py"}
+    test_ok! {ok_find_ayano_correct2_3, paths_set_engine!("/execution/calc.py"), image, "calc.py", None, "/execution/calc.py"}
+    test_ok! {ok_find_ayano_correct2_4, paths_set_engine!("/execution/calc.py", "/image/calc.py", "/source/calc.py", "/ayano/calc.py"), image, "calc.py", Some("/ayano"), "/ayano/calc.py"}
+    test_ok! {ok_find_ayano_correct3, paths_set_engine!("/execution/table.csv", "/image/table.csv", "/source/table.csv"), csv, "table.csv", None, "/source/table.csv"}
+    test_ok! {ok_find_ayano_correct3_2, paths_set_engine!("/execution/table.csv", "/image/table.csv"), csv, "table.csv", None, "/execution/table.csv"}
+    test_pat! {err_find_ayano_correct3_3, paths_set_engine!("/image/table.csv"), csv, "table.csv", None, Err(_)}
+
+    macro_rules! err {
+        ($path:literal) => {{
+            Some(Box::new(DontExist(PathBuf::from_str($path).unwrap())) as Box<dyn Error>)
+        }};
+    }
+    test_expr! {err_reaction1, primitive_dbg().with_check(test_check!()), csv, "file.txt", None,
+    Err(InformativeError {
+        source: None,
+        ayano: None,
+        specific: None,
+        execution: None,
+        none: err!("file.txt")
+    })}
+    test_expr! {err_reaction2, primitive_dbg().with_ayano().with_check(test_check!()), csv, "file.txt", Some("/ayano"),
+    Err(InformativeError {
+        source: None,
+        ayano: err!("/ayano/file.txt"),
+        specific: None,
+        execution: None,
+        none: err!("file.txt")
+    })}
+    test_expr! {err_reaction3, primitive_dbg().with_ayano().with_execution_folder(Path::new("/execution")).with_check(test_check!()), csv, "file.txt", Some("/ayano"),
+    Err(InformativeError {
+        source: None,
+        ayano: err!("/ayano/file.txt"),
+        specific: None,
+        execution: err!("/execution/file.txt"),
+        none: err!("file.txt")
+    })}
+    test_expr! {err_reaction4, primitive_dbg().with_ayano().with_image_folder(Path::new("/image")).with_execution_folder(Path::new("/execution")).with_check(test_check!()), csv, "file.txt", Some("/ayano"),
+    Err(InformativeError {
+        source: None,
+        ayano: err!("/ayano/file.txt"),
+        specific: None,
+        execution: err!("/execution/file.txt"),
+        none: err!("file.txt")
+    })}
+    test_expr! {err_reaction5, primitive_dbg().with_ayano().with_image_folder(Path::new("/image")).with_execution_folder(Path::new("/execution")).with_check(test_check!()), image, "file.txt", Some("/ayano"),
+    Err(InformativeError {
+        source: None,
+        ayano: err!("/ayano/file.txt"),
+        specific: err!("/image/file.txt"),
+        execution: err!("/execution/file.txt"),
+        none: err!("file.txt")
+    })}
+    test_expr! {err_reaction6, primitive_dbg().with_ayano().with_source_folder(Path::new("/source")).with_image_folder(Path::new("/image")).with_execution_folder(Path::new("/execution")).with_check(test_check!()), image, "file.txt", Some("/ayano"),
+    Err(InformativeError {
+        source: err!("/source/file.txt"),
+        ayano: err!("/ayano/file.txt"),
+        specific: err!("/image/file.txt"),
+        execution: err!("/execution/file.txt"),
+        none: err!("file.txt")
+    })}
 }
