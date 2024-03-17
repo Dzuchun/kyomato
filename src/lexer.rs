@@ -137,7 +137,6 @@ macro_rules! parse_args {
 ///
 /// Quite a tricky task, as there can be double quotes -- but escaped.
 /// Apart from double unescaped quotes, caption can be ANYTHING.
-/// TODO FIXME add a mention about caption attempting to parse after EACH unescaped double quote. First one to succeed will be the output
 fn caption_kernel<
     'source,
     E: ParseError<&'source str>
@@ -165,7 +164,6 @@ fn caption_kernel<
                 KyomatoLexError::no_tokens(input),
             )))?;
 
-    // FIXME add `terminated(_, space0)` to all `all_consuming`
     // lastly, match the actual closing quote
     let (input, _) = cut(char('"'))(input)?;
     Ok((input, token))
@@ -739,7 +737,7 @@ fn _formatting_inner<
     input: &'source str,
     style: crate::data::Formatting,
 ) -> Result<Token<'source>, nom::Err<E>> {
-    let (_, content) = all_consuming(inner_lex)(input)?;
+    let (_, content) = all_consuming(terminated(inner_lex, space0))(input)?;
     Ok(Token::Formatted(style, Box::new(content)))
 }
 
@@ -780,7 +778,9 @@ fn formatting<
         .filter_map(|(ind, _)| (rest[ind..].starts_with(delimiter)).then_some(ind));
     for end_candidate in possible_ends {
         let inner_tokens = &rest[..end_candidate];
-        if let Ok((_, inner)) = all_consuming(inner_lex::<'source, E>)(inner_tokens) {
+        if let Ok((_, inner)) =
+            all_consuming(terminated(inner_lex::<'source, E>, space0))(inner_tokens)
+        {
             return Ok((
                 &rest[(end_candidate + delimiter.len())..],
                 Token::Formatted(formatting, Box::new(inner)),
@@ -877,7 +877,8 @@ fn footnote_content<
         .and(preceded(
             space0,
             // Content can end at the end of this line, or at the end of file
-            alt((take_until1("\n"), take_while(|_| true))).and_then(cut(all_consuming(inner_lex))),
+            alt((take_until1("\n"), take_while(|_| true)))
+                .and_then(cut(all_consuming(terminated(inner_lex, space0)))),
         )),
     )
     .map(|(ident, content)| Token::FootNoteContent {
