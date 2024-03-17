@@ -1,0 +1,22 @@
+\fnt This is a test of ayano-generated stuff.\fnt This is supposed to be a generated figure:
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.9\textwidth]{circle.png}
+\caption{\fnt Some caption for a line drawing. This is parsed as a\textit{\fnt regular document text}\fnt , so you may\ref{eq:line}\fnt and$f(x) = A \cdot x^{1} + B \cdot x^{0}$\fnt here, for example}
+\label{fig:circle}
+\end{figure}
+\fnt This is expected to be a generated table:
+\begin{table}[h!]
+\begin{center}
+\begin{tabular}{|c|c|}
+\fnt x & \fnt y\\ \hline
+\hline
+\fnt 1.0 & \fnt 3.0\\ \hline
+\fnt 3.0 & \fnt 4.0\\ \hline
+\fnt -1.0 & \fnt -5743234.0\\ \hline
+\end{tabular}
+\stepcounter{tabnum}
+\caption{\fnt Caption for a table 1,\textit{\fnt because}\fnt why not}
+\label{tab:table1}
+\end{center}
+\end{table}

@@ -21,6 +21,7 @@ use std::{
 
 use crate::{
     data::{AyanoBlock, Font, Token, Tokens},
+    lexer::KyomatoLexError,
     util::{
         Equivalent, GenericRange, GenericRangeParseError, Immutable, InlinedStack,
         InlinedStackAccessor,
@@ -382,7 +383,7 @@ fn apply_ayano<'token, 'source: 'token>(
     } else {
         String::new()
     };
-    let mut code_lines = block.code.lines()
+    let mut code_lines = block.code.lines();
     // I used to have this filter here, but I don't think that's a good thing anymore
     // There's no harm in preserving basic formatting for better debugging
     // TODO probably and #[cfg(test)] switch, that would simplify the code is it's added to Python module itself (i.e. this is to be done in `python` module)
@@ -391,7 +392,6 @@ fn apply_ayano<'token, 'source: 'token>(
         !line.is_empty() && !line.starts_with('#') // remove comments
     })
     */
-    ;
 
     // create display name
     let display_name = if block.is_display {
@@ -636,8 +636,7 @@ pub enum SyntaxError {
     #[error("Unknown argument is present: {}", .0)]
     UnknownArgument(String),
     /// Right now this only means that you don't have a generator in a table syntax
-    #[error("Ayano syntax is fundamentally wrong")]
-    // TODO probably should rename and write a better message
+    #[error("Ayano syntax is lacking fields, or it's punctuation is wrong")]
     BadSyntax,
     #[error("{}", .0)]
     RangeParse(GenericRangeParseError),
@@ -1377,17 +1376,28 @@ return "tab", [[___generator___(0, 0), ___generator___(0, 1), ], [___generator__
 
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum ParsingError {
-    #[error("{}", .0)]
+    #[error(transparent)]
     Float(ParseFloatError),
     #[error("Python could not generate output. str: {}, error: {:?}", .0, .1)]
     UnexpectedSyntax(String, Equivalent<PyErr>),
     #[error("Table syntax error: no header")]
     TableNoHeader,
+    #[error(transparent)]
+    Token(KyomatoLexError),
 }
 
 impl From<ParseFloatError> for ParsingError {
     fn from(value: ParseFloatError) -> Self {
         Self::Float(value)
+    }
+}
+
+impl From<nom::Err<KyomatoLexError>> for ParsingError {
+    fn from(value: nom::Err<KyomatoLexError>) -> Self {
+        match value {
+            nom::Err::Incomplete(_) => unreachable!("Input is always complete here"),
+            nom::Err::Error(err) | nom::Err::Failure(err) => Self::Token(err),
+        }
     }
 }
 
@@ -1453,11 +1463,17 @@ fn parse_ayano(python_output: &PyAny) -> Result<Token<'static>, ParsingError> {
                     let ident = (!ident.is_none())
                         .then_some(throw_syntax!(ident.str().and_then(|s| s.to_str()))?);
                     let caption = throw_syntax!(tuple.get_item(3))?;
-                    let caption = (!caption.is_none())
-                        .then_some(throw_syntax!(caption.str().and_then(|s| s.to_str()))?);
+                    let caption = if caption.is_none() {
+                        None
+                    } else {
+                        let caption_str = throw_syntax!(caption.str().and_then(|s| s.to_str()))?;
+                        let (_, caption_token) =
+                            crate::lexer::inner_lex::<KyomatoLexError>(caption_str)?;
+                        Some(Box::new(caption_token.to_static_token()))
+                    };
                     return Ok(Token::Figure {
                         src_name: Cow::Owned(PathBuf::from(src)),
-                        caption: None, // TODO MUST USE LEXER HERE
+                        caption,
                         ident: ident.map(|i| Cow::Owned(i.to_string())),
                     });
                 }
@@ -1496,13 +1512,19 @@ fn parse_ayano(python_output: &PyAny) -> Result<Token<'static>, ParsingError> {
                     let ident = (!ident.is_none())
                         .then_some(throw_syntax!(ident.str().and_then(|s| s.to_str()))?);
                     let caption = throw_syntax!(tuple.get_item(3))?;
-                    let caption = (!caption.is_none())
-                        .then_some(throw_syntax!(caption.str().and_then(|s| s.to_str()))?);
+                    let caption = if caption.is_none() {
+                        None
+                    } else {
+                        let caption_str = throw_syntax!(caption.str().and_then(|s| s.to_str()))?;
+                        let (_, caption_token) =
+                            crate::lexer::inner_lex::<KyomatoLexError>(caption_str)?;
+                        Some(Box::new(caption_token.to_static_token()))
+                    };
                     return Ok(Token::Table {
                         header: Tokens::new(header),
                         cells: Tokens::new(cells),
                         ident: ident.map(|s| Cow::Owned(s.to_string())),
-                        caption: None, // TODO MUST USE LEXER HERE
+                        caption,
                     });
                 }
                 _ => {}
@@ -1581,7 +1603,11 @@ mod parsing_tests {
         src_name: Cow::Owned(PathBuf::from("path/to/file.png")),
         caption: None,
         ident: Some("circle".into()) })}
-    // TODO add tests for figure WITH CAPTION
+    test! {figure_caption, |py| PyTuple::new(py, [<&'static str as IntoPy<pyo3::Py<PyString>>>::into_py("fig", py), "path/to/file.png".into_py(py), "circle".into_py(py), "figure caption".into_py(py)]),
+    Ok(Token::Figure {
+        src_name: Cow::Owned(PathBuf::from("path/to/file.png")),
+        caption: Some(Box::new(Token::text("figure caption"))),
+        ident: Some("circle".into()) })}
 
     test! {table_nocaption, |py| {
         PyTuple::new(py, [
@@ -1629,7 +1655,27 @@ mod parsing_tests {
             ident: Some("table1".into())
         })
     }
-    // TODO add tests for table WITH CAPTION
+    test! {table_caption, |py| {
+        PyTuple::new(py, [
+        <&'static str as IntoPy<pyo3::Py<PyAny>>>::into_py("tab", py),
+        PyList::new(py, [
+            PyList::new(py, ["header1".into_py(py), 1.0.into_py(py)]),
+            PyList::new(py, ["cell_11".into_py(py), 0.25.into_py(py)]),
+            PyList::new(py, ["cell_21".into_py(py), (-2).into_py(py)]),
+        ]).into_py(py),
+        "table1".into_py(py),
+        "table caption with some $formula$".into_py(py),
+        ])},
+        Ok(Token::Table {
+            header: Tokens::new([Token::text("header1"), Token::text("1.0")]),
+            cells: Tokens::new([
+                Token::text("cell_11"), Token::text("0.25"),
+                Token::text("cell_21"), Token::text("-2"),
+            ]),
+            caption: Some(Box::new(Token::Text(Tokens::new([Token::text("table caption with some"),Token::InlineMathmode("formula".into())])))),
+            ident: Some("table1".into())
+        })
+    }
 }
 
 struct PrimitiveDecimal {

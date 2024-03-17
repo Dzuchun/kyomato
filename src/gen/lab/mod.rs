@@ -143,7 +143,7 @@ where
                 ident,
             } => {
                 output.write_str(
-                    "\\begin{figure}[h!]\n\\centering\n\\includegraphics[width=0.9\\textwidth]{",
+                    "\n\\begin{figure}[h!]\n\\centering\n\\includegraphics[width=0.9\\textwidth]{",
                 )?;
                 let src_path = self
                     .path_engine

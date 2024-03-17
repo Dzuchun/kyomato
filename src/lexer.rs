@@ -170,7 +170,6 @@ fn caption_kernel<
 }
 
 /// Parses page divider
-/// TODO update it's definition in the manual
 #[inline]
 fn div_page<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
     input: &'source str,
@@ -566,7 +565,7 @@ fn ayano<
     // - inner Some means this block has display caption
     // TODO add code captions support
     let insert: Option<&'source Path> = insert.map(Path::new);
-    // TODO add support for codeblock identifiers
+    // XXX add support for codeblock identifiers
     let code: Cow<'_, str> = Cow::from(code);
     Ok((
         rest,
@@ -1133,7 +1132,6 @@ impl<'source, E: Error + 'static> FromExternalError<&'source str, E> for Kyomato
     }
 }
 
-// TODO wrap outer-layer combinator into `complete`
 /// Parses one or more tokens.
 ///
 /// - If there's a single token to parse, it will be returned by itself, as a token
@@ -2012,7 +2010,6 @@ $$
         test_ok! {ok_no_args, "\n```python, Ayano  \nx = 1\ny = 2\nprint(x + y)\n```\n",
         ayano!(!false, *None::<&str>, ~None::<&str>, #None, "x = 1\ny = 2\nprint(x + y)"), "\n"}
     }
-    // FIXME EXPL: `formatting` tests are not to be done, since this token type will be removed soon anyways
     mod lex {
         use super::*;
         macro_rules! test_ok {

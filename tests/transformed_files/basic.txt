@@ -11,7 +11,8 @@ Ref(z) = \int \limits_{0}^{1} t^{z-1} \cdot \exp(-t) dt
 \item \fnt Нормувальний множник$|\psi|^{2} = 3/4$
 \item \fnt Кількість хромосом -$\exp(\pi)$
 \item \fnt Поживна цінність - 20 дптр/см
-\end{itemize}\begin{figure}[h!]
+\end{itemize}
+\begin{figure}[h!]
 \centering
 \includegraphics[width=0.9\textwidth]{refurb.jpg}
 \caption{\fnt Принципове влаштування рефурбалідзера}

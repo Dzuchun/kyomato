@@ -167,6 +167,76 @@ pub enum Token<'source> {
     Error(String),
 }
 
+trait ToStaticExt {
+    type AsStatic;
+    fn to_static(&self) -> Self::AsStatic;
+}
+
+impl ToStaticExt for Cow<'_, str> {
+    type AsStatic = Cow<'static, str>;
+
+    fn to_static(&self) -> Self::AsStatic {
+        Cow::Owned(self.to_string())
+    }
+}
+
+impl ToStaticExt for Cow<'_, Path> {
+    type AsStatic = Cow<'static, Path>;
+
+    fn to_static(&self) -> Self::AsStatic {
+        Cow::Owned(self.to_path_buf())
+    }
+}
+
+impl ToStaticExt for Token<'_> {
+    type AsStatic = Token<'static>;
+
+    fn to_static(&self) -> Self::AsStatic {
+        self.to_static_token()
+    }
+}
+
+impl ToStaticExt for Tokens<'_> {
+    type AsStatic = Tokens<'static>;
+
+    fn to_static(&self) -> Self::AsStatic {
+        let slice = self.get_slice();
+        Tokens::new(
+            slice
+                .into_iter()
+                .map(|t| t.to_static_token())
+                .collect::<Box<_>>(),
+        )
+    }
+}
+
+impl ToStaticExt for Box<Token<'_>> {
+    type AsStatic = Box<Token<'static>>;
+
+    fn to_static(&self) -> Self::AsStatic {
+        Box::new((&**self).to_static())
+    }
+}
+
+impl ToStaticExt for AyanoBlock<'_> {
+    type AsStatic = AyanoBlock<'static>;
+
+    fn to_static(&self) -> Self::AsStatic {
+        let AyanoBlock {
+            code,
+            insert_path,
+            is_display,
+            is_static,
+        } = self;
+        AyanoBlock {
+            code: code.to_static(),
+            insert_path: insert_path.as_ref().map(Cow::to_static),
+            is_static: *is_static,
+            is_display: *is_display,
+        }
+    }
+}
+
 impl<'source> Token<'source> {
     pub fn text(text: impl Into<Cow<'source, str>>) -> Self {
         Self::Paragraph(Font::Normal, text.into())
@@ -232,6 +302,69 @@ impl<'source> Token<'source> {
             Token::CodeBlock { code, language } => Token::CodeBlock {
                 code: Cow::Borrowed(&code),
                 language: language.as_ref().map(|c| Cow::Borrowed(c.borrow())),
+            },
+            Token::Error(error) => Token::Error(error.clone()),
+        }
+    }
+
+    pub fn to_static_token<'r>(&'r self) -> Token<'static>
+    where
+        'source: 'r,
+    {
+        match self {
+            Token::PageDiv => Token::PageDiv,
+            Token::Header { order, content } => Token::Header {
+                order: *order,
+                content: content.to_static(),
+            },
+            Token::Equation { content, ident } => Token::Equation {
+                content: content.to_static(),
+                ident: ident.as_ref().map(Cow::to_static),
+            },
+            Token::Table {
+                header,
+                cells,
+                caption,
+                ident,
+            } => Token::Table {
+                header: header.to_static(),
+                cells: cells.to_static(),
+                caption: caption.as_ref().map(Box::to_static),
+                ident: ident.as_ref().map(Cow::to_static),
+            },
+            Token::Figure {
+                src_name,
+                caption,
+                ident,
+            } => Token::Figure {
+                src_name: src_name.to_static(),
+                caption: caption.as_ref().map(Box::to_static),
+                ident: ident.as_ref().map(Cow::to_static),
+            },
+            Token::Href { url, display } => Token::Href {
+                url: url.clone(),
+                display: display.to_static(),
+            },
+            Token::Ayano(block) => Token::Ayano(block.to_static()),
+            Token::List { list_type, content } => Token::List {
+                list_type: list_type.clone(),
+                content: content.to_static(),
+            },
+            Token::Formatted(formatting, inner) => {
+                Token::Formatted(formatting.clone(), inner.to_static())
+            }
+            Token::Text(text) => Token::Text(text.to_static()),
+            Token::Paragraph(font, inner) => Token::Paragraph(font.clone(), inner.to_static()),
+            Token::InlineMathmode(math) => Token::InlineMathmode(math.to_static()),
+            Token::Reference(ident) => Token::Reference(ident.to_static()),
+            Token::FootNoteReference(ident) => Token::FootNoteReference(ident.to_static()),
+            Token::FootNoteContent { content, ident } => Token::FootNoteContent {
+                content: content.to_static(),
+                ident: ident.to_static(),
+            },
+            Token::CodeBlock { code, language } => Token::CodeBlock {
+                code: code.to_static(),
+                language: language.as_ref().map(Cow::to_static),
             },
             Token::Error(error) => Token::Error(error.clone()),
         }
