@@ -33,7 +33,7 @@ use url::Url;
 
 use crate::{
     data::{AyanoBlock, Font, Formatting, ListType, Token, Tokens},
-    util::{Equivalent, IteratorArrayCollectExt, VecTryExtendExt},
+    util::{optional_permutation, Equivalent, IteratorArrayCollectExt, VecTryExtendExt},
 };
 
 /// Matches any sort of whitespace characters, *newline*, and a provided tag at the end
@@ -105,108 +105,6 @@ fn _optional_permutation<'parsers, 'source, E: ParseError<&'source str>, const N
 // - parsers should only parse empty characters with `empty`
 // - parsers should only parse empty space at the beginning, not the end
 // - newline parsing should be carefully managed
-
-// TODO probably move to util, or even try committing to `nom` :idk:
-mod optional_permutation {
-    pub trait OptionalPermutation<In, Out, E> {
-        fn optional_permutation(&mut self, input: In) -> super::IResult<In, Out, E>;
-    }
-
-    macro_rules! impl_optional_permutation {
-        {$Count:expr, $type_ident:ident: $out_ident:ident} => {
-            // base case
-            impl<'source, Err, $out_ident, $type_ident> OptionalPermutation<&'source str, (Option<$out_ident>,), Err> for ($type_ident,)
-            where
-                Err: super::ParseError<&'source str>,
-                $type_ident: super::Parser<&'source str, $out_ident, Err>,
-            {
-                fn optional_permutation(&mut self, input: &'source str) -> super::IResult<&'source str, (Option<$out_ident>,), Err>
-                {
-                    // in a debug build, let's assert that we've passed a correct type count
-                    debug_assert!($Count == 1, "Should parse number equal to number of arguments");
-                    // for a single variant, just try parsing it, and propagate any sort of failure
-                    match self.0.parse(input) {
-                        Ok((rest, result)) => Ok((rest, (Some(result), ))),
-                        Err(nom::Err::Failure(err)) => Err(nom::Err::Failure(err)),
-                        Err(_) => Ok((input, (None, )))
-                    }
-                }
-            }
-        };
-        {$Count:expr, $type_ident0:ident: $out_ident0:ident, $($type_ident:ident: $out_ident:ident), *} => {
-            impl<'source, Err, $out_ident0, $($out_ident), *, $type_ident0, $($type_ident), *> OptionalPermutation<&'source str, (Option<$out_ident0>, $(Option<$out_ident>, ) *), Err>
-                for ($type_ident0, $($type_ident, ) *)
-            where
-                Err: super::ParseError<&'source str>,
-                $type_ident0: super::Parser<&'source str, $out_ident0, Err>,
-                $(
-                    $type_ident: super::Parser<&'source str, $out_ident, Err>
-                ), *
-            {
-                fn optional_permutation(&mut self, mut input: &'source str) -> super::IResult<&'source str, (Option<$out_ident0>, $(Option<$out_ident>), *), Err> {
-                    // for multiple variants, here comes chaos:
-                    // we can't create any sort of array or vector to hold the results -
-                    // they have different types, that's the point!
-                    // So we are bound to creating a BUNCH of variables
-                    let mut $out_ident0: Option<$out_ident0> = None;
-                    $(
-                        let mut $out_ident: Option<$out_ident> = None;
-                    ) *
-                    // Also, since we can't index tuples, we'll need to "deconstruct self"
-                    // I don't feel like creating separate identifiers for that, so I guess compiler IS to complain :idk:
-                    let ($type_ident0, $($type_ident, ) *) = self;
-                    // Now we can use `$type_ident` as corresponding parser, and `$out_ident` as a output variable!
-                    // Amazing! (not really; I imagine that would be a nightmare to read)
-
-                    // This is a max number of iterations we're gonna need
-                    const COUNT: usize = $Count;
-                    for _ in 0..COUNT {
-                        if $out_ident0.is_none() {
-                            match $type_ident0.parse(input) {
-                                Ok((rest, result)) => {
-                                    input = rest;
-                                    $out_ident0 = Some(result);
-                                    continue; // continues parsing attempts from the beginning
-                                },
-                                Err(nom::Err::Failure(err)) => return Err(nom::Err::Failure(err)),
-                                Err(_) => { }
-                            }
-                        }
-                        $(
-                            if $out_ident.is_none() {
-                                match $type_ident.parse(input) {
-                                    Ok((rest, result)) => {
-                                        input = rest;
-                                        $out_ident = Some(result);
-                                        continue; // continues parsing attempts from the beginning
-                                    },
-                                    Err(nom::Err::Failure(err)) => return Err(nom::Err::Failure(err)),
-                                    Err(_) => { }
-                                }
-                            }
-                        ) *
-                        // All parsing attempts had failed?
-                        // Break out, we're done here.
-                        break;
-                    }
-                    let _ = 2;
-                    Ok((input, ($out_ident0, $($out_ident, ) *)))
-                }
-            }
-
-            // forward to N-1
-            impl_optional_permutation!{$Count - 1, $($type_ident: $out_ident), *}
-        };
-    }
-
-    impl_optional_permutation! {16, A: A_Out, B: B_Out, C: C_Out, D: D_Out, E: E_Out, F: F_Out, G: G_Out, H: H_Out, I: I_Out, J: J_Out, K: K_Out, L: L_Out, M: M_Out, N: N_Out, O: O_Out, P: P_Out}
-}
-
-fn optional_permutation<'parsers, 'source: 'parsers, In, Out, E: ParseError<&'source str>>(
-    mut parsers: impl optional_permutation::OptionalPermutation<In, Out, E> + 'parsers,
-) -> impl Parser<In, Out, E> + 'parsers {
-    move |input| parsers.optional_permutation(input)
-}
 
 /// Generates argument parser that accounts for all necessary syntax
 macro_rules! parse_args {
