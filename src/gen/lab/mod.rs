@@ -12,12 +12,12 @@ use std::{borrow::Borrow, fmt::Write, marker::PhantomData};
 use super::{ayano::AyanoExecutor, GenerationError, OutputGenerator, Res};
 
 #[derive(Debug)]
-pub struct LabaLatex<'source, PE> {
+pub struct LabaLatex<'source, PE, PEErr> {
     path_engine: PE,
-    _phantom: PhantomData<&'source ()>,
+    _phantom: PhantomData<(&'source (), PEErr)>,
 }
 
-impl<'source, PE: PathEngine> LabaLatex<'source, PE> {
+impl<'source, PE: PathEngine<PEErr>, PEErr> LabaLatex<'source, PE, PEErr> {
     pub fn new(path_engine: PE) -> Self {
         Self {
             path_engine,
@@ -34,6 +34,8 @@ impl<'source, PE: PathEngine> LabaLatex<'source, PE> {
     ) -> Res<'source>
     where
         'source: 'meta + 'context + 'token,
+        PE: PathEngine<PEErr>,
+        PEErr: std::error::Error + 'source,
     {
         let mut cells = cells.into_iter();
         let Some(first_cell) = cells.next() else {
@@ -50,8 +52,11 @@ impl<'source, PE: PathEngine> LabaLatex<'source, PE> {
     }
 }
 
-impl<'source, PE: PathEngine> OutputGenerator<'source, SourceMeta<'source, AyanoExecutor>, Context>
-    for LabaLatex<'source, PE>
+impl<'source, PE, PEErr> OutputGenerator<'source, SourceMeta<'source, AyanoExecutor>, Context>
+    for LabaLatex<'source, PE, PEErr>
+where
+    PE: PathEngine<PEErr>,
+    PEErr: std::error::Error + 'source,
 {
     fn write_to<'meta, 'context, 'token, W: Write + ?Sized>(
         &self,
@@ -140,7 +145,10 @@ impl<'source, PE: PathEngine> OutputGenerator<'source, SourceMeta<'source, Ayano
                 output.write_str(
                     "\\begin{figure}[h!]\n\\centering\n\\includegraphics[width=0.9\\textwidth]{",
                 )?;
-                let src_path = self.path_engine.image(&src_name, None)?;
+                let src_path = self
+                    .path_engine
+                    .image(src_name.as_ref(), None)
+                    .map_err(|err| GenerationError::Path(Box::new(err)))?;
                 output.write_str(src_path.to_string_lossy().borrow())?; // FIXME non-utf paths *might* cause an issue here
                 output.write_str("}\n")?;
                 if let Some(caption) = caption.as_ref() {
@@ -313,7 +321,7 @@ mod tests {
         {$name:ident, $token:expr, $b:expr} => {
             #[test]
             fn $name() {
-                use $crate::path_engine::PrimitiveEngine;
+                use $crate::path_engine::primitive as primitive_engine;
                 // arrange
                 let token = $token;
                 let meta = SourceMeta::collect(&token)
@@ -321,7 +329,7 @@ mod tests {
                     .init_ayano()
                     .expect("Should be able to init Ayano");
 
-                let generator = LabaLatex::new(&PrimitiveEngine);
+                let generator = LabaLatex::new(primitive_engine());
                 let mut output_target = String::new();
 
                 // act

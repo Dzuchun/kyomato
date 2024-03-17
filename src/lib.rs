@@ -27,8 +27,6 @@
 //! Well, unless there's a way to efficiently write to a single output from multiple threads, while preserving output order.
 //! Any sort of "collect" function would've destroyed the purpose anyway.
 
-use std::fmt::Write;
-
 use gen::OutputGenerator;
 use lexer::KyomatoLexError;
 
@@ -59,7 +57,7 @@ pub fn gen<'token, 'source: 'token>(
 pub fn gen_to_string<'token, 'source: 'token>(
     token: &'token data::Token<'source>,
 ) -> Result<String, Box<dyn std::error::Error + 'token>> {
-    let generator = gen::lab::LabaLatex::new(&path_engine::PrimitiveEngine);
+    let generator = gen::lab::LabaLatex::new(path_engine::primitive());
     let meta = gen::lab::SourceMeta::collect(&token)?.init_ayano()?;
     let mut buf = String::new();
     generator.write_to(&mut buf, &meta, &mut gen::lab::Context::default(), token)?;

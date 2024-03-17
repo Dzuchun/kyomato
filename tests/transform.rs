@@ -30,7 +30,6 @@ fn show_transform() {
             }
         };
         let repr = kyomato::gen_to_string(&parsed).expect("Should be able to transform tokens");
-        // TODO check what the actual result is
         println!("{repr}");
         std::io::stdin()
             .read_line(&mut String::new())

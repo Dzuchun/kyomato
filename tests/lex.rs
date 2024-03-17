@@ -29,7 +29,6 @@ fn show_lex() {
                 panic!("Should successfully parse the input: {err:#?}");
             }
         };
-        // TODO check what the actual result is
         println!("{parsed:#?}");
         std::io::stdin()
             .read_line(&mut String::new())

@@ -5,10 +5,7 @@ use std::fmt::Write;
 
 use itertools::Itertools;
 
-use crate::{
-    data::{Token, Tokens},
-    path_engine,
-};
+use crate::data::{Token, Tokens};
 
 #[derive(Debug, derive_more::From, thiserror::Error)]
 pub enum GenerationError<'source> {
@@ -17,7 +14,7 @@ pub enum GenerationError<'source> {
     #[error("{}", .0)]
     Ayano(ayano::AyanoError<'source>),
     #[error("{}", .0)]
-    Path(path_engine::Error),
+    Path(Box<dyn std::error::Error + 'source>),
 }
 
 pub type Res<'source> = Result<(), GenerationError<'source>>;
