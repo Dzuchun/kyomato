@@ -1,0 +1,109 @@
+Text(
+    Owned(
+        [
+            Header {
+                order: 1,
+                content: "Перша тема",
+            },
+            Paragraph(
+                Normal,
+                "Тут трохи тексту і пояснень про квантові мультивироджені рефурбалідзери змішаного типу. Це нудно, тож тримайте формулу:",
+            ),
+            Equation {
+                content: "Ref(z) = \\int \\limits_{0}^{1} t^{z-1} \\cdot \\exp(-t) dt",
+                ident: Some(
+                    "refurbalidzer_1",
+                ),
+            },
+            Header {
+                order: 2,
+                content: "Підпункт",
+            },
+            Paragraph(
+                Normal,
+                "Рефурбалідзери можуть виявитись дуже важливими для збереження екологічної безпеки нашої планети. До прикладу, в них є наступні переваги:",
+            ),
+            List {
+                list_type: Bullet,
+                content: Owned(
+                    [
+                        Text(
+                            Owned(
+                                [
+                                    Paragraph(
+                                        Normal,
+                                        "Нормувальний множник",
+                                    ),
+                                    InlineMathmode(
+                                        "|\\psi|^{2} = 3/4",
+                                    ),
+                                ],
+                            ),
+                        ),
+                        Text(
+                            Owned(
+                                [
+                                    Paragraph(
+                                        Normal,
+                                        "Кількість хромосом -",
+                                    ),
+                                    InlineMathmode(
+                                        "\\exp(\\pi)",
+                                    ),
+                                ],
+                            ),
+                        ),
+                        Paragraph(
+                            Normal,
+                            "Поживна цінність - 20 дптр/см",
+                        ),
+                    ],
+                ),
+            },
+            Figure {
+                src_name: "refurb.jpg",
+                caption: Some(
+                    Paragraph(
+                        Normal,
+                        "Принципове влаштування рефурбалідзера",
+                    ),
+                ),
+                ident: Some(
+                    "refurb",
+                ),
+            },
+            Paragraph(
+                Normal,
+                "На світлині",
+            ),
+            Reference(
+                "fig:refurb",
+            ),
+            Paragraph(
+                Normal,
+                "можна бачити принципову схему влаштування рефурбалідзера. Неважно помітити великі очі",
+            ),
+            FootNoteReference(
+                "1",
+            ),
+            Paragraph(
+                Normal,
+                ", і два термоядерних реактори, що оточують їх. Точні реакції всередині невідомі, але цілком можливо що там женуть",
+            ),
+            InlineMathmode(
+                "du + t -> {}^{5}_{6}C",
+            ),
+            Paragraph(
+                Normal,
+                "...",
+            ),
+            FootNoteContent {
+                content: Paragraph(
+                    Normal,
+                    "Для поливу.",
+                ),
+                ident: "1",
+            },
+        ],
+    ),
+)

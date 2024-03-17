@@ -1,5 +1,5 @@
 mod ayano;
-mod lab;
+pub mod lab;
 
 use std::fmt::Write;
 
@@ -10,14 +10,17 @@ use crate::{
     path_engine,
 };
 
-#[derive(Debug, derive_more::From)]
+#[derive(Debug, derive_more::From, thiserror::Error)]
 pub enum GenerationError<'source> {
+    #[error("{}", .0)]
     IOs(std::fmt::Error),
+    #[error("{}", .0)]
     Ayano(ayano::AyanoError<'source>),
+    #[error("{}", .0)]
     Path(path_engine::Error),
 }
 
-type Res<'source> = Result<(), GenerationError<'source>>;
+pub type Res<'source> = Result<(), GenerationError<'source>>;
 
 // TODO make this thing modular (probably use tower to handle writes or th)
 pub trait OutputGenerator<'source, Meta, Context> {

@@ -15,6 +15,7 @@ use url::Url;
 // In fact, for any possible appliance they can be assumed to life for as long as source does.
 // Hope is for lifetime variance to help with lifetime casting, or th
 #[derive(Debug, PartialEq)]
+// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Tokens<'source> {
     Owned(Box<[Token<'source>]>),
     Borrowed(&'source [Token<'source>]),
@@ -62,6 +63,7 @@ impl<'source> Tokens<'source> {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq)]
+// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AyanoBlock<'code> {
     pub is_display: bool,
     pub is_static: bool,
@@ -84,6 +86,7 @@ impl PartialEq for AyanoBlock<'_> {
 */
 
 #[derive(Debug, Clone, PartialEq)]
+// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ListType {
     Bullet,
     Num,
@@ -93,6 +96,7 @@ pub enum ListType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Formatting {
     Bold,
     Italic,
@@ -100,6 +104,7 @@ pub enum Formatting {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Font {
     Normal,
     Caption,
@@ -109,6 +114,7 @@ type Tx<'source> = Cow<'source, str>;
 type Pth<'source> = Cow<'source, Path>;
 
 #[derive(Debug, PartialEq)]
+// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Token<'source> {
     PageDiv,
     Header {
@@ -132,6 +138,7 @@ pub enum Token<'source> {
         ident: Option<Tx<'source>>,
     },
     Href {
+        // #[cfg_attr(feature = "serde", serde(with = "url_serde"))]
         url: Url,
         display: Tx<'source>,
     },
@@ -199,25 +206,34 @@ impl<'source> Token<'source> {
                 caption: caption.as_ref().map(|t| Box::new(Token::borrow_ref(t))),
                 ident: ident.as_ref().map(|s| Cow::<'r, str>::Borrowed(s)),
             },
-            Token::Href { url, display } => {
-                todo!()
+            Token::Href { url, display } => Token::Href {
+                url: url.clone(),
+                display: Cow::Borrowed(&display),
+            },
+            Token::Ayano(ayano) => Token::Ayano(ayano.clone()),
+            Token::List { list_type, content } => Token::List {
+                list_type: list_type.clone(),
+                content: Tokens::Borrowed(&content),
+            },
+            Token::Formatted(formatting, content) => {
+                Token::Formatted(formatting.clone(), Box::new(content.borrow_ref()))
             }
-            Token::Ayano(_) => todo!(),
-            Token::List { list_type, content } => todo!(),
-            Token::Formatted(_, _) => todo!(),
-            Token::Text(_) => todo!(),
+            Token::Text(text) => Token::Text(Tokens::Borrowed(text)),
             Token::Paragraph(font, content) => {
                 Token::Paragraph(font.clone(), Cow::Borrowed(content))
             }
-            Token::InlineMathmode(_) => todo!(),
-            Token::Reference(_) => todo!(),
+            Token::InlineMathmode(content) => Token::InlineMathmode(Cow::Borrowed(&content)),
+            Token::Reference(ident) => Token::Reference(Cow::Borrowed(&ident)),
             Token::FootNoteReference(ident) => Token::FootNoteReference(Cow::Borrowed(ident)),
             Token::FootNoteContent { content, ident } => Token::FootNoteContent {
                 content: Box::new(content.borrow_ref()),
                 ident: Cow::Borrowed(ident),
             },
-            Token::CodeBlock { code, language } => todo!(),
-            Token::Error(_) => todo!(),
+            Token::CodeBlock { code, language } => Token::CodeBlock {
+                code: Cow::Borrowed(&code),
+                language: language.as_ref().map(|c| Cow::Borrowed(c.borrow())),
+            },
+            Token::Error(error) => Token::Error(error.clone()),
         }
     }
 }

@@ -1,12 +1,13 @@
 mod context;
 mod meta;
 
+pub use context::Context;
+pub use meta::SourceMeta;
+
 use itertools::Itertools;
 
 use crate::{data::Token, path_engine::PathEngine};
 use std::{borrow::Borrow, fmt::Write, marker::PhantomData};
-
-use self::{context::Context, meta::SourceMeta};
 
 use super::{ayano::AyanoExecutor, GenerationError, OutputGenerator, Res};
 
@@ -17,7 +18,7 @@ pub struct LabaLatex<'source, PE> {
 }
 
 impl<'source, PE: PathEngine> LabaLatex<'source, PE> {
-    fn new(path_engine: PE) -> Self {
+    pub fn new(path_engine: PE) -> Self {
         Self {
             path_engine,
             _phantom: PhantomData,
@@ -44,7 +45,7 @@ impl<'source, PE: PathEngine> LabaLatex<'source, PE> {
             output.write_str(" & ")?;
             self.write_to(output, meta, context, cell)?;
         }
-        output.write_str("\\\\ \\hline")?;
+        output.write_str("\\\\ \\hline\n")?;
         Ok(())
     }
 }
@@ -65,7 +66,7 @@ impl<'source, PE: PathEngine> OutputGenerator<'source, SourceMeta<'source, Ayano
     {
         match token {
             Token::PageDiv => {
-                output.write_str(r"\clearpage")?;
+                output.write_str("\n\\clearpage\n")?;
             }
             Token::Header { order, content } => {
                 let command = match order {
@@ -77,21 +78,16 @@ impl<'source, PE: PathEngine> OutputGenerator<'source, SourceMeta<'source, Ayano
                     _ => "textbf",
                 };
 
-                write!(output, "\\{command}{{{content}}}")?;
+                write!(output, "\n\\{command}{{{content}}}\n")?;
             }
             Token::Equation { content, ident } => {
                 let label = ident
                     .as_ref()
-                    .map(|ident| format!(r"\label{{eq:{}}}", ident))
+                    .map(|ident| format!("\\label{{eq:{}}}", ident))
                     .unwrap_or_else(String::new);
                 write!(
                     output,
-                    r"
-            \begin{{equation}}
-            {content}
-            {label}
-            \end{{equation}}
-            "
+                    "\n\\begin{{equation}}\n{content}\n{label}\\end{{equation}}\n"
                 )?;
             }
             Token::Table {
@@ -103,7 +99,7 @@ impl<'source, PE: PathEngine> OutputGenerator<'source, SourceMeta<'source, Ayano
                 let columns = header.len();
                 let column_format =
                     itertools::intersperse(std::iter::repeat("c").take(columns), "|");
-                write!(output, "\\begin{{table}}[h!]\n\\begin{{center}}\n")?;
+                write!(output, "\n\\begin{{table}}[h!]\n\\begin{{center}}\n")?;
                 output.write_str("\\begin{tabular}{|")?;
                 column_format
                     .map(|s| {
@@ -114,7 +110,7 @@ impl<'source, PE: PathEngine> OutputGenerator<'source, SourceMeta<'source, Ayano
                 output.write_str("|}\n")?;
                 // write header line
                 self.write_table_row(output, meta, context, header)?;
-                output.write_str("\\hline")?;
+                output.write_str("\\hline\n")?;
                 'cells: {
                     let mut rows = cells.chunks(columns).into_iter();
                     let Some(first_row) = rows.next() else {
@@ -125,11 +121,7 @@ impl<'source, PE: PathEngine> OutputGenerator<'source, SourceMeta<'source, Ayano
                         self.write_table_row(output, meta, context, row)?;
                     }
                 }
-                output.write_str(
-                    r"
-                \end{tabular}
-                \stepcounter{tabnum}",
-                )?;
+                output.write_str("\\end{tabular}\n\\stepcounter{tabnum}")?;
                 if let Some(caption) = caption {
                     output.write_str("\n\\caption{")?;
                     self.write_to(output, meta, context, caption)?;
@@ -138,7 +130,7 @@ impl<'source, PE: PathEngine> OutputGenerator<'source, SourceMeta<'source, Ayano
                 if let Some(ident) = ident.as_ref() {
                     write!(output, "\\label{{tab:{ident}}}\n")?;
                 }
-                output.write_str("\\end{center}\n\\end{table}")?;
+                output.write_str("\\end{center}\n\\end{table}\n")?;
             }
             Token::Figure {
                 src_name,
@@ -146,13 +138,11 @@ impl<'source, PE: PathEngine> OutputGenerator<'source, SourceMeta<'source, Ayano
                 ident,
             } => {
                 output.write_str(
-                    r"\begin{figure}[h!]
-                \centering
-                \includegraphics[width=0.9\textwidth]{",
+                    "\\begin{figure}[h!]\n\\centering\n\\includegraphics[width=0.9\\textwidth]{",
                 )?;
                 let src_path = self.path_engine.image(&src_name, None)?;
-                output.write_str(src_path.to_string_lossy().borrow())?; // TODO note here: non-UTF paths **should** be handled just fine.
-                output.write_str("}")?;
+                output.write_str(src_path.to_string_lossy().borrow())?; // FIXME non-utf paths *might* cause an issue here
+                output.write_str("}\n")?;
                 if let Some(caption) = caption.as_ref() {
                     output.write_str("\\caption{")?;
                     self.write_to(output, meta, context, caption)?;
@@ -161,8 +151,7 @@ impl<'source, PE: PathEngine> OutputGenerator<'source, SourceMeta<'source, Ayano
                 if let Some(ident) = ident.as_ref() {
                     write!(output, "\\label{{fig:{ident}}}\n")?;
                 }
-                output.write_str("\\end{figure}")?;
-                // TODO add attachments dir customization
+                output.write_str("\\end{figure}\n")?;
             }
             Token::Ayano(block) => {
                 let token = meta.ayano.display_token(block)?;
@@ -170,51 +159,60 @@ impl<'source, PE: PathEngine> OutputGenerator<'source, SourceMeta<'source, Ayano
             }
             Token::List { list_type, content } => {
                 let start: &str = match list_type {
-                    crate::data::ListType::Bullet => r"\begin{itemize}",
-                    crate::data::ListType::Num => r"\begin{enumerate}",
-                    crate::data::ListType::Latin => todo!(),
-                    crate::data::ListType::Cyrillic => {
-                        r"\begin{enumerate}[label=\asbuk*), ref=\asbuk*]"
+                    crate::data::ListType::Bullet => "\\begin{itemize}",
+                    crate::data::ListType::Num => "\\begin{enumerate}",
+                    crate::data::ListType::Latin => {
+                        unimplemented!("Latin lists are not supported for now")
                     }
-                    crate::data::ListType::Roman => todo!(),
+                    crate::data::ListType::Cyrillic => {
+                        "\\begin{enumerate}[label=\\asbuk*), ref=\\asbuk*]"
+                    }
+                    crate::data::ListType::Roman => {
+                        unimplemented!("Roman numeral lists are not supported for now")
+                    }
                 };
                 let end: &str = match list_type {
-                    crate::data::ListType::Bullet => r"\end{itemize}",
+                    crate::data::ListType::Bullet => "\\end{itemize}",
                     crate::data::ListType::Num | crate::data::ListType::Cyrillic => {
-                        r"\end{enumerate}"
+                        "\\end{enumerate}"
                     }
-                    crate::data::ListType::Latin => todo!(),
-                    crate::data::ListType::Roman => todo!(),
+                    crate::data::ListType::Latin => {
+                        unimplemented!("Latin lists are not supported for now")
+                    }
+                    crate::data::ListType::Roman => {
+                        unimplemented!("Roman numeral lists are not supported for now")
+                    }
                 };
+                output.write_str("\n")?;
                 output.write_str(start)?;
                 for item in content {
-                    output.write_str("\\item ")?;
+                    output.write_str("\n\\item ")?;
                     self.write_to(output, meta, context, item)?;
-                    output.write_str("\n")?;
                 }
+                output.write_str("\n")?;
                 output.write_str(end)?;
             }
             Token::Formatted(formatting, content) => {
                 let start: &str = match formatting {
-                    crate::data::Formatting::Bold => r"\textbf{ ",
-                    crate::data::Formatting::Italic => r"\textit{ ",
+                    crate::data::Formatting::Bold => "\\textbf{",
+                    crate::data::Formatting::Italic => "\\textit{",
                     // TODO ADD \usepackage{soul} TO PREAMBLE!
-                    crate::data::Formatting::StrikeThrough => r"\st{ ",
+                    crate::data::Formatting::StrikeThrough => "\\st{",
                 };
                 let end: &str = match formatting {
                     crate::data::Formatting::Bold
                     | crate::data::Formatting::Italic
-                    | crate::data::Formatting::StrikeThrough => " }",
+                    | crate::data::Formatting::StrikeThrough => "}",
                 };
                 output.write_str(start)?;
                 self.write_to(output, meta, context, content)?;
                 output.write_str(end)?;
             }
             Token::InlineMathmode(content) => {
-                write!(output, r"$ {content} $")?;
+                write!(output, "${content}$")?;
             }
             Token::Reference(ident) => {
-                write!(output, r"\ref{{{ident}}}")?;
+                write!(output, "\\ref{{{ident}}}")?;
             }
             Token::FootNoteReference(ident) => {
                 let (encountered, i) = {
@@ -232,12 +230,12 @@ impl<'source, PE: PathEngine> OutputGenerator<'source, SourceMeta<'source, Ayano
                     };
                     (encountered.is_some(), i)
                 };
-                // write out mark
-                write!(output, r"\footnotemark[{}]", i + 1)?;
+                // write out mark (always done)
+                write!(output, "\\footnotemark[{}]", i + 1)?;
                 if !encountered {
-                    // write out content
+                    // write out content (done only on first occurrence)
                     if let Some(content) = meta.footnotes.get(&ident.borrow()) {
-                        write!(output, r"\footnotetext[{}]{{", i + 1)?;
+                        write!(output, "\\footnotetext[{}]{{", i + 1)?;
                         self.write_to(output, meta, context, content)?;
                         output.write_str("}")?;
                     }
@@ -250,24 +248,25 @@ impl<'source, PE: PathEngine> OutputGenerator<'source, SourceMeta<'source, Ayano
                 // TODO add representation in the document
             }
             Token::Paragraph(font, content) => {
+                // TODO that's to be rewritten!
                 let font = match font {
                     crate::data::Font::Normal => "fnt",
                     crate::data::Font::Caption => "capfnt",
                 };
-                write!(output, r"\{font} {content}")?;
+                write!(output, "\\{font} {content}")?;
             }
             Token::Href { url, display } => {
-                write!(output, r"\href{{{url}}}{{{display}}}")?;
+                write!(output, "\\href{{{url}}}{{{display}}}")?;
             }
             Token::Text(content) => self.write_tokens_to(output, meta, context, content)?,
             Token::CodeBlock { code, language } => {
                 if let Some(language) = language {
                     writeln!(
                         output,
-                        "\n\\begin{{minted}}{{{language}}}\n{code}\n\\end{{minted}}"
+                        "\n\\begin{{minted}}{{{language}}}\n{code}\n\\end{{minted}}\n"
                     )?;
                 } else {
-                    writeln!(output, "\n\\begin{{minted}}\n{code}\n\\end{{minted}}")?;
+                    writeln!(output, "\n\\begin{{minted}}\n{code}\n\\end{{minted}}\n")?;
                 }
             }
         };

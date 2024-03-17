@@ -1,13 +1,17 @@
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, derive_more::From)]
+#[derive(Debug, derive_more::From, thiserror::Error)]
 pub enum VariantError {
+    #[error("{}", .0)]
     Io(std::io::Error), // missing permissions, or broken symbolic links
-    NotExist,           // file does not in fact exist in the filesystem
-    NotAFile,           // path resolves to a directory, not a file
+    #[error("file does not exist")]
+    NotExist, // file does not in fact exist in the filesystem
+    #[error("path is not of a file")]
+    NotAFile, // path resolves to a directory, not a file
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[error("Failed to resolve path: {:?}", self)]
 pub struct Error {
     source: Option<VariantError>, // error resolving path relative to the target file (if present)
     ayano: Option<VariantError>,  // error resolving relative to ayano-inserted code

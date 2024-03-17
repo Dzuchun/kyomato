@@ -1,0 +1,650 @@
+Text(
+    Owned(
+        [
+            Paragraph(
+                Normal,
+                "This test is dedicated to attempts of parser deception, i.e. usage of special symbols in wrong places to see if parser recognizes them as control symbols. There we go:",
+            ),
+            Header {
+                order: 1,
+                content: "Page dividers",
+            },
+            Paragraph(
+                Normal,
+                "Page dividers are represented by ------",
+            ),
+            Paragraph(
+                Normal,
+                "If the line above has dashes     ^^^^^^ here, it probably works alright.",
+            ),
+            Paragraph(
+                Normal,
+                "Here's a genuine divider",
+            ),
+            PageDiv,
+            Paragraph(
+                Normal,
+                "Fun fact: there can be a paragraph right after it!",
+            ),
+            PageDiv,
+            Paragraph(
+                Normal,
+                "Some text, cause why not",
+            ),
+            Paragraph(
+                Normal,
+                "But this",
+            ),
+            Formatted(
+                Bold,
+                Paragraph(
+                    Normal,
+                    "DOES",
+                ),
+            ),
+            Paragraph(
+                Normal,
+                "look cursed, don't do it.",
+            ),
+            Header {
+                order: 1,
+                content: "Headers",
+            },
+            Paragraph(
+                Normal,
+                "Headers are most recognizable by '#'-symbol. For it to actually represent a header, it needs to at the beginning of the line and there should be no more than 6 of them.",
+            ),
+            Formatted(
+                Bold,
+                Paragraph(
+                    Normal,
+                    "ANYTHING",
+                ),
+            ),
+            Paragraph(
+                Normal,
+                "up to the end of line will be included into a header, then.",
+            ),
+            Paragraph(
+                Normal,
+                "Example:",
+            ),
+            Header {
+                order: 6,
+                content: "This is a long, yet formally correct header. You can add $equations$ and *formatting* here, but I provide no guarantees as of the way these would display in final document.",
+            },
+            Paragraph(
+                Normal,
+                "Here's an example of incorrect header:",
+            ),
+            Paragraph(
+                Normal,
+                "###### This header is considered incorrect for this application, and will be parsed as regular paragraph instead",
+            ),
+            Paragraph(
+                Normal,
+                "Another example of incorrect header, featuring 7 hash-symbols:",
+            ),
+            Paragraph(
+                Normal,
+                "####### This will be parsed as a regular paragraph",
+            ),
+            Header {
+                order: 1,
+                content: "Equations",
+            },
+            Paragraph(
+                Normal,
+                "There are two types of equations in markdown/latex: inline mathmode and display mathmode",
+            ),
+            Paragraph(
+                Normal,
+                "Both of them are defined by $-symbols. However, they must be paired to actually represent these. Here are examples:",
+            ),
+            Paragraph(
+                Normal,
+                "Inline:",
+            ),
+            InlineMathmode(
+                "y = x ^ 2",
+            ),
+            Paragraph(
+                Normal,
+                "Display:",
+            ),
+            Equation {
+                content: "y = x ^ 2",
+                ident: None,
+            },
+            Paragraph(
+                Normal,
+                "Note that display mathmode should ALWAYS start from a new line for this application.",
+            ),
+            Paragraph(
+                Normal,
+                "Basically, there's not much to deceive for: you can do that:",
+            ),
+            Paragraph(
+                Normal,
+                "$",
+            ),
+            Paragraph(
+                Normal,
+                "$",
+            ),
+            Paragraph(
+                Normal,
+                "(the above should not be mathmode), and that's it, basically :sad:",
+            ),
+            Header {
+                order: 1,
+                content: "Table",
+            },
+            Paragraph(
+                Normal,
+                "Tables are defined by |-symbol. But the actual table will happen only if they are the first thing on the line.",
+            ),
+            Paragraph(
+                Normal,
+                "Due to current implementation, there's no cure apart from display mathmode and code:",
+            ),
+            Paragraph(
+                Normal,
+                "(this should be display mathmode):",
+            ),
+            Equation {
+                content: "|x|",
+                ident: None,
+            },
+            Paragraph(
+                Normal,
+                "(this should be a code block):",
+            ),
+            CodeBlock {
+                code: "head /dev/random\n| cat",
+                language: Some(
+                    "bash",
+                ),
+            },
+            Header {
+                order: 1,
+                content: "Figure",
+            },
+            Paragraph(
+                Normal,
+                "Figure is defined by a ![[ sequence at a start of the line. Same points should be uphold here:",
+            ),
+            Equation {
+                content: "![[",
+                ident: None,
+            },
+            CodeBlock {
+                code: "![[",
+                language: None,
+            },
+            Header {
+                order: 1,
+                content: "References",
+            },
+            Paragraph(
+                Normal,
+                "These start with []",
+            ),
+            Header {
+                order: 2,
+                content: "Hyperrefs",
+            },
+            Paragraph(
+                Normal,
+                "These are followed by parentheses (). Nothing is allowed between them, thus",
+            ),
+            Paragraph(
+                Normal,
+                "Here's a correct href:",
+            ),
+            Href {
+                url: Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "youtu.be",
+                        ),
+                    ),
+                    port: None,
+                    path: "/rickroll_link_lol",
+                    query: None,
+                    fragment: None,
+                },
+                display: "my gh page",
+            },
+            Paragraph(
+                Normal,
+                "Here are incorrect refs:",
+            ),
+            Paragraph(
+                Normal,
+                "[my gh page] (https://youtu.be/rickroll",
+            ),
+            Formatted(
+                Italic,
+                Paragraph(
+                    Normal,
+                    "link",
+                ),
+            ),
+            Paragraph(
+                Normal,
+                "lol)",
+            ),
+            Paragraph(
+                Normal,
+                "[my gh page]",
+            ),
+            Paragraph(
+                Normal,
+                "(https://youtu.be/rickroll",
+            ),
+            Formatted(
+                Italic,
+                Paragraph(
+                    Normal,
+                    "link",
+                ),
+            ),
+            Paragraph(
+                Normal,
+                "lol)",
+            ),
+            Header {
+                order: 2,
+                content: "Footnote refs",
+            },
+            Paragraph(
+                Normal,
+                "These are started by [^.",
+            ),
+            Paragraph(
+                Normal,
+                "Here are correct footnote refs:",
+            ),
+            FootNoteReference(
+                "1",
+            ),
+            Paragraph(
+                Normal,
+                ",",
+            ),
+            FootNoteReference(
+                "source",
+            ),
+            Paragraph(
+                Normal,
+                "Here are incorrect ones: [^1, ^1],",
+            ),
+            Paragraph(
+                Normal,
+                "[^",
+            ),
+            Paragraph(
+                Normal,
+                "1",
+            ),
+            Paragraph(
+                Normal,
+                "]",
+            ),
+            Paragraph(
+                Normal,
+                "So on",
+            ),
+            Header {
+                order: 2,
+                content: "Object refs",
+            },
+            Paragraph(
+                Normal,
+                "These refer to objects like figures, tables and equations.",
+            ),
+            Paragraph(
+                Normal,
+                "Started by [@.",
+            ),
+            Paragraph(
+                Normal,
+                "Here's a correct ref:",
+            ),
+            Reference(
+                "fig:experiment_schema",
+            ),
+            Paragraph(
+                Normal,
+                "Here's are bad ones: [@ fig:1, @  source3],",
+            ),
+            Paragraph(
+                Normal,
+                "[@",
+            ),
+            Paragraph(
+                Normal,
+                "eq2",
+            ),
+            Paragraph(
+                Normal,
+                "]",
+            ),
+            Paragraph(
+                Normal,
+                "",
+            ),
+            Formatted(
+                Bold,
+                Paragraph(
+                    Normal,
+                    "NOTE",
+                ),
+            ),
+            Paragraph(
+                Normal,
+                ": despite object types being prepended with 'eq', 'fig' or 'tab' in refs, you",
+            ),
+            Formatted(
+                Italic,
+                Paragraph(
+                    Normal,
+                    "can",
+                ),
+            ),
+            Paragraph(
+                Normal,
+                "use regular latex to define your custom refs. In fact, LaTeX doesn't care about all of these at all; I'm doing these transformations just for my own comfort, as I've been doing this manually.",
+            ),
+            Header {
+                order: 1,
+                content: "Formatting",
+            },
+            Paragraph(
+                Normal,
+                "This object's type is deprecated and will be removed soon.",
+            ),
+            Paragraph(
+                Normal,
+                "It starts and ends with",
+            ),
+            List {
+                list_type: Bullet,
+                content: Owned(
+                    [
+                        Paragraph(
+                            Normal,
+                            "* or _",
+                        ),
+                        Paragraph(
+                            Normal,
+                            "** or __",
+                        ),
+                        Paragraph(
+                            Normal,
+                            "~~",
+                        ),
+                    ],
+                ),
+            },
+            Paragraph(
+                Normal,
+                "",
+            ),
+            Formatted(
+                Bold,
+                Paragraph(
+                    Normal,
+                    "WARN",
+                ),
+            ),
+            Paragraph(
+                Normal,
+                ": As of now, these",
+            ),
+            Formatted(
+                Italic,
+                Paragraph(
+                    Normal,
+                    "might",
+                ),
+            ),
+            Paragraph(
+                Normal,
+                "cause cause massive problems if encountered at the start of the line.",
+            ),
+            Paragraph(
+                Normal,
+                "Basically, parsers for these tokens attempt parse everything up until they find a closing token. But if they are inserted in a middle of the text, then it's ok - they will be limited by current paragraph, and (most likely) will find no match inside it, if their use was unintended.",
+            ),
+            Header {
+                order: 1,
+                content: "Footnote content",
+            },
+            Paragraph(
+                Normal,
+                "These start with '",
+            ),
+            FootNoteReference(
+                "ID",
+            ),
+            Paragraph(
+                Normal,
+                ":' and proceed to the end of line.",
+            ),
+            Paragraph(
+                Normal,
+                "Example of valid content:",
+            ),
+            FootNoteContent {
+                content: Paragraph(
+                    Normal,
+                    "Explanation of source2.",
+                ),
+                ident: "source2",
+            },
+            Paragraph(
+                Normal,
+                "Example of invalid content:",
+            ),
+            Paragraph(
+                Normal,
+                "[^source2: This is invalid content",
+            ),
+            FootNoteReference(
+                "source2",
+            ),
+            Paragraph(
+                Normal,
+                ": This is invalid content",
+            ),
+            FootNoteReference(
+                "source2",
+            ),
+            Paragraph(
+                Normal,
+                ": This is invalid content",
+            ),
+            Paragraph(
+                Normal,
+                "They also must start at the beginning of the line. If fact, this:",
+            ),
+            FootNoteReference(
+                "source2",
+            ),
+            Paragraph(
+                Normal,
+                ": Some content",
+            ),
+            Paragraph(
+                Normal,
+                "Is expected to be a footnote ref with a colon.",
+            ),
+            Header {
+                order: 1,
+                content: "Code blocks",
+            },
+            Paragraph(
+                Normal,
+                "There are two fundamental types of code blocks: normal code block and",
+            ),
+            Formatted(
+                Bold,
+                Paragraph(
+                    Normal,
+                    "Ayano",
+                ),
+            ),
+            Paragraph(
+                Normal,
+                "code block.",
+            ),
+            Header {
+                order: 2,
+                content: "Normal code block",
+            },
+            Paragraph(
+                Normal,
+                "These start and end with '```' on a newline. There can be",
+            ),
+            Formatted(
+                Bold,
+                Paragraph(
+                    Normal,
+                    "practically anything",
+                ),
+            ),
+            Paragraph(
+                Normal,
+                "inside. Example:",
+            ),
+            CodeBlock {
+                code: "int x = 2;\nint y = 4;\nint[] arr = new int[2];\narr[0] = x;\narr[1] = 4;",
+                language: Some(
+                    "java",
+                ),
+            },
+            Paragraph(
+                Normal,
+                "There can be anything after code block had closed:",
+            ),
+            CodeBlock {
+                code: "local x = 'matt'\nlocal y = 'y'\nlocal z = x .. y -- matty!!",
+                language: Some(
+                    "lua(Idk why vscode detects this block closing as a valid lua syntax)",
+                ),
+            },
+            Paragraph(
+                Normal,
+                "Here's some text that's ok to be here",
+            ),
+            Paragraph(
+                Normal,
+                "There can't be any spaces before delimiting ```s:",
+            ),
+            Paragraph(
+                Normal,
+                "```python",
+            ),
+            Paragraph(
+                Normal,
+                "# This here is not really a python block",
+            ),
+            Paragraph(
+                Normal,
+                "x = 2",
+            ),
+            Paragraph(
+                Normal,
+                "print(x)",
+            ),
+            Paragraph(
+                Normal,
+                "```",
+            ),
+            Header {
+                order: 2,
+                content: "Ayano code block",
+            },
+            Paragraph(
+                Normal,
+                "",
+            ),
+            Formatted(
+                Italic,
+                Paragraph(
+                    Normal,
+                    "because Ayano loves Kyoko",
+                ),
+            ),
+            Paragraph(
+                Normal,
+                "This object looks and behaves just like normal code block, but is only limited to",
+            ),
+            Formatted(
+                Italic,
+                Paragraph(
+                    Normal,
+                    "python",
+                ),
+            ),
+            Paragraph(
+                Normal,
+                "language, can have spacial arguments in a language line, may leave something behind in the document. For example:",
+            ),
+            Paragraph(
+                Normal,
+                "This Ayano block will leave plain \"2\" behind it:",
+            ),
+            Ayano(
+                AyanoBlock {
+                    is_display: false,
+                    is_static: false,
+                    code: "2",
+                    insert_path: None,
+                },
+            ),
+            Paragraph(
+                Normal,
+                "Akin to normal blocks, it's ok to leave something trailing:",
+            ),
+            CodeBlock {
+                code: "2",
+                language: Some(
+                    "ayano",
+                ),
+            },
+            Paragraph(
+                Normal,
+                "This text is ok to be here",
+            ),
+            Paragraph(
+                Normal,
+                "And these are invalid Ayano blocks:",
+            ),
+            CodeBlock {
+                code: "2",
+                language: Some(
+                    "ayano",
+                ),
+            },
+            Paragraph(
+                Normal,
+                "```ayano",
+            ),
+            Paragraph(
+                Normal,
+                "2",
+            ),
+            Paragraph(
+                Normal,
+                "```",
+            ),
+        ],
+    ),
+)

@@ -114,11 +114,15 @@ pub struct AyanoExecutor {
     blocks: Immutable<HashMap<u64, BlockInfo>>,
 }
 
-#[derive(Debug, derive_more::From, PartialEq)]
+#[derive(Debug, derive_more::From, PartialEq, thiserror::Error)]
 pub enum AyanoError<'b> {
+    #[error("Python error occured: {:?}", .0)]
     Python(Equivalent<PyErr>),
+    #[error("There's no function for ayano block: {:?}", .0)]
     NoFunction(AyanoBlock<'b>),
+    #[error("{}", .0)]
     Applying(SyntaxError),
+    #[error("{}", .0)]
     Parsing(ParsingError),
 }
 
@@ -625,13 +629,21 @@ enum Syntax<'source> {
     },
 }
 
-#[derive(Debug, derive_more::From, PartialEq)]
+#[derive(Debug, derive_more::From, PartialEq, thiserror::Error)]
 pub enum SyntaxError {
+    #[error("Required argument is missing: {}", .0)]
     MissingArgument(&'static str),
+    #[error("Unknown argument is present: {}", .0)]
     UnknownArgument(String),
+    /// Right now this only means that you don't have a generator in a table syntax
+    #[error("Ayano syntax is fundamentally wrong")]
+    // TODO probably should rename and write a better message
     BadSyntax,
+    #[error("{}", .0)]
     RangeParse(GenericRangeParseError),
+    #[error("{}", .0)]
     IntParse(ParseIntError),
+    #[error("{}", **.0)]
     InsertIo(Equivalent<std::io::Error>),
 }
 
@@ -1363,10 +1375,13 @@ r#"___generator___ = lambda row, col: -1
 return "tab", [[___generator___(0, 0), ___generator___(0, 1), ], [___generator___(1, 0), ___generator___(1, 1), ], [___generator___(2, 0), ___generator___(2, 1), ], [___generator___(3, 0), ___generator___(3, 1), ], [___generator___(4, 0), ___generator___(4, 1), ], ], None, None"#}
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum ParsingError {
+    #[error("{}", .0)]
     Float(ParseFloatError),
+    #[error("Python could not generate output. str: {}, error: {:?}", .0, .1)]
     UnexpectedSyntax(String, Equivalent<PyErr>),
+    #[error("Table syntax error: no header")]
     TableNoHeader,
 }
 

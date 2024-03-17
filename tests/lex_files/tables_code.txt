@@ -1,0 +1,279 @@
+Text(
+    Owned(
+        [
+            Paragraph(
+                Normal,
+                "Наступний тест. Тут протестуємо таблиці і блоки коду.",
+            ),
+            Header {
+                order: 2,
+                content: "Таблиці",
+            },
+            Paragraph(
+                Normal,
+                "Звичайні таблиці; Можуть всередині мати",
+            ),
+            Formatted(
+                Bold,
+                Paragraph(
+                    Normal,
+                    "формули",
+                ),
+            ),
+            Paragraph(
+                Normal,
+                "чи",
+            ),
+            Formatted(
+                Italic,
+                Paragraph(
+                    Normal,
+                    "посилання",
+                ),
+            ),
+            Paragraph(
+                Normal,
+                "на інші штуки",
+            ),
+            Table {
+                header: Owned(
+                    [
+                        Paragraph(
+                            Normal,
+                            "Storage",
+                        ),
+                        Paragraph(
+                            Normal,
+                            "Space",
+                        ),
+                        Paragraph(
+                            Normal,
+                            "Number",
+                        ),
+                    ],
+                ),
+                cells: Owned(
+                    [
+                        Paragraph(
+                            Normal,
+                            "1",
+                        ),
+                        Paragraph(
+                            Normal,
+                            "2",
+                        ),
+                        InlineMathmode(
+                            "3 + e ^{\\pi}",
+                        ),
+                        Text(
+                            Owned(
+                                [
+                                    InlineMathmode(
+                                        "e",
+                                    ),
+                                    FootNoteReference(
+                                        "euler",
+                                    ),
+                                ],
+                            ),
+                        ),
+                        InlineMathmode(
+                            "\\cdot \\pm 1",
+                        ),
+                        Text(
+                            Owned(
+                                [
+                                    Paragraph(
+                                        Normal,
+                                        "І тут ще",
+                                    ),
+                                    Formatted(
+                                        Italic,
+                                        Paragraph(
+                                            Normal,
+                                            "трохи",
+                                        ),
+                                    ),
+                                    Paragraph(
+                                        Normal,
+                                        "тексту \\|",
+                                    ),
+                                ],
+                            ),
+                        ),
+                    ],
+                ),
+                caption: Some(
+                    Text(
+                        Owned(
+                            [
+                                Paragraph(
+                                    Normal,
+                                    "Оце приклад таблиці. Як казав мій вчитель:",
+                                ),
+                                Formatted(
+                                    Bold,
+                                    Paragraph(
+                                        Normal,
+                                        "ВИКОРИСТОВУЙ БІЛЬШЕ ВИБУХІВКИ",
+                                    ),
+                                ),
+                                Paragraph(
+                                    Normal,
+                                    "(і \\\"лапок\\\")",
+                                ),
+                            ],
+                        ),
+                    ),
+                ),
+                ident: Some(
+                    "example_1",
+                ),
+            },
+            Paragraph(
+                Normal,
+                "Таблиця цілком собі може не мати ідентифікатора або опису:",
+            ),
+            Table {
+                header: Owned(
+                    [
+                        Paragraph(
+                            Normal,
+                            "Кількість",
+                        ),
+                        Paragraph(
+                            Normal,
+                            "Роль",
+                        ),
+                    ],
+                ),
+                cells: Owned(
+                    [
+                        Paragraph(
+                            Normal,
+                            "3 діоптрії",
+                        ),
+                        Paragraph(
+                            Normal,
+                            "7 галон",
+                        ),
+                        Paragraph(
+                            Normal,
+                            "rust",
+                        ),
+                        Paragraph(
+                            Normal,
+                            "#PANIC!!!",
+                        ),
+                    ],
+                ),
+                caption: None,
+                ident: Some(
+                    "table_2",
+                ),
+            },
+            FootNoteContent {
+                content: Text(
+                    Owned(
+                        [
+                            Paragraph(
+                                Normal,
+                                "Це число Ейлера. Воно дуже корисне,",
+                            ),
+                            Formatted(
+                                StrikeThrough,
+                                Paragraph(
+                                    Normal,
+                                    "але не може бути записане",
+                                ),
+                            ),
+                            Paragraph(
+                                Normal,
+                                "у вигляді",
+                            ),
+                            Formatted(
+                                Italic,
+                                Paragraph(
+                                    Normal,
+                                    "десяткового",
+                                ),
+                            ),
+                            Paragraph(
+                                Normal,
+                                "дробу.",
+                            ),
+                        ],
+                    ),
+                ),
+                ident: "euler",
+            },
+            Header {
+                order: 2,
+                content: "Блоки коду",
+            },
+            Paragraph(
+                Normal,
+                "Наразі мають досить обмежену підтримку, адже у",
+            ),
+            InlineMathmode(
+                "\\LaTeX",
+            ),
+            Paragraph(
+                Normal,
+                "немає нативного поняття блоків коду.",
+            ),
+            Paragraph(
+                Normal,
+                "На щастя, у",
+            ),
+            Formatted(
+                Bold,
+                Paragraph(
+                    Normal,
+                    "markdown",
+                ),
+            ),
+            Paragraph(
+                Normal,
+                "таке поняття є",
+            ),
+            FootNoteReference(
+                "code",
+            ),
+            Paragraph(
+                Normal,
+                ":",
+            ),
+            CodeBlock {
+                code: "let x = 5;\nlet y = x.powi(2);\nlet z = (y as f64).sqrt();\nprintln!(\"x = {x}, y = {y}, z = {x}\");",
+                language: Some(
+                    "rust",
+                ),
+            },
+            FootNoteContent {
+                content: Text(
+                    Owned(
+                        [
+                            Paragraph(
+                                Normal,
+                                "Принаймні,",
+                            ),
+                            Formatted(
+                                Italic,
+                                Paragraph(
+                                    Normal,
+                                    "Obsidian",
+                                ),
+                            ),
+                            Paragraph(
+                                Normal,
+                                "таке робить",
+                            ),
+                        ],
+                    ),
+                ),
+                ident: "code",
+            },
+        ],
+    ),
+)

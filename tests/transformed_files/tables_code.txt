@@ -1,0 +1,38 @@
+\fnt Наступний тест. Тут протестуємо таблиці і блоки коду.
+\subsubsection{Таблиці}
+\fnt Звичайні таблиці; Можуть всередині мати\textbf{\fnt формули}\fnt чи\textit{\fnt посилання}\fnt на інші штуки
+\begin{table}[h!]
+\begin{center}
+\begin{tabular}{|c|c|c|}
+\fnt Storage & \fnt Space & \fnt Number\\ \hline
+\hline
+\fnt 1 & \fnt 2 & $3 + e ^{\pi}$\\ \hline
+$e$\footnotemark[1]\footnotetext[1]{\fnt Це число Ейлера. Воно дуже корисне,\st{\fnt але не може бути записане}\fnt у вигляді\textit{\fnt десяткового}\fnt дробу.} & $\cdot \pm 1$ & \fnt І тут ще\textit{\fnt трохи}\fnt тексту \|\\ \hline
+\end{tabular}
+\stepcounter{tabnum}
+\caption{\fnt Оце приклад таблиці. Як казав мій вчитель:\textbf{\fnt ВИКОРИСТОВУЙ БІЛЬШЕ ВИБУХІВКИ}\fnt (і \"лапок\")}
+\label{tab:example_1}
+\end{center}
+\end{table}
+\fnt Таблиця цілком собі може не мати ідентифікатора або опису:
+\begin{table}[h!]
+\begin{center}
+\begin{tabular}{|c|c|}
+\fnt Кількість & \fnt Роль\\ \hline
+\hline
+\fnt 3 діоптрії & \fnt 7 галон\\ \hline
+\fnt rust & \fnt #PANIC!!!\\ \hline
+\end{tabular}
+\stepcounter{tabnum}\label{tab:table_2}
+\end{center}
+\end{table}
+
+\subsubsection{Блоки коду}
+\fnt Наразі мають досить обмежену підтримку, адже у$\LaTeX$\fnt немає нативного поняття блоків коду.\fnt На щастя, у\textbf{\fnt markdown}\fnt таке поняття є\footnotemark[2]\footnotetext[2]{\fnt Принаймні,\textit{\fnt Obsidian}\fnt таке робить}\fnt :
+\begin{minted}{rust}
+let x = 5;
+let y = x.powi(2);
+let z = (y as f64).sqrt();
+println!("x = {x}, y = {y}, z = {x}");
+\end{minted}
+

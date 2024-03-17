@@ -10,8 +10,9 @@ use crate::data::{Token, Tokens};
 
 use super::super::ayano::{self, AyanoBuilder, AyanoExecutor};
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum MetaError {
+    #[error("Failed to recognize Ayano syntax: {}", .0)]
     AyanoSyntax(ayano::SyntaxError),
 }
 
