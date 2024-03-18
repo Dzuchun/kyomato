@@ -20,7 +20,7 @@ use std::{
 };
 
 use crate::{
-    data::{AyanoBlock, Font, Token, Tokens},
+    data::{AyanoBlock, Token, Tokens},
     lexer::KyomatoLexError,
     util::{
         Equivalent, GenericRange, GenericRangeParseError, Immutable, InlinedStack,
@@ -1555,10 +1555,11 @@ fn parse_ayano(python_output: &PyAny) -> Result<Token<'static>, ParsingError> {
         }
     }
     // any sort of parsing had failed - return regular text
-    Ok(Token::Paragraph(
-        Font::Normal,
-        Cow::Owned(python_output.to_string()),
-    ))
+    Ok(Token::Paragraph {
+        is_newline: false,
+        formatting: None,
+        content: Cow::Owned(python_output.to_string()),
+    })
 }
 
 #[cfg(test)]
@@ -2227,11 +2228,19 @@ pub fn value_error_format<'v, 'e>(
     // Result is a combination of text tokens with mathmode +- in between
     Ok(Token::Text {
         tokens: Tokens::new([
-            Token::Paragraph(crate::data::Font::Normal, value.into()),
+            Token::Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: value.into(),
+            },
             Token::InlineMathmode {
                 content: r"\pm".into(),
             },
-            Token::Paragraph(crate::data::Font::Normal, error.into()),
+            Token::Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: error.into(),
+            },
         ]),
     })
 }

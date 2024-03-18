@@ -103,13 +103,6 @@ pub enum Formatting {
     StrikeThrough,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum Font {
-    Normal,
-    Caption,
-}
-
 type Tx<'source> = Cow<'source, str>;
 type Pth<'source> = Cow<'source, Path>;
 
@@ -157,7 +150,11 @@ pub enum Token<'source> {
     },
     // TODO move font and formatting exclusively to here
     // TODO add a flag to indicate, if this paragraph contains escaped chars (if it was parsed from caption, basically)
-    Paragraph(Font, Tx<'source>),
+    Paragraph {
+        is_newline: bool,
+        formatting: Option<Formatting>,
+        content: Tx<'source>,
+    },
     InlineMathmode {
         content: Tx<'source>,
     },
@@ -252,7 +249,11 @@ impl ToStaticExt for AyanoBlock<'_> {
 
 impl<'source> Token<'source> {
     pub fn text(text: impl Into<Cow<'source, str>>) -> Self {
-        Self::Paragraph(Font::Normal, text.into())
+        Self::Paragraph {
+            is_newline: false,
+            content: text.into(),
+            formatting: None,
+        }
     }
 
     pub fn borrow_ref<'r>(&'r self) -> Token<'r>
@@ -306,9 +307,15 @@ impl<'source> Token<'source> {
             Token::Text { tokens } => Token::Text {
                 tokens: Tokens::Borrowed(tokens),
             },
-            Token::Paragraph(font, content) => {
-                Token::Paragraph(font.clone(), Cow::Borrowed(content))
-            }
+            Token::Paragraph {
+                is_newline,
+                formatting,
+                content,
+            } => Token::Paragraph {
+                is_newline: *is_newline,
+                formatting: formatting.clone(),
+                content: Cow::Borrowed(content),
+            },
             Token::InlineMathmode { content } => Token::InlineMathmode {
                 content: Cow::Borrowed(&content),
             },
@@ -385,7 +392,15 @@ impl<'source> Token<'source> {
             Token::Text { tokens } => Token::Text {
                 tokens: tokens.to_static(),
             },
-            Token::Paragraph(font, inner) => Token::Paragraph(font.clone(), inner.to_static()),
+            Token::Paragraph {
+                is_newline,
+                formatting,
+                content,
+            } => Token::Paragraph {
+                is_newline: *is_newline,
+                formatting: formatting.clone(),
+                content: content.to_static(),
+            },
             Token::InlineMathmode { content } => Token::InlineMathmode {
                 content: content.to_static(),
             },

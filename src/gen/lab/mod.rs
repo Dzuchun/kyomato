@@ -6,7 +6,10 @@ pub use meta::SourceMeta;
 
 use itertools::Itertools;
 
-use crate::{data::Token, path_engine::PathEngine};
+use crate::{
+    data::{Formatting, Token},
+    path_engine::PathEngine,
+};
 use std::{borrow::Borrow, fmt::Write, marker::PhantomData};
 
 use super::{ayano::AyanoExecutor, GenerationError, OutputGenerator, Res};
@@ -112,7 +115,7 @@ where
                         Ok::<(), GenerationError>(())
                     })
                     .try_collect()?;
-                output.write_str("|}\n")?;
+                output.write_str("|}\\hline\n")?;
                 // write header line
                 self.write_table_row(output, meta, context, header)?;
                 output.write_str("\\hline\n")?;
@@ -128,7 +131,7 @@ where
                 }
                 output.write_str("\\end{tabular}\n\\stepcounter{tabnum}")?;
                 if let Some(caption) = caption {
-                    output.write_str("\n\\caption{")?;
+                    output.write_str("\n\\caption{\\capfnt ")?;
                     self.write_to(output, meta, context, caption)?;
                     output.write_str("}\n")?;
                 }
@@ -157,7 +160,7 @@ where
                 output.write_str(src_path.to_string_lossy().borrow())?; // FIXME non-utf paths *might* cause an issue here
                 output.write_str("}\n")?;
                 if let Some(caption) = caption.as_ref() {
-                    output.write_str("\\caption{")?;
+                    output.write_str("\\caption{\\capfnt ")?;
                     self.write_to(output, meta, context, caption)?;
                     output.write_str("}\n")?;
                 }
@@ -260,13 +263,23 @@ where
                 eprintln!("{message}");
                 // TODO add representation in the document
             }
-            Token::Paragraph(font, content) => {
-                // TODO that's to be rewritten!
-                let font = match font {
-                    crate::data::Font::Normal => "fnt",
-                    crate::data::Font::Caption => "capfnt",
+            Token::Paragraph {
+                is_newline,
+                formatting,
+                content,
+            } => {
+                if *is_newline {
+                    output.write_str("\n\\tbln ")?;
+                }
+                let (start, end) = match formatting {
+                    None => ("", ""),
+                    Some(Formatting::Bold) => ("\\textbf{", "}"),
+                    Some(Formatting::Italic) => ("\\textit{", "}"),
+                    Some(Formatting::StrikeThrough) => ("\\st{", "}"),
                 };
-                write!(output, "\\{font} {content}")?;
+                output.write_str(start)?;
+                output.write_str(&content)?;
+                output.write_str(end)?;
             }
             Token::Href { url, display } => {
                 write!(output, "\\href{{{url}}}{{{display}}}")?;
@@ -291,13 +304,17 @@ where
 mod tests {
     use std::path::Path;
 
-    use crate::data::{AyanoBlock, Font, Formatting, ListType};
+    use crate::data::{AyanoBlock, Formatting, ListType};
 
     use super::*;
 
     macro_rules! text {
         ($text:literal) => {
-            Token::Paragraph(Font::Normal, $text.into())
+            Token::Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: $text.into(),
+            }
         };
     }
 
@@ -359,13 +376,13 @@ mod tests {
     test! {header5, Token::Header { order: 5, content: "HeaderText".into() }, r"\textbf{HeaderText}"}
 
     // Paragraphs
-    test! {para1, Token::Paragraph(Font::Normal, "content, content!!!".into()), r"\fnt content, content!!!"}
-    test! {para2, Token::Paragraph(Font::Caption, "content, content!!!".into()), r"\capfnt content, content!!!"}
+    test! {para1, Token::Paragraph{is_newline: false, formatting: None, content: "content, content!!!".into()}, "content, content!!!"}
+    test! {para2, Token::Paragraph{is_newline: true, formatting: None, content: "content, content!!!".into()}, "\n\\tbln content, content!!!"}
 
     // Formatting
-    test! {formatting1, Token::Formatted(Formatting::Bold, Box::new(text!("some text, idk"))), r"\textbf{ \fnt some text, idk }"}
-    test! {formatting2, Token::Formatted(Formatting::Italic, Box::new(text!("some text, idk"))), r"\textit{ \fnt some text, idk }"}
-    test! {formatting3, Token::Formatted(Formatting::StrikeThrough, Box::new(text!("some text, idk"))), r"\st{ \fnt some text, idk }"}
+    test! {formatting1, Token::Paragraph{is_newline: false, formatting: Some(Formatting::Bold), content: "some text, idk".into()}, "\\textbf{some text, idk}"}
+    test! {formatting2, Token::Paragraph{is_newline: false, formatting: Some(Formatting::Italic), content: "some text, idk".into()}, "\\textit{some text, idk}"}
+    test! {formatting3, Token::Paragraph{is_newline: false, formatting: Some(Formatting::StrikeThrough), content: "some text, idk".into()}, "\\st{some text, idk}"}
 
     // Hrefs
     test! {href1, Token::Href { url: "https://www.github.com/Dzuchun".parse().unwrap(), display: "My gh page".into() }, r"\href{https://www.github.com/Dzuchun}{My gh page}"}
@@ -395,14 +412,14 @@ mod tests {
     \begin{figure}[h!]
     \centering
     \includegraphics[width = 0.9 \textwidth]{apple.jpg}
-    \caption{\fnt a very realistic-looking apple}
+    \caption{\capfnt a very realistic-looking apple}
     \end{figure}
     "}
     test! {fig2, Token::Figure { src_name: Path::new("schema1.jpg").into(), caption: Some(Box::new(text!("A schema providing a bunch of very important info on quantum refurbalidzer function"))), ident: Some("schema-1".into()), width: None }, r"
     \begin{figure}[h!]
     \centering
     \includegraphics[width = 0.9 \textwidth]{schema1.jpg}
-    \caption{\fnt A schema providing a bunch of very important info on quantum refurbalidzer function}
+    \caption{\capfnt A schema providing a bunch of very important info on quantum refurbalidzer function}
     \label{fig:schema-1}
     \end{figure}
     "}
@@ -410,7 +427,7 @@ mod tests {
     \begin{figure}[h!]
     \centering
     \includegraphics[width = 0.25 \textwidth]{schema1.jpg}
-    \caption{\fnt A schema providing a bunch of very important info on quantum refurbalidzer function}
+    \caption{\capfnt A schema providing a bunch of very important info on quantum refurbalidzer function}
     \label{fig:schema-1}
     \end{figure}
     "}
@@ -429,13 +446,13 @@ mod tests {
     r"
     \begin{table}[h!]
     \begin{center}
-    \begin{tabular}{|c|c|c|}
-\fnt header1 & \fnt header2 & \fnt header3 \\ \hline \hline
-\fnt cell_11 & \fnt cell_12 & \fnt cell_13 \\ \hline
-\fnt cell_21 & \fnt cell_22 & \fnt cell_23 \\ \hline
+    \begin{tabular}{|c|c|c|}\hline
+header1 & header2 & header3 \\ \hline \hline
+cell_11 & cell_12 & cell_13 \\ \hline
+cell_21 & cell_22 & cell_23 \\ \hline
     \end{tabular}
     \stepcounter{tabnum}
-    \caption{ \fnt caption...}
+    \caption{ \capfnt caption...}
     \label{tab:example}
     \end{center}
     \end{table}
@@ -448,9 +465,9 @@ mod tests {
         text!("point3")
     ] }, r"
     \begin{itemize}
-    \item \fnt point1
-    \item \fnt point2
-    \item \fnt point3
+    \item point1
+    \item point2
+    \item point3
     \end{itemize}
     "}
 
@@ -460,9 +477,9 @@ mod tests {
         text!("point3")
     ] }, r"
     \begin{enumerate}
-    \item \fnt point1
-    \item \fnt point2
-    \item \fnt point3
+    \item point1
+    \item point2
+    \item point3
     \end{enumerate}
     "}
 
@@ -472,9 +489,9 @@ mod tests {
         text!("point3")
     ] }, r"
     \begin{enumerate}[label=\asbuk*), ref=\asbuk*]
-    \item \fnt point1
-    \item \fnt point2
-    \item \fnt point3
+    \item point1
+    \item point2
+    \item point3
     \end{enumerate}
     "}
 
@@ -482,7 +499,7 @@ mod tests {
     test! {text, Token::Text{tokens:tokens![Token::PageDiv, Token::Header { order: 0, content: "Header".into() }, text!("Here's a little formula: "), Token::InlineMathmode{content:r"(a+b)^2 = a^2 + 2 \cdot a \cdot b + b^2".into()}, text!(". It's very useful, more useful than me!")]}, r"
     \clearpage
     \section{Header}
-    \fnt Here's a little formula: $(a+b)^2 = a^2 + 2 \cdot a \cdot b + b^2$\fnt . It's very useful, more useful than me!
+    Here's a little formula: $(a+b)^2 = a^2 + 2 \cdot a \cdot b + b^2$. It's very useful, more useful than me!
     "}
 
     // Footnotes
@@ -491,7 +508,7 @@ mod tests {
         Token::FootNoteContent { content: Box::new(text!("42")), ident: "explanation".into() }
     ]}, r"
     \footnotemark[1]
-    \footnotetext[1]{\fnt 42}
+    \footnotetext[1]{42}
     "}
 
     test! {footnote_multiple, Token::Text{tokens:tokens![
@@ -508,16 +525,16 @@ mod tests {
         Token::FootNoteReference{ident:"explanation1".into()}
 
     ]}, r"
-    \fnt Here's a first note
+    Here's a first note
     \footnotemark[1]
-    \footnotetext[1]{\fnt There are things in this world that's you're not meant to see}
-    \fnt , there are also second
+    \footnotetext[1]{There are things in this world that's you're not meant to see}
+    , there are also second
     \footnotemark[2]
-    \footnotetext[2]{\fnt now the voice of a deity permeates}
-    \fnt , and the third
+    \footnotetext[2]{now the voice of a deity permeates}
+    , and the third
     \footnotemark[3]
-    \footnotetext[3]{\fnt see notes 1 and 2}
-    \fnt . But notes will not be duplicated here!
+    \footnotetext[3]{see notes 1 and 2}
+    . But notes will not be duplicated here!
     \footnotemark[1]
     "}
 
@@ -526,13 +543,13 @@ mod tests {
         is_static: false,
         code: "1".into(),
         insert_path: None
-    }}, r"\fnt 1"}
+    }}, r"1"}
     test! {ayano_plain2, Token::Ayano{data: AyanoBlock{
         is_display: false,
         is_static: false,
         code: "1 + 2".into(),
         insert_path: None
-    }}, r"\fnt 3"}
+    }}, r"3"}
     test! {ayano_plain3, Token::Ayano{data: AyanoBlock{
         is_display: false,
         is_static: false,
@@ -543,7 +560,7 @@ y = sqrt(x)
 int(y)"
         .into(),
         insert_path: None
-    }}, r"\fnt 10"}
+    }}, r"10"}
     test! {ayano_plain4, Token::Ayano{data: AyanoBlock{
         is_display: false,
         is_static: false,
@@ -554,7 +571,7 @@ for i in range(101):
 res"
         .into(),
         insert_path: None
-    }}, r"\fnt 5050"}
+    }}, r"5050"}
     test! {ayano_err1, Token::Ayano{data: AyanoBlock{
         is_display: false,
         is_static: false,
@@ -562,7 +579,7 @@ res"
     'err', 1.0, 0.1"
         .into(),
         insert_path: None
-    }}, r"\fnt 1.00 $\pm$ \fnt 0.10"}
+    }}, r"1.00 $\pm$ 0.10"}
     test! {ayano_err2, Token::Ayano{data: AyanoBlock{
         is_display: false,
         is_static: false,
@@ -570,7 +587,7 @@ res"
     'err', 1.0, 0.4"
         .into(),
         insert_path: None
-    }}, r"\fnt 1.0 $\pm$ \fnt 0.4"}
+    }}, r"1.0 $\pm$ 0.4"}
     test! {ayano_err3, Token::Ayano{data: AyanoBlock{
             is_display: false,
             is_static: false,
@@ -580,7 +597,7 @@ y = 0.4
 @dev: x, y"
             .into(),
             insert_path: None
-        }}, r"\fnt 1.0 $\pm$ \fnt 0.4"
+        }}, r"1.0 $\pm$ 0.4"
     }
 
     test! {ayano_fig1, Token::Ayano{data: AyanoBlock{
@@ -632,9 +649,9 @@ data = [[1, 2, 3], [4, 5, 6]]
 r#"
 \begin{table}[h!]
 \begin{center}
-\begin{tabular}{|c|c|c|}
-\fnt 1 & \fnt 2 & \fnt 3 \\ \hline \hline
-\fnt 4 & \fnt 5 & \fnt 6 \\ \hline
+\begin{tabular}{|c|c|c|}\hline
+1 &  2 & 3 \\ \hline \hline
+ 4 &  5 & 6 \\ \hline
 \end{tabular}
 \stepcounter{tabnum}
 \end{center}

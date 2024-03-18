@@ -1,67 +1,76 @@
 Text {
     tokens: Owned(
         [
-            Paragraph(
-                Normal,
-                "Наступний тест. Тут протестуємо таблиці і блоки коду.",
-            ),
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "Наступний тест. Тут протестуємо таблиці і блоки коду.",
+            },
             Header {
                 order: 2,
                 content: "Таблиці",
             },
-            Paragraph(
-                Normal,
-                "Звичайні таблиці; Можуть всередині мати",
-            ),
-            Formatted(
-                Bold,
-                Paragraph(
-                    Normal,
-                    "формули",
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Звичайні таблиці; Можуть всередині мати",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: Some(
+                    Bold,
                 ),
-            ),
-            Paragraph(
-                Normal,
-                "чи",
-            ),
-            Formatted(
-                Italic,
-                Paragraph(
-                    Normal,
-                    "посилання",
+                content: "формули",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "чи",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: Some(
+                    Italic,
                 ),
-            ),
-            Paragraph(
-                Normal,
-                "на інші штуки",
-            ),
+                content: "посилання",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "на інші штуки",
+            },
             Table {
                 header: Owned(
                     [
-                        Paragraph(
-                            Normal,
-                            "Storage",
-                        ),
-                        Paragraph(
-                            Normal,
-                            "Space",
-                        ),
-                        Paragraph(
-                            Normal,
-                            "Number",
-                        ),
+                        Paragraph {
+                            is_newline: false,
+                            formatting: None,
+                            content: "Storage",
+                        },
+                        Paragraph {
+                            is_newline: false,
+                            formatting: None,
+                            content: "Space",
+                        },
+                        Paragraph {
+                            is_newline: false,
+                            formatting: None,
+                            content: "Number",
+                        },
                     ],
                 ),
                 cells: Owned(
                     [
-                        Paragraph(
-                            Normal,
-                            "1",
-                        ),
-                        Paragraph(
-                            Normal,
-                            "2",
-                        ),
+                        Paragraph {
+                            is_newline: false,
+                            formatting: None,
+                            content: "1",
+                        },
+                        Paragraph {
+                            is_newline: false,
+                            formatting: None,
+                            content: "2",
+                        },
                         InlineMathmode {
                             content: "3 + e ^{\\pi}",
                         },
@@ -83,21 +92,23 @@ Text {
                         Text {
                             tokens: Owned(
                                 [
-                                    Paragraph(
-                                        Normal,
-                                        "І тут ще",
-                                    ),
-                                    Formatted(
-                                        Italic,
-                                        Paragraph(
-                                            Normal,
-                                            "трохи",
+                                    Paragraph {
+                                        is_newline: false,
+                                        formatting: None,
+                                        content: "І тут ще",
+                                    },
+                                    Paragraph {
+                                        is_newline: false,
+                                        formatting: Some(
+                                            Italic,
                                         ),
-                                    ),
-                                    Paragraph(
-                                        Normal,
-                                        "тексту \\|",
-                                    ),
+                                        content: "трохи",
+                                    },
+                                    Paragraph {
+                                        is_newline: false,
+                                        formatting: None,
+                                        content: "тексту \\|",
+                                    },
                                 ],
                             ),
                         },
@@ -107,21 +118,23 @@ Text {
                     Text {
                         tokens: Owned(
                             [
-                                Paragraph(
-                                    Normal,
-                                    "Оце приклад таблиці. Як казав мій вчитель:",
-                                ),
-                                Formatted(
-                                    Bold,
-                                    Paragraph(
-                                        Normal,
-                                        "ВИКОРИСТОВУЙ БІЛЬШЕ ВИБУХІВКИ",
+                                Paragraph {
+                                    is_newline: false,
+                                    formatting: None,
+                                    content: "Оце приклад таблиці. Як казав мій вчитель:",
+                                },
+                                Paragraph {
+                                    is_newline: false,
+                                    formatting: Some(
+                                        Bold,
                                     ),
-                                ),
-                                Paragraph(
-                                    Normal,
-                                    "(і \\\"лапок\\\")",
-                                ),
+                                    content: "ВИКОРИСТОВУЙ БІЛЬШЕ ВИБУХІВКИ",
+                                },
+                                Paragraph {
+                                    is_newline: false,
+                                    formatting: None,
+                                    content: "(і \\\"лапок\\\")",
+                                },
                             ],
                         ),
                     },
@@ -130,41 +143,48 @@ Text {
                     "example_1",
                 ),
             },
-            Paragraph(
-                Normal,
-                "Таблиця цілком собі може не мати ідентифікатора або опису:",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Таблиця цілком собі може не мати ідентифікатора або опису:",
+            },
             Table {
                 header: Owned(
                     [
-                        Paragraph(
-                            Normal,
-                            "Кількість",
-                        ),
-                        Paragraph(
-                            Normal,
-                            "Роль",
-                        ),
+                        Paragraph {
+                            is_newline: false,
+                            formatting: None,
+                            content: "Кількість",
+                        },
+                        Paragraph {
+                            is_newline: false,
+                            formatting: None,
+                            content: "Роль",
+                        },
                     ],
                 ),
                 cells: Owned(
                     [
-                        Paragraph(
-                            Normal,
-                            "3 діоптрії",
-                        ),
-                        Paragraph(
-                            Normal,
-                            "7 галон",
-                        ),
-                        Paragraph(
-                            Normal,
-                            "rust",
-                        ),
-                        Paragraph(
-                            Normal,
-                            "#PANIC!!!",
-                        ),
+                        Paragraph {
+                            is_newline: false,
+                            formatting: None,
+                            content: "3 діоптрії",
+                        },
+                        Paragraph {
+                            is_newline: false,
+                            formatting: None,
+                            content: "7 галон",
+                        },
+                        Paragraph {
+                            is_newline: false,
+                            formatting: None,
+                            content: "rust",
+                        },
+                        Paragraph {
+                            is_newline: false,
+                            formatting: None,
+                            content: "#PANIC!!!",
+                        },
                     ],
                 ),
                 caption: None,
@@ -176,32 +196,35 @@ Text {
                 content: Text {
                     tokens: Owned(
                         [
-                            Paragraph(
-                                Normal,
-                                "Це число Ейлера. Воно дуже корисне,",
-                            ),
-                            Formatted(
-                                StrikeThrough,
-                                Paragraph(
-                                    Normal,
-                                    "але не може бути записане",
+                            Paragraph {
+                                is_newline: false,
+                                formatting: None,
+                                content: "Це число Ейлера. Воно дуже корисне,",
+                            },
+                            Paragraph {
+                                is_newline: false,
+                                formatting: Some(
+                                    StrikeThrough,
                                 ),
-                            ),
-                            Paragraph(
-                                Normal,
-                                "у вигляді",
-                            ),
-                            Formatted(
-                                Italic,
-                                Paragraph(
-                                    Normal,
-                                    "десяткового",
+                                content: "але не може бути записане",
+                            },
+                            Paragraph {
+                                is_newline: false,
+                                formatting: None,
+                                content: "у вигляді",
+                            },
+                            Paragraph {
+                                is_newline: false,
+                                formatting: Some(
+                                    Italic,
                                 ),
-                            ),
-                            Paragraph(
-                                Normal,
-                                "дробу.",
-                            ),
+                                content: "десяткового",
+                            },
+                            Paragraph {
+                                is_newline: false,
+                                formatting: None,
+                                content: "дробу.",
+                            },
                         ],
                     ),
                 },
@@ -211,39 +234,44 @@ Text {
                 order: 2,
                 content: "Блоки коду",
             },
-            Paragraph(
-                Normal,
-                "Наразі мають досить обмежену підтримку, адже у",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Наразі мають досить обмежену підтримку, адже у",
+            },
             InlineMathmode {
                 content: "\\LaTeX",
             },
-            Paragraph(
-                Normal,
-                "немає нативного поняття блоків коду.",
-            ),
-            Paragraph(
-                Normal,
-                "На щастя, у",
-            ),
-            Formatted(
-                Bold,
-                Paragraph(
-                    Normal,
-                    "markdown",
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "немає нативного поняття блоків коду.",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "На щастя, у",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: Some(
+                    Bold,
                 ),
-            ),
-            Paragraph(
-                Normal,
-                "таке поняття є",
-            ),
+                content: "markdown",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "таке поняття є",
+            },
             FootNoteReference {
                 ident: "code",
             },
-            Paragraph(
-                Normal,
-                ":",
-            ),
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: ":",
+            },
             CodeBlock {
                 code: "let x = 5;\nlet y = x.powi(2);\nlet z = (y as f64).sqrt();\nprintln!(\"x = {x}, y = {y}, z = {x}\");",
                 language: Some(
@@ -254,21 +282,23 @@ Text {
                 content: Text {
                     tokens: Owned(
                         [
-                            Paragraph(
-                                Normal,
-                                "Принаймні,",
-                            ),
-                            Formatted(
-                                Italic,
-                                Paragraph(
-                                    Normal,
-                                    "Obsidian",
+                            Paragraph {
+                                is_newline: false,
+                                formatting: None,
+                                content: "Принаймні,",
+                            },
+                            Paragraph {
+                                is_newline: false,
+                                formatting: Some(
+                                    Italic,
                                 ),
-                            ),
-                            Paragraph(
-                                Normal,
-                                "таке робить",
-                            ),
+                                content: "Obsidian",
+                            },
+                            Paragraph {
+                                is_newline: false,
+                                formatting: None,
+                                content: "таке робить",
+                            },
                         ],
                     ),
                 },

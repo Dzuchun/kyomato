@@ -1,26 +1,50 @@
-\fnt This test is dedicated to attempts of parser deception, i.e. usage of special symbols in wrong places to see if parser recognizes them as control symbols. There we go:
+This test is dedicated to attempts of parser deception, i.e. usage of special symbols in wrong places to see if parser recognizes them as control symbols. There we go:
 \subsection{Page dividers}
-\fnt Page dividers are represented by ------\fnt If the line above has dashes     ^^^^^^ here, it probably works alright.\fnt Here's a genuine divider
+
+\tbln Page dividers are represented by ------
+\tbln If the line above has dashes     ^^^^^^ here, it probably works alright.
+\tbln Here's a genuine divider
 \clearpage
-\fnt Fun fact: there can be a paragraph right after it!
+
+\tbln Fun fact: there can be a paragraph right after it!
 \clearpage
-\fnt Some text, cause why not\fnt But this\textbf{\fnt DOES}\fnt look cursed, don't do it.
+Some text, cause why not
+\tbln But this\textbf{DOES}look cursed, don't do it.
 \subsection{Headers}
-\fnt Headers are most recognizable by '#'-symbol. For it to actually represent a header, it needs to at the beginning of the line and there should be no more than 6 of them.\textbf{\fnt ANYTHING}\fnt up to the end of line will be included into a header, then.\fnt Example:
+
+\tbln Headers are most recognizable by '#'-symbol. For it to actually represent a header, it needs to at the beginning of the line and there should be no more than 6 of them.\textbf{ANYTHING}up to the end of line will be included into a header, then.
+\tbln Example:
 \textbf{This is a long, yet formally correct header. You can add $equations$ and *formatting* here, but I provide no guarantees as of the way these would display in final document.}
-\fnt Here's an example of incorrect header:\fnt ###### This header is considered incorrect for this application, and will be parsed as regular paragraph instead\fnt Another example of incorrect header, featuring 7 hash-symbols:\fnt ####### This will be parsed as a regular paragraph
+
+\tbln Here's an example of incorrect header:
+\tbln ###### This header is considered incorrect for this application, and will be parsed as regular paragraph instead
+\tbln Another example of incorrect header, featuring 7 hash-symbols:
+\tbln ####### This will be parsed as a regular paragraph
 \subsection{Equations}
-\fnt There are two types of equations in markdown/latex: inline mathmode and display mathmode\fnt Both of them are defined by $-symbols. However, they must be paired to actually represent these. Here are examples:\fnt Inline:$y = x ^ 2$\fnt Display:
+
+\tbln There are two types of equations in markdown/latex: inline mathmode and display mathmode
+\tbln Both of them are defined by $-symbols. However, they must be paired to actually represent these. Here are examples:
+\tbln Inline:$y = x ^ 2$
+\tbln Display:
 \begin{equation}
 y = x ^ 2
 \end{equation}
-\fnt Note that display mathmode should ALWAYS start from a new line for this application.\fnt Basically, there's not much to deceive for: you can do that:\fnt $\fnt $\fnt (the above should not be mathmode), and that's it, basically :sad:
+
+\tbln Note that display mathmode should ALWAYS start from a new line for this application.
+\tbln Basically, there's not much to deceive for: you can do that:
+\tbln $
+\tbln $
+\tbln (the above should not be mathmode), and that's it, basically :sad:
 \subsection{Table}
-\fnt Tables are defined by |-symbol. But the actual table will happen only if they are the first thing on the line.\fnt Due to current implementation, there's no cure apart from display mathmode and code:\fnt (this should be display mathmode):
+
+\tbln Tables are defined by |-symbol. But the actual table will happen only if they are the first thing on the line.
+\tbln Due to current implementation, there's no cure apart from display mathmode and code:
+\tbln (this should be display mathmode):
 \begin{equation}
 |x|
 \end{equation}
-\fnt (this should be a code block):
+
+\tbln (this should be a code block):
 \begin{minted}{bash}
 head /dev/random
 | cat
@@ -28,7 +52,8 @@ head /dev/random
 
 
 \subsection{Figure}
-\fnt Figure is defined by a ![[ sequence at a start of the line. Same points should be uphold here:
+
+\tbln Figure is defined by a ![[ sequence at a start of the line. Same points should be uphold here:
 \begin{equation}
 ![[
 \end{equation}
@@ -39,26 +64,60 @@ head /dev/random
 
 
 \subsection{References}
-\fnt These start with []
+
+\tbln These start with []
 \subsubsection{Hyperrefs}
-\fnt These are followed by parentheses (). Nothing is allowed between them, thus\fnt Here's a correct href:\href{https://youtu.be/rickroll_link_lol}{my gh page}\fnt Here are incorrect refs:\fnt [my gh page] (https://youtu.be/rickroll\textit{\fnt link}\fnt lol)\fnt [my gh page]\fnt (https://youtu.be/rickroll\textit{\fnt link}\fnt lol)
+
+\tbln These are followed by parentheses (). Nothing is allowed between them, thus
+\tbln Here's a correct href:\href{https://youtu.be/rickroll_link_lol}{my gh page}
+\tbln Here are incorrect refs:
+\tbln [my gh page] (https://youtu.be/rickroll\textit{link}lol)
+\tbln [my gh page]
+\tbln (https://youtu.be/rickroll\textit{link}lol)
 \subsubsection{Footnote refs}
-\fnt These are started by [^.\fnt Here are correct footnote refs:\footnotemark[1]\fnt ,\footnotemark[2]\fnt Here are incorrect ones: [^1, ^1],\fnt [^\fnt 1\fnt ]\fnt So on
+
+\tbln These are started by [^.
+\tbln Here are correct footnote refs:\footnotemark[1],\footnotemark[2]
+\tbln Here are incorrect ones: [^1, ^1],
+\tbln [^
+\tbln 1
+\tbln ]
+\tbln So on
 \subsubsection{Object refs}
-\fnt These refer to objects like figures, tables and equations.\fnt Started by [@.\fnt Here's a correct ref:\ref{fig:experiment_schema}\fnt Here's are bad ones: [@ fig:1, @  source3],\fnt [@\fnt eq2\fnt ]\fnt \textbf{\fnt NOTE}\fnt : despite object types being prepended with 'eq', 'fig' or 'tab' in refs, you\textit{\fnt can}\fnt use regular latex to define your custom refs. In fact, LaTeX doesn't care about all of these at all; I'm doing these transformations just for my own comfort, as I've been doing this manually.
+
+\tbln These refer to objects like figures, tables and equations.
+\tbln Started by [@.
+\tbln Here's a correct ref:\ref{fig:experiment_schema}
+\tbln Here's are bad ones: [@ fig:1, @  source3],
+\tbln [@
+\tbln eq2
+\tbln ]
+\tbln \textbf{NOTE}: despite object types being prepended with 'eq', 'fig' or 'tab' in refs, you\textit{can}use regular latex to define your custom refs. In fact, LaTeX doesn't care about all of these at all; I'm doing these transformations just for my own comfort, as I've been doing this manually.
 \subsection{Formatting}
-\fnt This object's type is deprecated and will be removed soon.\fnt It starts and ends with
+
+\tbln This object's type is deprecated and will be removed soon.
+\tbln It starts and ends with
 \begin{itemize}
-\item \fnt * or _
-\item \fnt ** or __
-\item \fnt ~~
-\end{itemize}\fnt \textbf{\fnt WARN}\fnt : As of now, these\textit{\fnt might}\fnt cause cause massive problems if encountered at the start of the line.\fnt Basically, parsers for these tokens attempt parse everything up until they find a closing token. But if they are inserted in a middle of the text, then it's ok - they will be limited by current paragraph, and (most likely) will find no match inside it, if their use was unintended.
+\item * or _
+\item ** or __
+\item ~~
+\end{itemize}
+\tbln \textbf{WARN}: As of now, these\textit{might}cause cause massive problems if encountered at the start of the line.
+\tbln Basically, parsers for these tokens attempt parse everything up until they find a closing token. But if they are inserted in a middle of the text, then it's ok - they will be limited by current paragraph, and (most likely) will find no match inside it, if their use was unintended.
 \subsection{Footnote content}
-\fnt These start with '\footnotemark[3]\fnt :' and proceed to the end of line.\fnt Example of valid content:\fnt Example of invalid content:\fnt [^source2: This is invalid content\footnotemark[4]\footnotetext[4]{\fnt Explanation of source2.}\fnt : This is invalid content\footnotemark[4]\fnt : This is invalid content\fnt They also must start at the beginning of the line. If fact, this:\footnotemark[4]\fnt : Some content\fnt Is expected to be a footnote ref with a colon.
+
+\tbln These start with '\footnotemark[3]:' and proceed to the end of line.
+\tbln Example of valid content:
+\tbln Example of invalid content:
+\tbln [^source2: This is invalid content\footnotemark[4]\footnotetext[4]{Explanation of source2.}: This is invalid content\footnotemark[4]: This is invalid content
+\tbln They also must start at the beginning of the line. If fact, this:\footnotemark[4]: Some content
+\tbln Is expected to be a footnote ref with a colon.
 \subsection{Code blocks}
-\fnt There are two fundamental types of code blocks: normal code block and\textbf{\fnt Ayano}\fnt code block.
+
+\tbln There are two fundamental types of code blocks: normal code block and\textbf{Ayano}code block.
 \subsubsection{Normal code block}
-\fnt These start and end with '```' on a newline. There can be\textbf{\fnt practically anything}\fnt inside. Example:
+
+\tbln These start and end with '```' on a newline. There can be\textbf{practically anything}inside. Example:
 \begin{minted}{java}
 int x = 2;
 int y = 4;
@@ -67,23 +126,38 @@ arr[0] = x;
 arr[1] = 4;
 \end{minted}
 
-\fnt There can be anything after code block had closed:
+
+\tbln There can be anything after code block had closed:
 \begin{minted}{lua(Idk why vscode detects this block closing as a valid lua syntax)}
 local x = 'matt'
 local y = 'y'
 local z = x .. y -- matty!!
 \end{minted}
 
-\fnt Here's some text that's ok to be here\fnt There can't be any spaces before delimiting ```s:\fnt ```python\fnt # This here is not really a python block\fnt x = 2\fnt print(x)\fnt ```
+Here's some text that's ok to be here
+\tbln There can't be any spaces before delimiting ```s:
+\tbln ```python
+\tbln # This here is not really a python block
+\tbln x = 2
+\tbln print(x)
+\tbln ```
 \subsubsection{Ayano code block}
-\fnt \textit{\fnt because Ayano loves Kyoko}\fnt This object looks and behaves just like normal code block, but is only limited to\textit{\fnt python}\fnt language, can have spacial arguments in a language line, may leave something behind in the document. For example:\fnt This Ayano block will leave plain "2" behind it:\fnt 2\fnt Akin to normal blocks, it's ok to leave something trailing:
+
+\tbln \textit{because Ayano loves Kyoko}
+\tbln This object looks and behaves just like normal code block, but is only limited to\textit{python}language, can have spacial arguments in a language line, may leave something behind in the document. For example:
+\tbln This Ayano block will leave plain "2" behind it:2
+\tbln Akin to normal blocks, it's ok to leave something trailing:
 \begin{minted}{ayano}
 2
 \end{minted}
 
-\fnt This text is ok to be here\fnt And these are invalid Ayano blocks:
+This text is ok to be here
+\tbln And these are invalid Ayano blocks:
 \begin{minted}{ayano}
 2
 \end{minted}
 
-\fnt ```ayano\fnt 2\fnt ```
+
+\tbln ```ayano
+\tbln 2
+\tbln ```

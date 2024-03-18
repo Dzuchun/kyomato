@@ -86,7 +86,7 @@ where
                 collect_single(caption, dest)?;
             }
         }
-        Token::Text { tokens } => {
+        Token::Text { tokens, .. } => {
             collect_iterable(tokens, dest)?;
         }
         Token::FootNoteContent { content, ident } => {
@@ -101,7 +101,7 @@ where
         | Token::Href { .. }
         | Token::List { .. }
         | Token::Formatted(_, _)
-        | Token::Paragraph(_, _)
+        | Token::Paragraph { .. }
         | Token::InlineMathmode { .. }
         | Token::Reference { .. }
         | Token::FootNoteReference { .. }

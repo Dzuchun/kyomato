@@ -1,12 +1,5 @@
 use std::{
-    any::Any,
-    borrow::Cow,
-    cmp::Ordering,
-    error::Error,
-    fmt::{Debug, Display},
-    num::ParseIntError,
-    path::Path,
-    str::FromStr,
+    borrow::Cow, error::Error, fmt::Debug, num::ParseIntError, path::Path, str::FromStr,
     sync::RwLock,
 };
 
@@ -17,14 +10,10 @@ use nom::{
         complete::{tag, take_till1, take_until, take_until1, take_while},
         streaming::tag_no_case,
     },
-    character::{
-        complete::{alphanumeric1, char, digit1, multispace0, newline, none_of, space0},
-        is_space,
-        streaming::line_ending,
-    },
-    combinator::{all_consuming, cut, eof, iterator, map_res, not, opt, peek, recognize, success},
+    character::complete::{char, digit1, multispace0, space0},
+    combinator::{all_consuming, cut, iterator, map_res, opt, recognize},
     error::{context, ContextError, ErrorKind, FromExternalError, ParseError},
-    multi::{fold_many1, many0_count, many1, many1_count, separated_list1},
+    multi::{many0_count, many1},
     number::complete::float,
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult, Parser,
@@ -32,7 +21,7 @@ use nom::{
 use url::Url;
 
 use crate::{
-    data::{AyanoBlock, Font, Formatting, ListType, Token, Tokens},
+    data::{AyanoBlock, Formatting, ListType, Token, Tokens},
     util::{optional_permutation, Equivalent, IteratorArrayCollectExt, VecTryExtendExt},
 };
 
@@ -729,6 +718,7 @@ fn list<
     context("list", _list_inner)(input)
 }
 
+#[deprecated]
 fn _formatting_inner<
     'source,
     E: ParseError<&'source str>
@@ -763,10 +753,11 @@ fn formatting<
 >(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
-    let (rest, delimiter) = preceded(
-        pair(opt(char('\n')), space0),
-        alt((tag("**"), tag("__"), tag("*"), tag("_"), tag("~~"))),
-    )(input)?;
+    // First, let's parse the empty space before paragraph
+    let (input, space_before) = multispace0(input)?;
+    // if there are newlines, this paragraph is_newline
+    let is_newline = space_before.contains('\n');
+    let (rest, delimiter) = alt((tag("**"), tag("__"), tag("*"), tag("_"), tag("~~")))(input)?;
     // Anything starting from these characters IS a formatting token.
     // Committed to parsing after this point
     let formatting = match delimiter {
@@ -780,13 +771,25 @@ fn formatting<
         .filter_map(|(ind, _)| (rest[ind..].starts_with(delimiter)).then_some(ind));
     for end_candidate in possible_ends {
         let inner_tokens = &rest[..end_candidate];
-        if let Ok((_, inner)) =
-            all_consuming(terminated(inner_lex::<'source, E>, space0))(inner_tokens)
+        if let Ok((_, (content, follower))) =
+            all_consuming(terminated(paragraph_inner::<'source, E>, space0))(inner_tokens)
         {
-            return Ok((
-                &rest[(end_candidate + delimiter.len())..],
-                Token::Formatted(formatting, Box::new(inner)),
-            ));
+            return if follower.is_some() {
+                Err(nom::Err::Error(E::add_context(
+                    input,
+                    "formatting",
+                    E::from_error_kind(input, ErrorKind::Fail),
+                )))
+            } else {
+                Ok((
+                    &rest[(end_candidate + delimiter.len())..],
+                    Token::Paragraph {
+                        is_newline,
+                        formatting: Some(formatting),
+                        content,
+                    },
+                ))
+            };
         }
     }
     // If this point was reached, there is no correct variant for pairing delimiter.
@@ -902,6 +905,94 @@ fn footnote_content<
     .parse(input)
 }
 
+fn paragraph_inner<
+    'source,
+    E: ParseError<&'source str>
+        + ContextError<&'source str>
+        + FromExternalError<&'source str, KyomatoLexError>
+        + 'source,
+>(
+    input: &'source str,
+) -> IResult<&'source str, (Cow<'source, str>, Option<Token<'source>>), E> {
+    // At this point we assume, that whitespace before was parsed, including any possible newlines
+
+    // If input turns out empty after that, return error
+    if input.is_empty() {
+        return Err(nom::Err::Error(E::from_error_kind(input, ErrorKind::Eof)));
+    }
+
+    // Any token starting with a newline is out of the question
+    // However, this still leaves a couple of candidates:
+    // - href (starting with '[')
+    // - formatting (starting with '*', '_' or '~')
+    // - inline_math (starting with '$')
+    // - reference (starting with "[@")
+    // - footnote_reference (starting with "[^")
+
+    // First, let's isolate input to a newline (if there is no newline, stop at last char)
+    let interrupt_ind = input.find('\n').unwrap_or(input.len());
+    let cut_input = &input[..interrupt_ind];
+
+    // Now, let's try finding interrupting token
+    let interruption = cut_input
+        .char_indices()
+        // Parsing continues until new, Option<Token<'source>>)line is reached
+        .take_while(|(_, c)| c != &'\n')
+        // Possible breakpoints are at characters '[', '*', '_', '~', and '$'
+        .filter(|(_, c)| ['[', '*', '_', '~', '$'].contains(c))
+        // Now, try a proper parser for each one
+        .map(|(ind, c)| {
+            let cut_cut_input = &input[ind..];
+            let parse_res = match c {
+                '[' => {
+                    if cut_input[ind..].starts_with("[@") {
+                        reference(cut_cut_input)
+                    } else if cut_input[ind..].starts_with("[^") {
+                        footnote_reference(cut_cut_input)
+                    } else {
+                        href(cut_cut_input)
+                    }
+                }
+                '*' | '_' | '~' => formatting(cut_cut_input),
+                '$' => inline_math(cut_cut_input),
+                _ => unreachable!(),
+            };
+            (ind, parse_res)
+        })
+        .try_fold((), |_, (ind, parse_res)| match parse_res {
+            // if there is a match for the following token -- return this "Ok" wrapped into "Err", forcing iterator to stop
+            Ok(ok) => Err(Ok((ind, ok))),
+            // if there is not a match, but a FAUILURE -- return it as "Err" wrapped in "Err", forcing iterator to stop
+            Err(nom::Err::Failure(err)) => Err(Err(nom::Err::Failure(err))),
+            // if parsing had failed, continue driving iterator by returning "Ok"
+            Err(_) => Ok(()),
+        })
+        .err();
+
+    let interruption = if let Some(interruption) = interruption {
+        // there was an interruption!
+        // but it might be a FAILURE ONE. That should bubble up
+        Some(interruption?)
+    } else {
+        None
+    };
+
+    // Now, construct the output
+    let this_token_end = interruption
+        .as_ref()
+        .map(|(ind, _)| *ind)
+        .unwrap_or(interrupt_ind);
+    let rest_input = interruption
+        .as_ref()
+        .map(|(_, (rest, _))| *rest)
+        .unwrap_or(&input[this_token_end..]);
+    let follower = interruption.map(|(_, (_, f))| f);
+    Ok((
+        rest_input,
+        (Cow::from(cut_input[..this_token_end].trim()), follower),
+    ))
+}
+
 /// Parses plaintext paragraph, up to at most the end of input/line
 ///
 /// WARNING: must be used AFTER ALL OTHER PARSERS.
@@ -921,84 +1012,19 @@ fn paragraph<
 >(
     outer_input: &'source str,
 ) -> IResult<&'source str, (Token<'source>, Option<Token<'source>>), E> {
-    preceded(multispace0, |input: &'source str| {
-        // At this point we assume, that whitespace before was parsed, including any possible newlines
+    // First, let's parse the empty space before paragraph
+    let (input, space_before) = multispace0(outer_input)?;
+    // if there are newlines, this paragraph is_newline
+    let is_newline = space_before.contains('\n');
 
-        // If input turns out empty after that, return error
-        if input.is_empty() {
-            return Err(nom::Err::Error(E::from_error_kind(input, ErrorKind::Eof)));
-        }
+    let (rest, (content, follower)) = paragraph_inner(input)?;
 
-        // Any token starting with a newline is out of the question
-        // However, this still leaves a couple of candidates:
-        // - href (starting with '[')
-        // - formatting (starting with '*', '_' or '~')
-        // - inline_math (starting with '$')
-        // - reference (starting with "[@")
-        // - footnote_reference (starting with "[^")
-
-        // First, let's isolate input to a newline (if there is no newline, stop at last char)
-        let interrupt_ind = input.find('\n').unwrap_or(input.len());
-        let cut_input = &input[..interrupt_ind];
-
-        // Now, let's try finding interrupting token
-        let interruption = cut_input
-            .char_indices()
-            // Parsing continues until newline is reached
-            .take_while(|(_, c)| c != &'\n')
-            // Possible breakpoints are at characters '[', '*', '_', '~', and '$'
-            .filter(|(_, c)| ['[', '*', '_', '~', '$'].contains(c))
-            // Now, try a proper parser for each one
-            .map(|(ind, c)| {
-                let cut_cut_input = &input[ind..];
-                let parse_res = match c {
-                    '[' => {
-                        if cut_input[ind..].starts_with("[@") {
-                            reference(cut_cut_input)
-                        } else if cut_input[ind..].starts_with("[^") {
-                            footnote_reference(cut_cut_input)
-                        } else {
-                            href(cut_cut_input)
-                        }
-                    }
-                    '*' | '_' | '~' => formatting(cut_cut_input),
-                    '$' => inline_math(cut_cut_input),
-                    _ => unreachable!(),
-                };
-                (ind, parse_res)
-            })
-            .try_fold((), |_, (ind, parse_res)| match parse_res {
-                // if there is a match for the following token -- return this "Ok" wrapped into "Err", forcing iterator to stop
-                Ok(ok) => Err(Ok((ind, ok))),
-                // if there is not a match, but a FAUILURE -- return it as "Err" wrapped in "Err", forcing iterator to stop
-                Err(nom::Err::Failure(err)) => Err(Err(nom::Err::Failure(err))),
-                // if parsing had failed, continue driving iterator by returning "Ok"
-                Err(_) => Ok(()),
-            })
-            .err();
-
-        let interruption = if let Some(interruption) = interruption {
-            // there was an interruption!
-            // but it might be a FAILURE ONE. That should bubble up
-            Some(interruption?)
-        } else {
-            None
-        };
-
-        // Now, construct the output
-        let this_token_end = interruption
-            .as_ref()
-            .map(|(ind, _)| *ind)
-            .unwrap_or(interrupt_ind);
-        let this_token =
-            Token::Paragraph(Font::Normal, Cow::from(cut_input[..this_token_end].trim()));
-        let rest_input = interruption
-            .as_ref()
-            .map(|(_, (rest, _))| *rest)
-            .unwrap_or(&input[this_token_end..]);
-        let follower = interruption.map(|(_, (_, f))| f);
-        Ok((rest_input, (this_token, follower)))
-    })(outer_input)
+    let this_token = Token::Paragraph {
+        is_newline,
+        content,
+        formatting: None,
+    };
+    Ok((rest, (this_token, follower)))
 }
 
 fn __equalizer(token: Token<'_>) -> (Token<'_>, Option<Token<'_>>) {
@@ -1384,6 +1410,8 @@ pub fn inner_lex<
 
 #[cfg(test)]
 mod tests {
+    use nom::character::complete::alphanumeric1;
+
     use super::*;
 
     macro_rules! _assert_inner {
@@ -1680,25 +1708,37 @@ $$
 
         macro_rules! test_ok {
             {$name:ident, $input:literal, $paragraph:literal, $follower_token:expr, $left_over:literal} => {
-                test!{$name, paragraph, $input, e: Ok(($left_over, (Token::Paragraph(Font::Normal, $paragraph.into()), $follower_token)))}
+                test!{$name, paragraph, $input, e: Ok(($left_over, (Token::Paragraph{
+                    is_newline: false,
+                    formatting: None,
+                    content: $paragraph.into(),
+                    }, $follower_token)))}
+            };
+            {$name:ident, $input:literal, $paragraph:literal, $follower_token:expr, $left_over:literal, |} => {
+                test!{$name, paragraph, $input, e: Ok(($left_over, (Token::Paragraph{
+                    is_newline: true,
+                    formatting: None,
+                    content: $paragraph.into(),
+                    }, $follower_token)))}
             };
         }
 
         test! {err_empty, paragraph, "", p: Err(_)} // paragraph won't be parsed where it's empty
         test! {err_whitespace, paragraph, "   \t   \n\n \t", p: Err(_)} // nor if it's all whitespace
-        test_ok! {ok_char, "  \t\n c\nfff", "c", None, "\nfff"} // single char is ok as a paragraph
+        test_ok! {ok_char, "  \t\n c\nfff", "c", None, "\nfff", |} // single char is ok as a paragraph
         test_ok! {ok_sentence, "\t    \n I'm absolutely increative, so here's a bunch of garbage: ]42[t5(2[24tj4-0)jt3_94j03\nand some rest",
-        "I'm absolutely increative, so here's a bunch of garbage: ]42[t5(2[24tj4-0)jt3_94j03", None, "\nand some rest"}
-        test_ok! {ok_formatting, "\t    \n You can use *bold*!", "You can use", Some(Token::Formatted(Formatting::Italic, Box::new(Token::text("bold")))), "!"}
-        test_ok! {ok_formatting_in_formatting, "\t    \n You can even use ~~__double-formatted__~~ things!", "You can even use",
-        Some(Token::Formatted(Formatting::StrikeThrough, Box::new(Token::Formatted(Formatting::Bold, Box::new(Token::text("double-formatted")))))), " things!"}
+        "I'm absolutely increative, so here's a bunch of garbage: ]42[t5(2[24tj4-0)jt3_94j03", None, "\nand some rest", |}
+        test_ok! {ok_formatting, "\t    \n You can use *bold*!", "You can use", Some(Token::Paragraph{is_newline: false, formatting: Some(Formatting::Italic), content: "bold".into()}), "!", |}
+        // FIXME NOT SUPPORTED
+        /* test_ok! {ok_formatting_in_formatting, "\t    \n You can even use ~~__double-formatted__~~ things!", "You can even use",
+        Some(Token::Formatted(Formatting::StrikeThrough, Box::new(Token::Formatted(Formatting::Bold, Box::new(Token::text("double-formatted")))))), " things!"} */
         test_ok! {ok_equation, "    \t Inline math is fine too: $y = x_{\text{поч}} + x_0$.", "Inline math is fine too:",
         Some(Token::InlineMathmode{content: "y = x_{\text{поч}} + x_0".into()}), "."}
         test_ok! {ok_href, "   \t\t\n You can even [залишити посилання на свою сторінку на Гітхабі   ](https://www.github.com/Dzuchun)!", "You can even",
-        Some(Token::Href { url: "https://www.github.com/Dzuchun".parse().expect("That's a valid url"), display: "залишити посилання на свою сторінку на Гітхабі".into() }), "!"}
+        Some(Token::Href { url: "https://www.github.com/Dzuchun".parse().expect("That's a valid url"), display: "залишити посилання на свою сторінку на Гітхабі".into() }), "!", |}
         test_ok! {ok_footnote_ref, "\t Footnote refs[^1] are also ok too!", "Footnote refs", Some(Token::FootNoteReference{ident: "1".into()}), " are also ok too!"}
         test_ok! {ok_obj_ref, "\n\t Thi[[ngs lik_e tables* ([@tab:results]) can also be referenced", "Thi[[ngs lik_e tables* (",
-        Some(Token::Reference{ident: "tab:results".into()}), ") can also be referenced"}
+        Some(Token::Reference{ident: "tab:results".into()}), ") can also be referenced", |}
     }
 
     // `inner_lex` tests
@@ -1764,7 +1804,23 @@ $$
     }
     macro_rules! tx {
         ($text:literal) => {
-            Token::Paragraph(Font::Normal, Cow::Borrowed($text))
+            tx!($text, None)
+        };
+        ($text:literal, |) => {
+            tx!($text, None, |)
+        };
+        ($text:literal, $formatting:expr) => {
+            tx!($text, $formatting, false)
+        };
+        ($text:literal, $formatting:expr, |) => {
+            tx!($text, $formatting, true)
+        };
+        ($text:literal, $formatting:expr, $newline:literal) => {
+            Token::Paragraph {
+                is_newline: $newline,
+                formatting: $formatting,
+                content: Cow::Borrowed($text),
+            }
         };
     }
     macro_rules! tks {
@@ -1790,7 +1846,9 @@ $$
         test_err! {err_empty, ""}
         test_ok! {ok_char_para, "a", tx!("a")}
         test_ok! {ok_formatted, "*виділений текст * і ще щось потім",
-        tks![Token::Formatted(Formatting::Italic, Box::new(tx!("виділений текст"))), tx!("і ще щось потім")]}
+        tks![tx!("виділений текст", Some(Formatting::Italic)), tx!("і ще щось потім")]}
+        test_ok! {ok_formatted_newlined, "\n*виділений текст * і ще щось потім",
+        tks![tx!("виділений текст", Some(Formatting::Italic), |), tx!("і ще щось потім")]}
         test_ok! {ok_inline_math, "дивіться! ось формула для параболи: $y = x^2$",
         tks![tx!("дивіться! ось формула для параболи:"), eq!(! "y = x^2")]}
         test_err! {err_display_math, "якась страшна штука:\n$$\nf(x) = \\int\\lms_{0}^{x} \\log(x - 2) dx\n$$\n{ref = scary}\n\tКраще не чіпати її"}
@@ -2050,10 +2108,10 @@ $$
         }
 
         test_err! {err_empty, ""}
-        test_ok! {ok_some_text, "\t\t\nSome text\n", tx!("Some text")}
-        test_ok! {ok_multiple_test, "\t\t\nSome text\nІ ще отакий текст", tks![tx!("Some text"), tx!("І ще отакий текст")]}
+        test_ok! {ok_some_text, "\t\t\nSome text\n", tx!("Some text", |)}
+        test_ok! {ok_multiple_test, "\t\t\nSome text\nІ ще отакий текст", tks![tx!("Some text", |), tx!("І ще отакий текст", |)]}
         test_ok! {ok_multiple_test2, "\t\t\n# Header\n## header2\n\n\tЦе початок тексту.\n- А це перший елемент списку\n- І другий елемент списку\nА оце буде рівняння: \n$$\ny = x ^ 2\n$$\n",
-        tks![head!(# "Header"), head!(## "header2"), tx!("Це початок тексту."), ls!(- tx!("А це перший елемент списку"), tx!("І другий елемент списку")), tx!("А оце буде рівняння:"), eq!("y = x ^ 2")]}
+        tks![head!(# "Header"), head!(## "header2"), tx!("Це початок тексту.", |), ls!(- tx!("А це перший елемент списку"), tx!("І другий елемент списку")), tx!("А оце буде рівняння:", |), eq!("y = x ^ 2")]}
 
         test_ok! {ok_idk1, "На світлині [@ fig:refurb] можна бачити принципову схему влаштування рефурбалідзера. Неважно помитити великі очі[^1], і два термоядерних реактори, що оточують їх. Точні реакції всередині невідомі, але цілком можливо що там женуть $du + t -> {}^{5}_{6}C$.\n\n[^1]: Для поливу.",
         tks![tx!("На світлині"), rf!(@ "fig:refurb"),

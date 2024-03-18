@@ -1,165 +1,193 @@
 Text {
     tokens: Owned(
         [
-            Paragraph(
-                Normal,
-                "This test is dedicated to attempts of parser deception, i.e. usage of special symbols in wrong places to see if parser recognizes them as control symbols. There we go:",
-            ),
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "This test is dedicated to attempts of parser deception, i.e. usage of special symbols in wrong places to see if parser recognizes them as control symbols. There we go:",
+            },
             Header {
                 order: 1,
                 content: "Page dividers",
             },
-            Paragraph(
-                Normal,
-                "Page dividers are represented by ------",
-            ),
-            Paragraph(
-                Normal,
-                "If the line above has dashes     ^^^^^^ here, it probably works alright.",
-            ),
-            Paragraph(
-                Normal,
-                "Here's a genuine divider",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Page dividers are represented by ------",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "If the line above has dashes     ^^^^^^ here, it probably works alright.",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Here's a genuine divider",
+            },
             PageDiv,
-            Paragraph(
-                Normal,
-                "Fun fact: there can be a paragraph right after it!",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Fun fact: there can be a paragraph right after it!",
+            },
             PageDiv,
-            Paragraph(
-                Normal,
-                "Some text, cause why not",
-            ),
-            Paragraph(
-                Normal,
-                "But this",
-            ),
-            Formatted(
-                Bold,
-                Paragraph(
-                    Normal,
-                    "DOES",
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "Some text, cause why not",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "But this",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: Some(
+                    Bold,
                 ),
-            ),
-            Paragraph(
-                Normal,
-                "look cursed, don't do it.",
-            ),
+                content: "DOES",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "look cursed, don't do it.",
+            },
             Header {
                 order: 1,
                 content: "Headers",
             },
-            Paragraph(
-                Normal,
-                "Headers are most recognizable by '#'-symbol. For it to actually represent a header, it needs to at the beginning of the line and there should be no more than 6 of them.",
-            ),
-            Formatted(
-                Bold,
-                Paragraph(
-                    Normal,
-                    "ANYTHING",
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Headers are most recognizable by '#'-symbol. For it to actually represent a header, it needs to at the beginning of the line and there should be no more than 6 of them.",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: Some(
+                    Bold,
                 ),
-            ),
-            Paragraph(
-                Normal,
-                "up to the end of line will be included into a header, then.",
-            ),
-            Paragraph(
-                Normal,
-                "Example:",
-            ),
+                content: "ANYTHING",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "up to the end of line will be included into a header, then.",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Example:",
+            },
             Header {
                 order: 6,
                 content: "This is a long, yet formally correct header. You can add $equations$ and *formatting* here, but I provide no guarantees as of the way these would display in final document.",
             },
-            Paragraph(
-                Normal,
-                "Here's an example of incorrect header:",
-            ),
-            Paragraph(
-                Normal,
-                "###### This header is considered incorrect for this application, and will be parsed as regular paragraph instead",
-            ),
-            Paragraph(
-                Normal,
-                "Another example of incorrect header, featuring 7 hash-symbols:",
-            ),
-            Paragraph(
-                Normal,
-                "####### This will be parsed as a regular paragraph",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Here's an example of incorrect header:",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "###### This header is considered incorrect for this application, and will be parsed as regular paragraph instead",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Another example of incorrect header, featuring 7 hash-symbols:",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "####### This will be parsed as a regular paragraph",
+            },
             Header {
                 order: 1,
                 content: "Equations",
             },
-            Paragraph(
-                Normal,
-                "There are two types of equations in markdown/latex: inline mathmode and display mathmode",
-            ),
-            Paragraph(
-                Normal,
-                "Both of them are defined by $-symbols. However, they must be paired to actually represent these. Here are examples:",
-            ),
-            Paragraph(
-                Normal,
-                "Inline:",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "There are two types of equations in markdown/latex: inline mathmode and display mathmode",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Both of them are defined by $-symbols. However, they must be paired to actually represent these. Here are examples:",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Inline:",
+            },
             InlineMathmode {
                 content: "y = x ^ 2",
             },
-            Paragraph(
-                Normal,
-                "Display:",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Display:",
+            },
             Equation {
                 content: "y = x ^ 2",
                 ident: None,
             },
-            Paragraph(
-                Normal,
-                "Note that display mathmode should ALWAYS start from a new line for this application.",
-            ),
-            Paragraph(
-                Normal,
-                "Basically, there's not much to deceive for: you can do that:",
-            ),
-            Paragraph(
-                Normal,
-                "$",
-            ),
-            Paragraph(
-                Normal,
-                "$",
-            ),
-            Paragraph(
-                Normal,
-                "(the above should not be mathmode), and that's it, basically :sad:",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Note that display mathmode should ALWAYS start from a new line for this application.",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Basically, there's not much to deceive for: you can do that:",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "$",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "$",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "(the above should not be mathmode), and that's it, basically :sad:",
+            },
             Header {
                 order: 1,
                 content: "Table",
             },
-            Paragraph(
-                Normal,
-                "Tables are defined by |-symbol. But the actual table will happen only if they are the first thing on the line.",
-            ),
-            Paragraph(
-                Normal,
-                "Due to current implementation, there's no cure apart from display mathmode and code:",
-            ),
-            Paragraph(
-                Normal,
-                "(this should be display mathmode):",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Tables are defined by |-symbol. But the actual table will happen only if they are the first thing on the line.",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Due to current implementation, there's no cure apart from display mathmode and code:",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "(this should be display mathmode):",
+            },
             Equation {
                 content: "|x|",
                 ident: None,
             },
-            Paragraph(
-                Normal,
-                "(this should be a code block):",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "(this should be a code block):",
+            },
             CodeBlock {
                 code: "head /dev/random\n| cat",
                 language: Some(
@@ -170,10 +198,11 @@ Text {
                 order: 1,
                 content: "Figure",
             },
-            Paragraph(
-                Normal,
-                "Figure is defined by a ![[ sequence at a start of the line. Same points should be uphold here:",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Figure is defined by a ![[ sequence at a start of the line. Same points should be uphold here:",
+            },
             Equation {
                 content: "![[",
                 ident: None,
@@ -186,22 +215,25 @@ Text {
                 order: 1,
                 content: "References",
             },
-            Paragraph(
-                Normal,
-                "These start with []",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "These start with []",
+            },
             Header {
                 order: 2,
                 content: "Hyperrefs",
             },
-            Paragraph(
-                Normal,
-                "These are followed by parentheses (). Nothing is allowed between them, thus",
-            ),
-            Paragraph(
-                Normal,
-                "Here's a correct href:",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "These are followed by parentheses (). Nothing is allowed between them, thus",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Here's a correct href:",
+            },
             Href {
                 url: Url {
                     scheme: "https",
@@ -220,387 +252,432 @@ Text {
                 },
                 display: "my gh page",
             },
-            Paragraph(
-                Normal,
-                "Here are incorrect refs:",
-            ),
-            Paragraph(
-                Normal,
-                "[my gh page] (https://youtu.be/rickroll",
-            ),
-            Formatted(
-                Italic,
-                Paragraph(
-                    Normal,
-                    "link",
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Here are incorrect refs:",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "[my gh page] (https://youtu.be/rickroll",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: Some(
+                    Italic,
                 ),
-            ),
-            Paragraph(
-                Normal,
-                "lol)",
-            ),
-            Paragraph(
-                Normal,
-                "[my gh page]",
-            ),
-            Paragraph(
-                Normal,
-                "(https://youtu.be/rickroll",
-            ),
-            Formatted(
-                Italic,
-                Paragraph(
-                    Normal,
-                    "link",
+                content: "link",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "lol)",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "[my gh page]",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "(https://youtu.be/rickroll",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: Some(
+                    Italic,
                 ),
-            ),
-            Paragraph(
-                Normal,
-                "lol)",
-            ),
+                content: "link",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "lol)",
+            },
             Header {
                 order: 2,
                 content: "Footnote refs",
             },
-            Paragraph(
-                Normal,
-                "These are started by [^.",
-            ),
-            Paragraph(
-                Normal,
-                "Here are correct footnote refs:",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "These are started by [^.",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Here are correct footnote refs:",
+            },
             FootNoteReference {
                 ident: "1",
             },
-            Paragraph(
-                Normal,
-                ",",
-            ),
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: ",",
+            },
             FootNoteReference {
                 ident: "source",
             },
-            Paragraph(
-                Normal,
-                "Here are incorrect ones: [^1, ^1],",
-            ),
-            Paragraph(
-                Normal,
-                "[^",
-            ),
-            Paragraph(
-                Normal,
-                "1",
-            ),
-            Paragraph(
-                Normal,
-                "]",
-            ),
-            Paragraph(
-                Normal,
-                "So on",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Here are incorrect ones: [^1, ^1],",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "[^",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "1",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "]",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "So on",
+            },
             Header {
                 order: 2,
                 content: "Object refs",
             },
-            Paragraph(
-                Normal,
-                "These refer to objects like figures, tables and equations.",
-            ),
-            Paragraph(
-                Normal,
-                "Started by [@.",
-            ),
-            Paragraph(
-                Normal,
-                "Here's a correct ref:",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "These refer to objects like figures, tables and equations.",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Started by [@.",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Here's a correct ref:",
+            },
             Reference {
                 ident: "fig:experiment_schema",
             },
-            Paragraph(
-                Normal,
-                "Here's are bad ones: [@ fig:1, @  source3],",
-            ),
-            Paragraph(
-                Normal,
-                "[@",
-            ),
-            Paragraph(
-                Normal,
-                "eq2",
-            ),
-            Paragraph(
-                Normal,
-                "]",
-            ),
-            Paragraph(
-                Normal,
-                "",
-            ),
-            Formatted(
-                Bold,
-                Paragraph(
-                    Normal,
-                    "NOTE",
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Here's are bad ones: [@ fig:1, @  source3],",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "[@",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "eq2",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "]",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: Some(
+                    Bold,
                 ),
-            ),
-            Paragraph(
-                Normal,
-                ": despite object types being prepended with 'eq', 'fig' or 'tab' in refs, you",
-            ),
-            Formatted(
-                Italic,
-                Paragraph(
-                    Normal,
-                    "can",
+                content: "NOTE",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: ": despite object types being prepended with 'eq', 'fig' or 'tab' in refs, you",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: Some(
+                    Italic,
                 ),
-            ),
-            Paragraph(
-                Normal,
-                "use regular latex to define your custom refs. In fact, LaTeX doesn't care about all of these at all; I'm doing these transformations just for my own comfort, as I've been doing this manually.",
-            ),
+                content: "can",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "use regular latex to define your custom refs. In fact, LaTeX doesn't care about all of these at all; I'm doing these transformations just for my own comfort, as I've been doing this manually.",
+            },
             Header {
                 order: 1,
                 content: "Formatting",
             },
-            Paragraph(
-                Normal,
-                "This object's type is deprecated and will be removed soon.",
-            ),
-            Paragraph(
-                Normal,
-                "It starts and ends with",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "This object's type is deprecated and will be removed soon.",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "It starts and ends with",
+            },
             List {
                 list_type: Bullet,
                 content: Owned(
                     [
-                        Paragraph(
-                            Normal,
-                            "* or _",
-                        ),
-                        Paragraph(
-                            Normal,
-                            "** or __",
-                        ),
-                        Paragraph(
-                            Normal,
-                            "~~",
-                        ),
+                        Paragraph {
+                            is_newline: false,
+                            formatting: None,
+                            content: "* or _",
+                        },
+                        Paragraph {
+                            is_newline: false,
+                            formatting: None,
+                            content: "** or __",
+                        },
+                        Paragraph {
+                            is_newline: false,
+                            formatting: None,
+                            content: "~~",
+                        },
                     ],
                 ),
             },
-            Paragraph(
-                Normal,
-                "",
-            ),
-            Formatted(
-                Bold,
-                Paragraph(
-                    Normal,
-                    "WARN",
+            Paragraph {
+                is_newline: true,
+                formatting: Some(
+                    Bold,
                 ),
-            ),
-            Paragraph(
-                Normal,
-                ": As of now, these",
-            ),
-            Formatted(
-                Italic,
-                Paragraph(
-                    Normal,
-                    "might",
+                content: "WARN",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: ": As of now, these",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: Some(
+                    Italic,
                 ),
-            ),
-            Paragraph(
-                Normal,
-                "cause cause massive problems if encountered at the start of the line.",
-            ),
-            Paragraph(
-                Normal,
-                "Basically, parsers for these tokens attempt parse everything up until they find a closing token. But if they are inserted in a middle of the text, then it's ok - they will be limited by current paragraph, and (most likely) will find no match inside it, if their use was unintended.",
-            ),
+                content: "might",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "cause cause massive problems if encountered at the start of the line.",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Basically, parsers for these tokens attempt parse everything up until they find a closing token. But if they are inserted in a middle of the text, then it's ok - they will be limited by current paragraph, and (most likely) will find no match inside it, if their use was unintended.",
+            },
             Header {
                 order: 1,
                 content: "Footnote content",
             },
-            Paragraph(
-                Normal,
-                "These start with '",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "These start with '",
+            },
             FootNoteReference {
                 ident: "ID",
             },
-            Paragraph(
-                Normal,
-                ":' and proceed to the end of line.",
-            ),
-            Paragraph(
-                Normal,
-                "Example of valid content:",
-            ),
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: ":' and proceed to the end of line.",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Example of valid content:",
+            },
             FootNoteContent {
-                content: Paragraph(
-                    Normal,
-                    "Explanation of source2.",
-                ),
+                content: Paragraph {
+                    is_newline: false,
+                    formatting: None,
+                    content: "Explanation of source2.",
+                },
                 ident: "source2",
             },
-            Paragraph(
-                Normal,
-                "Example of invalid content:",
-            ),
-            Paragraph(
-                Normal,
-                "[^source2: This is invalid content",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Example of invalid content:",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "[^source2: This is invalid content",
+            },
             FootNoteReference {
                 ident: "source2",
             },
-            Paragraph(
-                Normal,
-                ": This is invalid content",
-            ),
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: ": This is invalid content",
+            },
             FootNoteReference {
                 ident: "source2",
             },
-            Paragraph(
-                Normal,
-                ": This is invalid content",
-            ),
-            Paragraph(
-                Normal,
-                "They also must start at the beginning of the line. If fact, this:",
-            ),
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: ": This is invalid content",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "They also must start at the beginning of the line. If fact, this:",
+            },
             FootNoteReference {
                 ident: "source2",
             },
-            Paragraph(
-                Normal,
-                ": Some content",
-            ),
-            Paragraph(
-                Normal,
-                "Is expected to be a footnote ref with a colon.",
-            ),
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: ": Some content",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Is expected to be a footnote ref with a colon.",
+            },
             Header {
                 order: 1,
                 content: "Code blocks",
             },
-            Paragraph(
-                Normal,
-                "There are two fundamental types of code blocks: normal code block and",
-            ),
-            Formatted(
-                Bold,
-                Paragraph(
-                    Normal,
-                    "Ayano",
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "There are two fundamental types of code blocks: normal code block and",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: Some(
+                    Bold,
                 ),
-            ),
-            Paragraph(
-                Normal,
-                "code block.",
-            ),
+                content: "Ayano",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "code block.",
+            },
             Header {
                 order: 2,
                 content: "Normal code block",
             },
-            Paragraph(
-                Normal,
-                "These start and end with '```' on a newline. There can be",
-            ),
-            Formatted(
-                Bold,
-                Paragraph(
-                    Normal,
-                    "practically anything",
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "These start and end with '```' on a newline. There can be",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: Some(
+                    Bold,
                 ),
-            ),
-            Paragraph(
-                Normal,
-                "inside. Example:",
-            ),
+                content: "practically anything",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "inside. Example:",
+            },
             CodeBlock {
                 code: "int x = 2;\nint y = 4;\nint[] arr = new int[2];\narr[0] = x;\narr[1] = 4;",
                 language: Some(
                     "java",
                 ),
             },
-            Paragraph(
-                Normal,
-                "There can be anything after code block had closed:",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "There can be anything after code block had closed:",
+            },
             CodeBlock {
                 code: "local x = 'matt'\nlocal y = 'y'\nlocal z = x .. y -- matty!!",
                 language: Some(
                     "lua(Idk why vscode detects this block closing as a valid lua syntax)",
                 ),
             },
-            Paragraph(
-                Normal,
-                "Here's some text that's ok to be here",
-            ),
-            Paragraph(
-                Normal,
-                "There can't be any spaces before delimiting ```s:",
-            ),
-            Paragraph(
-                Normal,
-                "```python",
-            ),
-            Paragraph(
-                Normal,
-                "# This here is not really a python block",
-            ),
-            Paragraph(
-                Normal,
-                "x = 2",
-            ),
-            Paragraph(
-                Normal,
-                "print(x)",
-            ),
-            Paragraph(
-                Normal,
-                "```",
-            ),
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "Here's some text that's ok to be here",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "There can't be any spaces before delimiting ```s:",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "```python",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "# This here is not really a python block",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "x = 2",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "print(x)",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "```",
+            },
             Header {
                 order: 2,
                 content: "Ayano code block",
             },
-            Paragraph(
-                Normal,
-                "",
-            ),
-            Formatted(
-                Italic,
-                Paragraph(
-                    Normal,
-                    "because Ayano loves Kyoko",
+            Paragraph {
+                is_newline: true,
+                formatting: Some(
+                    Italic,
                 ),
-            ),
-            Paragraph(
-                Normal,
-                "This object looks and behaves just like normal code block, but is only limited to",
-            ),
-            Formatted(
-                Italic,
-                Paragraph(
-                    Normal,
-                    "python",
+                content: "because Ayano loves Kyoko",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "This object looks and behaves just like normal code block, but is only limited to",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: Some(
+                    Italic,
                 ),
-            ),
-            Paragraph(
-                Normal,
-                "language, can have spacial arguments in a language line, may leave something behind in the document. For example:",
-            ),
-            Paragraph(
-                Normal,
-                "This Ayano block will leave plain \"2\" behind it:",
-            ),
+                content: "python",
+            },
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "language, can have spacial arguments in a language line, may leave something behind in the document. For example:",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "This Ayano block will leave plain \"2\" behind it:",
+            },
             Ayano {
                 data: AyanoBlock {
                     is_display: false,
@@ -609,42 +686,48 @@ Text {
                     insert_path: None,
                 },
             },
-            Paragraph(
-                Normal,
-                "Akin to normal blocks, it's ok to leave something trailing:",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Akin to normal blocks, it's ok to leave something trailing:",
+            },
             CodeBlock {
                 code: "2",
                 language: Some(
                     "ayano",
                 ),
             },
-            Paragraph(
-                Normal,
-                "This text is ok to be here",
-            ),
-            Paragraph(
-                Normal,
-                "And these are invalid Ayano blocks:",
-            ),
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "This text is ok to be here",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "And these are invalid Ayano blocks:",
+            },
             CodeBlock {
                 code: "2",
                 language: Some(
                     "ayano",
                 ),
             },
-            Paragraph(
-                Normal,
-                "```ayano",
-            ),
-            Paragraph(
-                Normal,
-                "2",
-            ),
-            Paragraph(
-                Normal,
-                "```",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "```ayano",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "2",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "```",
+            },
         ],
     ),
 }

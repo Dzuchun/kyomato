@@ -1,14 +1,16 @@
 Text {
     tokens: Owned(
         [
-            Paragraph(
-                Normal,
-                "This is a test of ayano-generated stuff.",
-            ),
-            Paragraph(
-                Normal,
-                "This is supposed to be a generated figure:",
-            ),
+            Paragraph {
+                is_newline: false,
+                formatting: None,
+                content: "This is a test of ayano-generated stuff.",
+            },
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "This is supposed to be a generated figure:",
+            },
             Ayano {
                 data: AyanoBlock {
                     is_display: false,
@@ -17,10 +19,11 @@ Text {
                     insert_path: None,
                 },
             },
-            Paragraph(
-                Normal,
-                "Here's a table with specified width:",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "Here's a table with specified width:",
+            },
             Ayano {
                 data: AyanoBlock {
                     is_display: false,
@@ -29,10 +32,11 @@ Text {
                     insert_path: None,
                 },
             },
-            Paragraph(
-                Normal,
-                "This is expected to be a generated table:",
-            ),
+            Paragraph {
+                is_newline: true,
+                formatting: None,
+                content: "This is expected to be a generated table:",
+            },
             Ayano {
                 data: AyanoBlock {
                     is_display: false,
