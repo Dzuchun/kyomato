@@ -1,5 +1,5 @@
-Text(
-    Owned(
+Text {
+    tokens: Owned(
         [
             Header {
                 order: 1,
@@ -27,32 +27,32 @@ Text(
                 list_type: Bullet,
                 content: Owned(
                     [
-                        Text(
-                            Owned(
+                        Text {
+                            tokens: Owned(
                                 [
                                     Paragraph(
                                         Normal,
                                         "Нормувальний множник",
                                     ),
-                                    InlineMathmode(
-                                        "|\\psi|^{2} = 3/4",
-                                    ),
+                                    InlineMathmode {
+                                        content: "|\\psi|^{2} = 3/4",
+                                    },
                                 ],
                             ),
-                        ),
-                        Text(
-                            Owned(
+                        },
+                        Text {
+                            tokens: Owned(
                                 [
                                     Paragraph(
                                         Normal,
                                         "Кількість хромосом -",
                                     ),
-                                    InlineMathmode(
-                                        "\\exp(\\pi)",
-                                    ),
+                                    InlineMathmode {
+                                        content: "\\exp(\\pi)",
+                                    },
                                 ],
                             ),
-                        ),
+                        },
                         Paragraph(
                             Normal,
                             "Поживна цінність - 20 дптр/см",
@@ -79,23 +79,23 @@ Text(
                 Normal,
                 "На світлині",
             ),
-            Reference(
-                "fig:refurb",
-            ),
+            Reference {
+                ident: "fig:refurb",
+            },
             Paragraph(
                 Normal,
                 "можна бачити принципову схему влаштування рефурбалідзера. Неважно помітити великі очі",
             ),
-            FootNoteReference(
-                "1",
-            ),
+            FootNoteReference {
+                ident: "1",
+            },
             Paragraph(
                 Normal,
                 ", і два термоядерних реактори, що оточують їх. Точні реакції всередині невідомі, але цілком можливо що там женуть",
             ),
-            InlineMathmode(
-                "du + t -> {}^{5}_{6}C",
-            ),
+            InlineMathmode {
+                content: "du + t -> {}^{5}_{6}C",
+            },
             Paragraph(
                 Normal,
                 "...",
@@ -109,4 +109,4 @@ Text(
             },
         ],
     ),
-)
+}

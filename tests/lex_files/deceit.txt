@@ -1,5 +1,5 @@
-Text(
-    Owned(
+Text {
+    tokens: Owned(
         [
             Paragraph(
                 Normal,
@@ -105,9 +105,9 @@ Text(
                 Normal,
                 "Inline:",
             ),
-            InlineMathmode(
-                "y = x ^ 2",
-            ),
+            InlineMathmode {
+                content: "y = x ^ 2",
+            },
             Paragraph(
                 Normal,
                 "Display:",
@@ -270,16 +270,16 @@ Text(
                 Normal,
                 "Here are correct footnote refs:",
             ),
-            FootNoteReference(
-                "1",
-            ),
+            FootNoteReference {
+                ident: "1",
+            },
             Paragraph(
                 Normal,
                 ",",
             ),
-            FootNoteReference(
-                "source",
-            ),
+            FootNoteReference {
+                ident: "source",
+            },
             Paragraph(
                 Normal,
                 "Here are incorrect ones: [^1, ^1],",
@@ -316,9 +316,9 @@ Text(
                 Normal,
                 "Here's a correct ref:",
             ),
-            Reference(
-                "fig:experiment_schema",
-            ),
+            Reference {
+                ident: "fig:experiment_schema",
+            },
             Paragraph(
                 Normal,
                 "Here's are bad ones: [@ fig:1, @  source3],",
@@ -430,9 +430,9 @@ Text(
                 Normal,
                 "These start with '",
             ),
-            FootNoteReference(
-                "ID",
-            ),
+            FootNoteReference {
+                ident: "ID",
+            },
             Paragraph(
                 Normal,
                 ":' and proceed to the end of line.",
@@ -456,16 +456,16 @@ Text(
                 Normal,
                 "[^source2: This is invalid content",
             ),
-            FootNoteReference(
-                "source2",
-            ),
+            FootNoteReference {
+                ident: "source2",
+            },
             Paragraph(
                 Normal,
                 ": This is invalid content",
             ),
-            FootNoteReference(
-                "source2",
-            ),
+            FootNoteReference {
+                ident: "source2",
+            },
             Paragraph(
                 Normal,
                 ": This is invalid content",
@@ -474,9 +474,9 @@ Text(
                 Normal,
                 "They also must start at the beginning of the line. If fact, this:",
             ),
-            FootNoteReference(
-                "source2",
-            ),
+            FootNoteReference {
+                ident: "source2",
+            },
             Paragraph(
                 Normal,
                 ": Some content",
@@ -601,14 +601,14 @@ Text(
                 Normal,
                 "This Ayano block will leave plain \"2\" behind it:",
             ),
-            Ayano(
-                AyanoBlock {
+            Ayano {
+                data: AyanoBlock {
                     is_display: false,
                     is_static: false,
                     code: "2",
                     insert_path: None,
                 },
-            ),
+            },
             Paragraph(
                 Normal,
                 "Akin to normal blocks, it's ok to leave something trailing:",
@@ -647,4 +647,4 @@ Text(
             ),
         ],
     ),
-)
+}

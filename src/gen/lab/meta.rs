@@ -6,7 +6,7 @@ use std::{
 use itertools::Itertools;
 use pyo3::PyErr;
 
-use crate::data::{Token, Tokens};
+use crate::data::Token;
 
 use super::super::ayano::{self, AyanoBuilder, AyanoExecutor};
 
@@ -86,17 +86,15 @@ where
                 collect_single(caption, dest)?;
             }
         }
-        Token::Text(text) => {
-            collect_iterable(text, dest)?;
+        Token::Text { tokens } => {
+            collect_iterable(tokens, dest)?;
         }
         Token::FootNoteContent { content, ident } => {
             collect_single(content, dest)?;
             dest.footnotes.insert(ident, content.borrow_ref());
         }
-        Token::Ayano(block) => {
-            dest.ayano
-                .add_block(block)
-                .map_err(MetaError::AyanoSyntax)?;
+        Token::Ayano { data } => {
+            dest.ayano.add_block(data).map_err(MetaError::AyanoSyntax)?;
         }
         Token::PageDiv
         | Token::Header { .. }
@@ -104,13 +102,13 @@ where
         | Token::List { .. }
         | Token::Formatted(_, _)
         | Token::Paragraph(_, _)
-        | Token::InlineMathmode(_)
-        | Token::Reference(_)
-        | Token::FootNoteReference(_)
+        | Token::InlineMathmode { .. }
+        | Token::Reference { .. }
+        | Token::FootNoteReference { .. }
         | Token::Figure { .. }
         | Token::Equation { .. }
         | Token::CodeBlock { .. } => {}
-        Token::Error(_) => {}
+        Token::Error { .. } => {}
     }
     Ok(())
 }

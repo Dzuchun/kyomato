@@ -1,7 +1,7 @@
 use std::{
     borrow::{Borrow, Cow},
     ops::Deref,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use url::Url;
@@ -143,20 +143,30 @@ pub enum Token<'source> {
         url: Url,
         display: Tx<'source>,
     },
-    Ayano(AyanoBlock<'source>),
+    Ayano {
+        data: AyanoBlock<'source>,
+    },
     List {
         list_type: ListType,
         content: Tokens<'source>,
     },
     #[deprecated = "`Font`-thing inside paragraph token does similar thing, so it would be wise to merge them"]
     Formatted(Formatting, Box<Token<'source>>),
-    Text(Tokens<'source>),
+    Text {
+        tokens: Tokens<'source>,
+    },
     // TODO move font and formatting exclusively to here
     // TODO add a flag to indicate, if this paragraph contains escaped chars (if it was parsed from caption, basically)
     Paragraph(Font, Tx<'source>),
-    InlineMathmode(Tx<'source>),
-    Reference(Tx<'source>),
-    FootNoteReference(Tx<'source>),
+    InlineMathmode {
+        content: Tx<'source>,
+    },
+    Reference {
+        ident: Tx<'source>,
+    },
+    FootNoteReference {
+        ident: Tx<'source>,
+    },
     FootNoteContent {
         content: Box<Token<'source>>,
         ident: Tx<'source>,
@@ -165,7 +175,9 @@ pub enum Token<'source> {
         code: Tx<'source>,
         language: Option<Tx<'source>>,
     },
-    Error(String),
+    Error {
+        message: String,
+    },
 }
 
 trait ToStaticExt {
@@ -283,7 +295,7 @@ impl<'source> Token<'source> {
                 url: url.clone(),
                 display: Cow::Borrowed(&display),
             },
-            Token::Ayano(ayano) => Token::Ayano(ayano.clone()),
+            Token::Ayano { data } => Token::Ayano { data: data.clone() },
             Token::List { list_type, content } => Token::List {
                 list_type: list_type.clone(),
                 content: Tokens::Borrowed(&content),
@@ -291,13 +303,21 @@ impl<'source> Token<'source> {
             Token::Formatted(formatting, content) => {
                 Token::Formatted(formatting.clone(), Box::new(content.borrow_ref()))
             }
-            Token::Text(text) => Token::Text(Tokens::Borrowed(text)),
+            Token::Text { tokens } => Token::Text {
+                tokens: Tokens::Borrowed(tokens),
+            },
             Token::Paragraph(font, content) => {
                 Token::Paragraph(font.clone(), Cow::Borrowed(content))
             }
-            Token::InlineMathmode(content) => Token::InlineMathmode(Cow::Borrowed(&content)),
-            Token::Reference(ident) => Token::Reference(Cow::Borrowed(&ident)),
-            Token::FootNoteReference(ident) => Token::FootNoteReference(Cow::Borrowed(ident)),
+            Token::InlineMathmode { content } => Token::InlineMathmode {
+                content: Cow::Borrowed(&content),
+            },
+            Token::Reference { ident } => Token::Reference {
+                ident: Cow::Borrowed(&ident),
+            },
+            Token::FootNoteReference { ident } => Token::FootNoteReference {
+                ident: Cow::Borrowed(ident),
+            },
             Token::FootNoteContent { content, ident } => Token::FootNoteContent {
                 content: Box::new(content.borrow_ref()),
                 ident: Cow::Borrowed(ident),
@@ -306,7 +326,9 @@ impl<'source> Token<'source> {
                 code: Cow::Borrowed(&code),
                 language: language.as_ref().map(|c| Cow::Borrowed(c.borrow())),
             },
-            Token::Error(error) => Token::Error(error.clone()),
+            Token::Error { message } => Token::Error {
+                message: message.clone(),
+            },
         }
     }
 
@@ -350,7 +372,9 @@ impl<'source> Token<'source> {
                 url: url.clone(),
                 display: display.to_static(),
             },
-            Token::Ayano(block) => Token::Ayano(block.to_static()),
+            Token::Ayano { data } => Token::Ayano {
+                data: data.to_static(),
+            },
             Token::List { list_type, content } => Token::List {
                 list_type: list_type.clone(),
                 content: content.to_static(),
@@ -358,11 +382,19 @@ impl<'source> Token<'source> {
             Token::Formatted(formatting, inner) => {
                 Token::Formatted(formatting.clone(), inner.to_static())
             }
-            Token::Text(text) => Token::Text(text.to_static()),
+            Token::Text { tokens } => Token::Text {
+                tokens: tokens.to_static(),
+            },
             Token::Paragraph(font, inner) => Token::Paragraph(font.clone(), inner.to_static()),
-            Token::InlineMathmode(math) => Token::InlineMathmode(math.to_static()),
-            Token::Reference(ident) => Token::Reference(ident.to_static()),
-            Token::FootNoteReference(ident) => Token::FootNoteReference(ident.to_static()),
+            Token::InlineMathmode { content } => Token::InlineMathmode {
+                content: content.to_static(),
+            },
+            Token::Reference { ident } => Token::Reference {
+                ident: ident.to_static(),
+            },
+            Token::FootNoteReference { ident } => Token::FootNoteReference {
+                ident: ident.to_static(),
+            },
             Token::FootNoteContent { content, ident } => Token::FootNoteContent {
                 content: content.to_static(),
                 ident: ident.to_static(),
@@ -371,7 +403,9 @@ impl<'source> Token<'source> {
                 code: code.to_static(),
                 language: language.as_ref().map(Cow::to_static),
             },
-            Token::Error(error) => Token::Error(error.clone()),
+            Token::Error { message } => Token::Error {
+                message: message.clone(),
+            },
         }
     }
 }

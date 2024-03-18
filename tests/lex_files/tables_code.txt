@@ -1,5 +1,5 @@
-Text(
-    Owned(
+Text {
+    tokens: Owned(
         [
             Paragraph(
                 Normal,
@@ -62,26 +62,26 @@ Text(
                             Normal,
                             "2",
                         ),
-                        InlineMathmode(
-                            "3 + e ^{\\pi}",
-                        ),
-                        Text(
-                            Owned(
+                        InlineMathmode {
+                            content: "3 + e ^{\\pi}",
+                        },
+                        Text {
+                            tokens: Owned(
                                 [
-                                    InlineMathmode(
-                                        "e",
-                                    ),
-                                    FootNoteReference(
-                                        "euler",
-                                    ),
+                                    InlineMathmode {
+                                        content: "e",
+                                    },
+                                    FootNoteReference {
+                                        ident: "euler",
+                                    },
                                 ],
                             ),
-                        ),
-                        InlineMathmode(
-                            "\\cdot \\pm 1",
-                        ),
-                        Text(
-                            Owned(
+                        },
+                        InlineMathmode {
+                            content: "\\cdot \\pm 1",
+                        },
+                        Text {
+                            tokens: Owned(
                                 [
                                     Paragraph(
                                         Normal,
@@ -100,12 +100,12 @@ Text(
                                     ),
                                 ],
                             ),
-                        ),
+                        },
                     ],
                 ),
                 caption: Some(
-                    Text(
-                        Owned(
+                    Text {
+                        tokens: Owned(
                             [
                                 Paragraph(
                                     Normal,
@@ -124,7 +124,7 @@ Text(
                                 ),
                             ],
                         ),
-                    ),
+                    },
                 ),
                 ident: Some(
                     "example_1",
@@ -173,8 +173,8 @@ Text(
                 ),
             },
             FootNoteContent {
-                content: Text(
-                    Owned(
+                content: Text {
+                    tokens: Owned(
                         [
                             Paragraph(
                                 Normal,
@@ -204,7 +204,7 @@ Text(
                             ),
                         ],
                     ),
-                ),
+                },
                 ident: "euler",
             },
             Header {
@@ -215,9 +215,9 @@ Text(
                 Normal,
                 "Наразі мають досить обмежену підтримку, адже у",
             ),
-            InlineMathmode(
-                "\\LaTeX",
-            ),
+            InlineMathmode {
+                content: "\\LaTeX",
+            },
             Paragraph(
                 Normal,
                 "немає нативного поняття блоків коду.",
@@ -237,9 +237,9 @@ Text(
                 Normal,
                 "таке поняття є",
             ),
-            FootNoteReference(
-                "code",
-            ),
+            FootNoteReference {
+                ident: "code",
+            },
             Paragraph(
                 Normal,
                 ":",
@@ -251,8 +251,8 @@ Text(
                 ),
             },
             FootNoteContent {
-                content: Text(
-                    Owned(
+                content: Text {
+                    tokens: Owned(
                         [
                             Paragraph(
                                 Normal,
@@ -271,9 +271,9 @@ Text(
                             ),
                         ],
                     ),
-                ),
+                },
                 ident: "code",
             },
         ],
     ),
-)
+}

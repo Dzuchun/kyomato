@@ -166,8 +166,8 @@ where
                 }
                 output.write_str("\\end{figure}\n")?;
             }
-            Token::Ayano(block) => {
-                let token = meta.ayano.display_token(block)?;
+            Token::Ayano { data } => {
+                let token = meta.ayano.display_token(data)?;
                 self.write_to(output, meta, context, &token)?;
             }
             Token::List { list_type, content } => {
@@ -221,13 +221,13 @@ where
                 self.write_to(output, meta, context, content)?;
                 output.write_str(end)?;
             }
-            Token::InlineMathmode(content) => {
+            Token::InlineMathmode { content } => {
                 write!(output, "${content}$")?;
             }
-            Token::Reference(ident) => {
+            Token::Reference { ident } => {
                 write!(output, "\\ref{{{ident}}}")?;
             }
-            Token::FootNoteReference(ident) => {
+            Token::FootNoteReference { ident } => {
                 let (encountered, i) = {
                     // TODO probably should move this to separate function
                     let encountered_map = &mut context.encountered_footnotes;
@@ -256,8 +256,8 @@ where
             }
             // might seem weird at first, but these are basically useless at this point, as their content was presumably collected into context
             Token::FootNoteContent { .. } => {}
-            Token::Error(error) => {
-                eprintln!("{error}");
+            Token::Error { message } => {
+                eprintln!("{message}");
                 // TODO add representation in the document
             }
             Token::Paragraph(font, content) => {
@@ -271,7 +271,7 @@ where
             Token::Href { url, display } => {
                 write!(output, "\\href{{{url}}}{{{display}}}")?;
             }
-            Token::Text(content) => self.write_tokens_to(output, meta, context, content)?,
+            Token::Text { tokens } => self.write_tokens_to(output, meta, context, tokens)?,
             Token::CodeBlock { code, language } => {
                 if let Some(language) = language {
                     writeln!(
@@ -388,7 +388,7 @@ mod tests {
     "}
 
     // Inline math
-    test! {inline_mathmode, Token::InlineMathmode(r"\dfrac{\partial x}{\partial t}".into()), r"$ \dfrac{\partial x}{\partial t} $"}
+    test! {inline_mathmode, Token::InlineMathmode{content:r"\dfrac{\partial x}{\partial t}".into()}, r"$ \dfrac{\partial x}{\partial t} $"}
 
     // Figures
     test! {fig1, Token::Figure { src_name: Path::new("apple.jpg").into(), caption: Some(Box::new(text!("a very realistic-looking apple"))), ident: None, width: None }, r"
@@ -479,35 +479,35 @@ mod tests {
     "}
 
     // Text
-    test! {text, Token::Text(tokens![Token::PageDiv, Token::Header { order: 0, content: "Header".into() }, text!("Here's a little formula: "), Token::InlineMathmode(r"(a+b)^2 = a^2 + 2 \cdot a \cdot b + b^2".into()), text!(". It's very useful, more useful than me!")]), r"
+    test! {text, Token::Text{tokens:tokens![Token::PageDiv, Token::Header { order: 0, content: "Header".into() }, text!("Here's a little formula: "), Token::InlineMathmode{content:r"(a+b)^2 = a^2 + 2 \cdot a \cdot b + b^2".into()}, text!(". It's very useful, more useful than me!")]}, r"
     \clearpage
     \section{Header}
     \fnt Here's a little formula: $(a+b)^2 = a^2 + 2 \cdot a \cdot b + b^2$\fnt . It's very useful, more useful than me!
     "}
 
     // Footnotes
-    test! {footnote_single, Token::Text(tokens![
-        Token::FootNoteReference("explanation".into()),
+    test! {footnote_single, Token::Text{tokens:tokens![
+        Token::FootNoteReference{ident:"explanation".into()},
         Token::FootNoteContent { content: Box::new(text!("42")), ident: "explanation".into() }
-    ]), r"
+    ]}, r"
     \footnotemark[1]
     \footnotetext[1]{\fnt 42}
     "}
 
-    test! {footnote_multiple, Token::Text(tokens![
+    test! {footnote_multiple, Token::Text{tokens:tokens![
         text!("Here's a first note"),
-        Token::FootNoteReference("explanation1".into()),
+        Token::FootNoteReference{ident:"explanation1".into()},
         text!(", there are also second"),
-        Token::FootNoteReference("explanation2".into()),
+        Token::FootNoteReference{ident: "explanation2".into()},
         text!(", and the third"),
-        Token::FootNoteReference("explanation3".into()),
+        Token::FootNoteReference{ident:"explanation3".into()},
         Token::FootNoteContent { content: Box::new(text!("There are things in this world that's you're not meant to see")), ident: "explanation1".into() },
         Token::FootNoteContent { content: Box::new(text!("now the voice of a deity permeates")), ident: "explanation2".into() },
         Token::FootNoteContent { content: Box::new(text!("see notes 1 and 2")), ident: "explanation3".into() },
         text!(". But notes will not be duplicated here!"),
-        Token::FootNoteReference("explanation1".into())
+        Token::FootNoteReference{ident:"explanation1".into()}
 
-    ]), r"
+    ]}, r"
     \fnt Here's a first note
     \footnotemark[1]
     \footnotetext[1]{\fnt There are things in this world that's you're not meant to see}
@@ -521,19 +521,19 @@ mod tests {
     \footnotemark[1]
     "}
 
-    test! {ayano_plain1, Token::Ayano(AyanoBlock{
+    test! {ayano_plain1, Token::Ayano{data: AyanoBlock{
         is_display: false,
         is_static: false,
         code: "1".into(),
         insert_path: None
-    }), r"\fnt 1"}
-    test! {ayano_plain2, Token::Ayano(AyanoBlock{
+    }}, r"\fnt 1"}
+    test! {ayano_plain2, Token::Ayano{data: AyanoBlock{
         is_display: false,
         is_static: false,
         code: "1 + 2".into(),
         insert_path: None
-    }), r"\fnt 3"}
-    test! {ayano_plain3, Token::Ayano(AyanoBlock{
+    }}, r"\fnt 3"}
+    test! {ayano_plain3, Token::Ayano{data: AyanoBlock{
         is_display: false,
         is_static: false,
         code: r"
@@ -543,8 +543,8 @@ y = sqrt(x)
 int(y)"
         .into(),
         insert_path: None
-    }), r"\fnt 10"}
-    test! {ayano_plain4, Token::Ayano(AyanoBlock{
+    }}, r"\fnt 10"}
+    test! {ayano_plain4, Token::Ayano{data: AyanoBlock{
         is_display: false,
         is_static: false,
         code: r"
@@ -554,24 +554,24 @@ for i in range(101):
 res"
         .into(),
         insert_path: None
-    }), r"\fnt 5050"}
-    test! {ayano_err1, Token::Ayano(AyanoBlock{
+    }}, r"\fnt 5050"}
+    test! {ayano_err1, Token::Ayano{data: AyanoBlock{
         is_display: false,
         is_static: false,
         code: r"
     'err', 1.0, 0.1"
         .into(),
         insert_path: None
-    }), r"\fnt 1.00 $\pm$ \fnt 0.10"}
-    test! {ayano_err2, Token::Ayano(AyanoBlock{
+    }}, r"\fnt 1.00 $\pm$ \fnt 0.10"}
+    test! {ayano_err2, Token::Ayano{data: AyanoBlock{
         is_display: false,
         is_static: false,
         code: r"
     'err', 1.0, 0.4"
         .into(),
         insert_path: None
-    }), r"\fnt 1.0 $\pm$ \fnt 0.4"}
-    test! {ayano_err3, Token::Ayano(AyanoBlock{
+    }}, r"\fnt 1.0 $\pm$ \fnt 0.4"}
+    test! {ayano_err3, Token::Ayano{data: AyanoBlock{
             is_display: false,
             is_static: false,
             code: r"
@@ -580,41 +580,41 @@ y = 0.4
 @dev: x, y"
             .into(),
             insert_path: None
-        }), r"\fnt 1.0 $\pm$ \fnt 0.4"
+        }}, r"\fnt 1.0 $\pm$ \fnt 0.4"
     }
 
-    test! {ayano_fig1, Token::Ayano(AyanoBlock{
+    test! {ayano_fig1, Token::Ayano{data: AyanoBlock{
         is_display: false,
         is_static: false,
         code: r"'fig', 'path/to/image.jpg', None, None, None".into(),
         insert_path: None
-    }), r"
+    }}, r"
 \begin{figure}[h!]
 \centering
 \includegraphics[width = 0.9 \textwidth]{path/to/image.jpg}
 \end{figure}"
     }
 
-    test! {ayano_fig2_width, Token::Ayano(AyanoBlock{
+    test! {ayano_fig2_width, Token::Ayano{data: AyanoBlock{
         is_display: false,
         is_static: false,
         code: r"'fig', 'path/to/image.jpg', None, None, 0.625".into(),
         insert_path: None
-    }), r"
+    }}, r"
 \begin{figure}[h!]
 \centering
 \includegraphics[width = 0.625 \textwidth]{path/to/image.jpg}
 \end{figure}"
     }
 
-    test! {ayano_fig2, Token::Ayano(AyanoBlock{is_display: false,is_static: false,code: r"@fig: src = 'path/to/image.jpg'".into(),insert_path: None}),
+    test! {ayano_fig2, Token::Ayano{data: AyanoBlock{is_display: false,is_static: false,code: r"@fig: src = 'path/to/image.jpg'".into(),insert_path: None}},
 r"
 \begin{figure}[h!]
 \centering
 \includegraphics[width = 0.9 \textwidth]{path/to/image.jpg}
 \end{figure}"}
-    test! {ayano_fig3, Token::Ayano(AyanoBlock{ is_display: false,is_static: false,code: r#"@fig: src = 'path/to/image.jpg', ident = "meow""#.into(),insert_path: None
-        }),
+    test! {ayano_fig3, Token::Ayano{data: AyanoBlock{ is_display: false,is_static: false,code: r#"@fig: src = 'path/to/image.jpg', ident = "meow""#.into(),insert_path: None
+        }},
 r#"
 \begin{figure}[h!]
 \centering
@@ -624,11 +624,11 @@ r#"
     }
     // TODO add tests with captions
 
-    test! {ayano_gen_tab1, Token::Ayano(AyanoBlock { is_display: false, is_static: false, code:
+    test! {ayano_gen_tab1, Token::Ayano{data: AyanoBlock { is_display: false, is_static: false, code:
 r#"
 data = [[1, 2, 3], [4, 5, 6]]
 @gen_table: lambda r,c: data[r][c]; rows=2, columns=3
-"#.into(), insert_path: None }),
+"#.into(), insert_path: None }},
 r#"
 \begin{table}[h!]
 \begin{center}

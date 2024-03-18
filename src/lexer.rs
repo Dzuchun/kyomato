@@ -570,12 +570,14 @@ fn ayano<
     let code: Cow<'_, str> = Cow::from(code);
     Ok((
         rest,
-        Token::Ayano(AyanoBlock {
-            insert_path: insert.map(Cow::from),
-            code,
-            is_display: display.is_some(),
-            is_static: is_static.is_some(),
-        }),
+        Token::Ayano {
+            data: AyanoBlock {
+                insert_path: insert.map(Cow::from),
+                code,
+                is_display: display.is_some(),
+                is_static: is_static.is_some(),
+            },
+        },
     ))
 }
 
@@ -806,7 +808,9 @@ fn inline_math<'source, E: ParseError<&'source str> + ContextError<&'source str>
             delimited(char('$'), take_till1(|c| c == '\n' || c == '$'), char('$')),
         ),
     )
-    .map(|content: &str| Token::InlineMathmode(content.trim().into()))
+    .map(|content: &str| Token::InlineMathmode {
+        content: content.trim().into(),
+    })
     .parse(input)
 }
 
@@ -831,7 +835,12 @@ fn reference<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
             pair(space0, char(']')),
         ),
     )(input)?;
-    Ok((rest, Token::Reference(ident.trim().into())))
+    Ok((
+        rest,
+        Token::Reference {
+            ident: ident.trim().into(),
+        },
+    ))
 }
 
 /// Parses a footnote reference
@@ -849,7 +858,12 @@ fn footnote_reference<'source, E: ParseError<&'source str> + ContextError<&'sour
             char(']'),
         ),
     )(input)?;
-    Ok((rest, Token::FootNoteReference(ident.trim().into())))
+    Ok((
+        rest,
+        Token::FootNoteReference {
+            ident: ident.trim().into(),
+        },
+    ))
 }
 
 /// Parses definition of a footnote content
@@ -1226,7 +1240,9 @@ fn tokens_many1<
             |inner_result| match inner_result {
                 InnerResult::None => Err(KyomatoLexError::no_tokens(outer_input)),
                 InnerResult::Single(token) => Ok(token),
-                InnerResult::Multiple(tokens) => Ok(Token::Text(Tokens::new(tokens))),
+                InnerResult::Multiple(tokens) => Ok(Token::Text {
+                    tokens: Tokens::new(tokens),
+                }),
             },
         )
         .parse(outer_input)
@@ -1603,7 +1619,7 @@ $$
 
         macro_rules! test_ok {
             {$name:ident, $input:literal, $formula:literal, $left_over:literal} => {
-                test!{$name, inline_math, $input, e: Ok(($left_over, Token::InlineMathmode($formula.into())))}
+                test!{$name, inline_math, $input, e: Ok(($left_over, Token::InlineMathmode{content:$formula.into()}))}
             };
         }
 
@@ -1629,7 +1645,7 @@ $$
 
         macro_rules! test_ok {
             {$name:ident, $input:literal, $reference:literal, $left_over:literal} => {
-                test!{$name, reference, $input, e: Ok(($left_over, Token::Reference($reference.into())))}
+                test!{$name, reference, $input, e: Ok(($left_over, Token::Reference{ident: $reference.into()}))}
             };
         }
 
@@ -1648,7 +1664,7 @@ $$
 
         macro_rules! test_ok {
             {$name:ident, $input:literal, $reference:literal, $left_over:literal} => {
-                test!{$name, footnote_reference, $input, e: Ok(($left_over, Token::FootNoteReference($reference.into())))}
+                test!{$name, footnote_reference, $input, e: Ok(($left_over, Token::FootNoteReference{ident:$reference.into()}))}
             };
         }
 
@@ -1677,12 +1693,12 @@ $$
         test_ok! {ok_formatting_in_formatting, "\t    \n You can even use ~~__double-formatted__~~ things!", "You can even use",
         Some(Token::Formatted(Formatting::StrikeThrough, Box::new(Token::Formatted(Formatting::Bold, Box::new(Token::text("double-formatted")))))), " things!"}
         test_ok! {ok_equation, "    \t Inline math is fine too: $y = x_{\text{поч}} + x_0$.", "Inline math is fine too:",
-        Some(Token::InlineMathmode("y = x_{\text{поч}} + x_0".into())), "."}
+        Some(Token::InlineMathmode{content: "y = x_{\text{поч}} + x_0".into()}), "."}
         test_ok! {ok_href, "   \t\t\n You can even [залишити посилання на свою сторінку на Гітхабі   ](https://www.github.com/Dzuchun)!", "You can even",
         Some(Token::Href { url: "https://www.github.com/Dzuchun".parse().expect("That's a valid url"), display: "залишити посилання на свою сторінку на Гітхабі".into() }), "!"}
-        test_ok! {ok_footnote_ref, "\t Footnote refs[^1] are also ok too!", "Footnote refs", Some(Token::FootNoteReference("1".into())), " are also ok too!"}
+        test_ok! {ok_footnote_ref, "\t Footnote refs[^1] are also ok too!", "Footnote refs", Some(Token::FootNoteReference{ident: "1".into()}), " are also ok too!"}
         test_ok! {ok_obj_ref, "\n\t Thi[[ngs lik_e tables* ([@tab:results]) can also be referenced", "Thi[[ngs lik_e tables* (",
-        Some(Token::Reference("tab:results".into())), ") can also be referenced"}
+        Some(Token::Reference{ident: "tab:results".into()}), ") can also be referenced"}
     }
 
     // `inner_lex` tests
@@ -1707,7 +1723,9 @@ $$
             }
         };
         (!$eq:literal) => {
-            Token::InlineMathmode(Cow::Borrowed($eq))
+            Token::InlineMathmode {
+                content: Cow::Borrowed($eq),
+            }
         };
     }
     macro_rules! hr {
@@ -1734,10 +1752,14 @@ $$
     }
     macro_rules! rf {
         (@ $ident:literal) => {
-            Token::Reference(Cow::Borrowed($ident))
+            Token::Reference {
+                ident: Cow::Borrowed($ident),
+            }
         };
         (^ $ident:literal) => {
-            Token::FootNoteReference(Cow::Borrowed($ident))
+            Token::FootNoteReference {
+                ident: Cow::Borrowed($ident),
+            }
         };
     }
     macro_rules! tx {
@@ -1747,7 +1769,7 @@ $$
     }
     macro_rules! tks {
         [$($token:expr), +] => {
-            Token::Text(Tokens::new([$($token), +]))
+            Token::Text{tokens: Tokens::new([$($token), +])}
         };
     }
     mod inner_lex {
@@ -1982,12 +2004,12 @@ $$
 
     macro_rules! ayano {
         {!$is_static:literal, *$description:expr, ~$insert_path:expr, #$_id:expr, $code:literal} => {
-            Token::Ayano(AyanoBlock{
+            Token::Ayano{data: AyanoBlock{
                 is_display: $description.is_some(),
                 is_static: $is_static,
                 code: Cow::Borrowed($code),
                 insert_path: $insert_path.map(Path::new).map(Cow::from),
-        })
+        }}
         };
     }
     mod ayano {
