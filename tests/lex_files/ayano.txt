@@ -19,6 +19,18 @@ Text(
             ),
             Paragraph(
                 Normal,
+                "Here's a table with specified width:",
+            ),
+            Ayano(
+                AyanoBlock {
+                    is_display: false,
+                    is_static: false,
+                    code: "width = 2\n@fig: src = \"graph.png\", width = width",
+                    insert_path: None,
+                },
+            ),
+            Paragraph(
+                Normal,
                 "This is expected to be a generated table:",
             ),
             Ayano(

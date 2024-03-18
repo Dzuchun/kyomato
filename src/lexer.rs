@@ -394,7 +394,7 @@ fn figure<
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
     // TODO add width parameter to figure, I guess
-    let (rest, (_, (path, _, (ident, caption, _width)))) = context(
+    let (rest, (_, (path, _, (ident, caption, width)))) = context(
         "figure",
         pair(
             // first, match syntax start
@@ -417,6 +417,7 @@ fn figure<
         src_name: Path::new(path).into(),
         caption: caption.map(Box::new),
         ident: ident.map(Cow::from),
+        width,
     };
     Ok((rest, token))
 }
@@ -1835,13 +1836,14 @@ $$
 
     macro_rules! fig {
         ($path:literal) => {
-            fig!($path, {ref = None::<&'static str>, caption = None})
+            fig!($path, {ref = None::<&'static str>, caption = None, width = None})
         };
-        ($path:literal, {ref = $ident:expr, caption = $caption:expr}) => {
+        ($path:literal, {ref = $ident:expr, caption = $caption:expr, width = $width:expr}) => {
             Token::Figure {
                 src_name: Cow::Borrowed(Path::new($path)),
                 ident: $ident.map(Cow::from),
                 caption: $caption.map(Box::new),
+                width: $width,
             }
         };
     }
@@ -1867,15 +1869,16 @@ $$
         test_ok! {ok_empty_before, "\t\t\t\n   \n\n![[path/to/file.jpg]]", fig!("path/to/file.jpg"), ""}
         test_ok! {ok_text_after, "\t\t\t\n   \n\n![[path/to/file.jpg]] і ще щось написане", fig!("path/to/file.jpg"), " і ще щось написане"}
         test_ok! {ok_explicit_no_params, "\n![[path/to/file.jpg]]\n{}\n", fig!("path/to/file.jpg"), "\n"}
-        test_ok! {ok_ident, "\n![[path/to/file.jpg]]\n{ref = figure_of_doom    }\n", fig!("path/to/file.jpg", {ref = Some("figure_of_doom"), caption = None}), "\n"}
+        test_ok! {ok_ident, "\n![[path/to/file.jpg]]\n{ref = figure_of_doom    }\n", fig!("path/to/file.jpg", {ref = Some("figure_of_doom"), caption = None, width = None}), "\n"}
         test_ok! {ok_caption, "\n![[path/to/file.jpg]]\n{caption = \"Ця картинка показує графік рівняння $y = x^2$\"    }\n",
-        fig!("path/to/file.jpg", {ref = None::<&str>, caption = Some(tks![tx!("Ця картинка показує графік рівняння"), eq!(!"y = x^2")])}), "\n"}
+        fig!("path/to/file.jpg", {ref = None::<&str>, caption = Some(tks![tx!("Ця картинка показує графік рівняння"), eq!(!"y = x^2")]), width = None}), "\n"}
         test_ok! {ok_both, "\n![[path/to/file.jpg]]\n{   ref = mc_erat, caption = \"This is a mee from our $\\text{Nomifactory}^{2*}$ world.\"    }\n",
-        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a mee from our"), eq!(!"\\text{Nomifactory}^{2*}"), tx!("world.")))}), "\n"}
+        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a mee from our"), eq!(!"\\text{Nomifactory}^{2*}"), tx!("world."))), width = None}), "\n"}
         test_ok! {ok_both_reversed, "\n![[path/to/file.jpg]]\n{   caption = \"This is a meme from our $\\text{Nomifactory}^{2*}$ world.\" ,    ref = mc_erat    }\n",
-        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a meme from our"), eq!(!"\\text{Nomifactory}^{2*}"), tx!("world.")))}), "\n"}
+        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a meme from our"), eq!(!"\\text{Nomifactory}^{2*}"), tx!("world."))), width = None}), "\n"}
         test_ok! {ok_both_left_over, "\n![[path/to/file.jpg]]\n{   caption = \"This is a meme from our $\\text{Nomifactory}^{2*}$ world.\" ,    ref = mc_erat    }\nІще трохи тексту",
-        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a meme from our"), eq!(!"\\text{Nomifactory}^{2*}"), tx!("world.")))}), "\nІще трохи тексту"}
+        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a meme from our"), eq!(!"\\text{Nomifactory}^{2*}"), tx!("world."))), width = None}), "\nІще трохи тексту"}
+        test_ok! {ok_width, "\n![[path/to/file.jpg]]\n{    width = 0.5}\nTh else", fig!("path/to/file.jpg", {ref = None::<&str>, caption = None, width = Some(0.5)}), "\nTh else"}
     }
 
     macro_rules! ls {

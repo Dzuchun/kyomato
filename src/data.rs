@@ -136,6 +136,7 @@ pub enum Token<'source> {
         src_name: Pth<'source>,
         caption: Option<Box<Token<'source>>>,
         ident: Option<Tx<'source>>,
+        width: Option<f32>,
     },
     Href {
         // #[cfg_attr(feature = "serde", serde(with = "url_serde"))]
@@ -271,10 +272,12 @@ impl<'source> Token<'source> {
                 src_name,
                 caption,
                 ident,
+                width,
             } => Token::Figure {
                 src_name: Cow::Borrowed(src_name),
                 caption: caption.as_ref().map(|t| Box::new(Token::borrow_ref(t))),
                 ident: ident.as_ref().map(|s| Cow::<'r, str>::Borrowed(s)),
+                width: *width,
             },
             Token::Href { url, display } => Token::Href {
                 url: url.clone(),
@@ -336,10 +339,12 @@ impl<'source> Token<'source> {
                 src_name,
                 caption,
                 ident,
+                width,
             } => Token::Figure {
                 src_name: src_name.to_static(),
                 caption: caption.as_ref().map(Box::to_static),
                 ident: ident.as_ref().map(Cow::to_static),
+                width: *width,
             },
             Token::Href { url, display } => Token::Href {
                 url: url.clone(),

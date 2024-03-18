@@ -5,6 +5,12 @@ This is supposed to be a generated figure:
 @fig: src="circle.png", ident="circle", caption="Some caption for a line drawing. This is parsed as a *regular document text*, so you may [@eq:line] and $f(x) = A \cdot x^{1} + B \cdot x^{0}$ here, for example"
 ```
 
+Here's a table with specified width:
+```python, Ayano
+width = 0.2
+@fig: src = "graph.png", width = width
+```
+
 This is expected to be a generated table:
 ```python, Ayano
 data = [

@@ -14,7 +14,7 @@ Ref(z) = \int \limits_{0}^{1} t^{z-1} \cdot \exp(-t) dt
 \end{itemize}
 \begin{figure}[h!]
 \centering
-\includegraphics[width=0.9\textwidth]{refurb.jpg}
+\includegraphics[width=0.4\textwidth]{refurb.jpg}
 \caption{\fnt Принципове влаштування рефурбалідзера}
 \label{fig:refurb}
 \end{figure}

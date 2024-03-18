@@ -141,10 +141,15 @@ where
                 src_name,
                 caption,
                 ident,
+                width,
             } => {
-                output.write_str(
-                    "\n\\begin{figure}[h!]\n\\centering\n\\includegraphics[width=0.9\\textwidth]{",
-                )?;
+                output.write_str("\n\\begin{figure}[h!]\n\\centering\n\\includegraphics[width=")?;
+                if let Some(width) = width.as_ref() {
+                    output.write_str(&width.to_string())?
+                } else {
+                    output.write_str("0.9")?;
+                }
+                output.write_str("\\textwidth]{")?;
                 let src_path = self
                     .path_engine
                     .image(src_name.as_ref(), None)
@@ -386,14 +391,14 @@ mod tests {
     test! {inline_mathmode, Token::InlineMathmode(r"\dfrac{\partial x}{\partial t}".into()), r"$ \dfrac{\partial x}{\partial t} $"}
 
     // Figures
-    test! {fig1, Token::Figure { src_name: Path::new("apple.jpg").into(), caption: Some(Box::new(text!("a very realistic-looking apple"))), ident: None }, r"
+    test! {fig1, Token::Figure { src_name: Path::new("apple.jpg").into(), caption: Some(Box::new(text!("a very realistic-looking apple"))), ident: None, width: None }, r"
     \begin{figure}[h!]
     \centering
     \includegraphics[width = 0.9 \textwidth]{apple.jpg}
     \caption{\fnt a very realistic-looking apple}
     \end{figure}
     "}
-    test! {fig2, Token::Figure { src_name: Path::new("schema1.jpg").into(), caption: Some(Box::new(text!("A schema providing a bunch of very important info on quantum refurbalidzer function"))), ident: Some("schema-1".into()) }, r"
+    test! {fig2, Token::Figure { src_name: Path::new("schema1.jpg").into(), caption: Some(Box::new(text!("A schema providing a bunch of very important info on quantum refurbalidzer function"))), ident: Some("schema-1".into()), width: None }, r"
     \begin{figure}[h!]
     \centering
     \includegraphics[width = 0.9 \textwidth]{schema1.jpg}
@@ -401,7 +406,14 @@ mod tests {
     \label{fig:schema-1}
     \end{figure}
     "}
-
+    test! {fig3_width, Token::Figure { src_name: Path::new("schema1.jpg").into(), caption: Some(Box::new(text!("A schema providing a bunch of very important info on quantum refurbalidzer function"))), ident: Some("schema-1".into()), width: Some(0.25) }, r"
+    \begin{figure}[h!]
+    \centering
+    \includegraphics[width = 0.25 \textwidth]{schema1.jpg}
+    \caption{\fnt A schema providing a bunch of very important info on quantum refurbalidzer function}
+    \label{fig:schema-1}
+    \end{figure}
+    "}
     // Tables
     test! {tab1, Token::Table {
     header:
@@ -574,12 +586,24 @@ y = 0.4
     test! {ayano_fig1, Token::Ayano(AyanoBlock{
         is_display: false,
         is_static: false,
-        code: r"'fig', 'path/to/image.jpg', None, None".into(),
+        code: r"'fig', 'path/to/image.jpg', None, None, None".into(),
         insert_path: None
     }), r"
 \begin{figure}[h!]
 \centering
 \includegraphics[width = 0.9 \textwidth]{path/to/image.jpg}
+\end{figure}"
+    }
+
+    test! {ayano_fig2_width, Token::Ayano(AyanoBlock{
+        is_display: false,
+        is_static: false,
+        code: r"'fig', 'path/to/image.jpg', None, None, 0.625".into(),
+        insert_path: None
+    }), r"
+\begin{figure}[h!]
+\centering
+\includegraphics[width = 0.625 \textwidth]{path/to/image.jpg}
 \end{figure}"
     }
 

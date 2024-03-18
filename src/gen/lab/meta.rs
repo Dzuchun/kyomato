@@ -79,6 +79,7 @@ where
             ident: Some(ident),
             caption,
             src_name: _src_name,
+            width: _width,
         } => {
             dest.refs.insert(ident);
             if let Some(caption) = caption {

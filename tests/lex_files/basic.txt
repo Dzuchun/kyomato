@@ -71,6 +71,9 @@ Text(
                 ident: Some(
                     "refurb",
                 ),
+                width: Some(
+                    0.4,
+                ),
             },
             Paragraph(
                 Normal,

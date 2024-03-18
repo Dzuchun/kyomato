@@ -612,6 +612,7 @@ enum Syntax<'source> {
         src: &'source str,
         ident: Option<&'source str>,
         caption: Option<&'source str>,
+        width: Option<&'source str>,
     },
     CsvTable {
         src: &'source str,
@@ -638,9 +639,9 @@ pub enum SyntaxError {
     /// Right now this only means that you don't have a generator in a table syntax
     #[error("Ayano syntax is lacking fields, or it's punctuation is wrong")]
     BadSyntax,
-    #[error("{}", .0)]
+    #[error(transparent)]
     RangeParse(GenericRangeParseError),
-    #[error("{}", .0)]
+    #[error(transparent)]
     IntParse(ParseIntError),
     #[error("{}", **.0)]
     InsertIo(Equivalent<std::io::Error>),
@@ -802,7 +803,8 @@ impl<'l> TryFrom<&'l str> for SyntaxData<'l> {
             let mut src = None;
             let mut ident = None;
             let mut caption = None;
-            parse_args!(s, src, "src", ident, "ident", caption, "caption");
+            let mut width = None;
+            parse_args!(s, src, "src", ident, "ident", caption, "caption", width, "width");
             needed!(src, "src");
             return Ok(Self {
                 indent,
@@ -810,6 +812,7 @@ impl<'l> TryFrom<&'l str> for SyntaxData<'l> {
                     src,
                     caption,
                     ident,
+                    width,
                 },
             });
         }
@@ -911,8 +914,11 @@ mod syntax_data_tests {
     test! {value_error1, "@dev: 1, 2", SyntaxData {indent: 0, syntax: Syntax::ValueError { value: "1", error: "2" }}}
     test! {value_error2, "@dev:  1,    2   ", SyntaxData {indent: 0, syntax: Syntax::ValueError { value: "1", error: "2" }}}
     test! {value_error3, "@dev:  x + 1,  (2 + 3) / 10   ", SyntaxData {indent: 0, syntax: Syntax::ValueError { value: "x + 1", error: "(2 + 3) / 10" }}}
-    test! {fig1, r#"    @fig:  src = "path.png" , caption   =  "Wow, such caption", ident="path"  "#, SyntaxData {indent: 4, syntax: Syntax::Figure{ src:"\"path.png\"", caption: Some("\"Wow, such caption\""), ident: Some("\"path\"")}}}
-    test! {fig2, r#"    @fig:   caption   =  "Wow, such caption", ident="path" ,src = "path.png"  "#, SyntaxData {indent: 4, syntax: Syntax::Figure{ src: "\"path.png\"", caption: Some("\"Wow, such caption\""), ident: Some("\"path\"")}}}
+    test! {fig1, r#"    @fig:  src = "path.png" , caption   =  "Wow, such caption", ident="path"  "#, SyntaxData {indent: 4, syntax: Syntax::Figure{ src:"\"path.png\"", caption: Some("\"Wow, such caption\""), ident: Some("\"path\""), width: None}}}
+    test! {fig2, r#"    @fig:   caption   =  "Wow, such caption", ident="path" ,src = "path.png"  "#, SyntaxData {indent: 4, syntax: Syntax::Figure{ src: "\"path.png\"", caption: Some("\"Wow, such caption\""), ident: Some("\"path\""), width: None}}}
+    test! {fig3_width, r#"    @fig:   caption   =  "Wow, such caption", width=   0.125, ident="path" ,src = "path.png"  "#, SyntaxData {indent: 4, syntax: Syntax::Figure{ src: "\"path.png\"", caption: Some("\"Wow, such caption\""), ident: Some("\"path\""), width: Some("0.125")}}}
+    test! {fig4_width_expr, r#"    @fig:   caption   =  "Wow, such caption", width=    WIDTH + 3 , ident="path" ,src = "path.png"  "#,
+    SyntaxData {indent: 4, syntax: Syntax::Figure{ src: "\"path.png\"", caption: Some("\"Wow, such caption\""), ident: Some("\"path\""), width: Some("WIDTH + 3")}}}
     test! {csv_table1, r#"   @csv_table: src = "path/to/table.csv", caption = "such caption, wow""#, SyntaxData {indent: 3, syntax: Syntax::CsvTable { src: "\"path/to/table.csv\"", rows: GenericRange::Full, columns: None, ident: None, caption: Some("\"such caption, wow\"") }}}
     test! {csv_table2, r#"   @csv_table: src = "path/to/table.csv", rows  =   1..1000"#, SyntaxData {indent: 3, syntax: Syntax::CsvTable { src: "\"path/to/table.csv\"", rows: GenericRange::DoubleBounded(1..1000), columns: None, ident: None, caption: None, }}}
     test! {csv_table3, r#"   @csv_table: src = "path/to/table.csv", rows  =   2.."#, SyntaxData {indent: 3, syntax: Syntax::CsvTable { src: "\"path/to/table.csv\"", rows: GenericRange::From(2..), columns: None, ident: None, caption: None }}}
@@ -990,6 +996,7 @@ impl Syntax<'_> {
                 src,
                 ident,
                 caption,
+                width,
             } => {
                 writer.write_str("return \"fig\", ")?;
                 writer.write_str(src)?;
@@ -1002,6 +1009,12 @@ impl Syntax<'_> {
                 writer.write_str(", ")?;
                 if let Some(caption) = caption {
                     writer.write_str(caption)?;
+                } else {
+                    writer.write_str("None")?;
+                }
+                writer.write_str(", ")?;
+                if let Some(width) = width {
+                    writer.write_str(&width.to_string())?;
                 } else {
                     writer.write_str("None")?;
                 }
@@ -1171,7 +1184,9 @@ mod syntax_display_tests {
     test! {indent1, SyntaxData {indent: 4, syntax: Syntax::Nothing("")}, "    return "}
     test! {value_error1, SyntaxData {indent: 4, syntax: Syntax::ValueError{value:"x", error:"y"}}, "    return \"err\", x, y"}
     test! {value_error2, SyntaxData {indent: 0, syntax: Syntax::ValueError{value:"x + 2", error:"sqrt(x/2  +y)"}}, "return \"err\", x + 2, sqrt(x/2  +y)"}
-    test! {figure1, SyntaxData {indent: 0, syntax: Syntax::Figure{src:"output_path", caption: Some("\"some caption text\""), ident: Some("\"fig1\"")}}, "return \"fig\", output_path, \"fig1\", \"some caption text\""}
+    test! {figure1, SyntaxData {indent: 0, syntax: Syntax::Figure{src:"output_path", caption: Some("\"some caption text\""), ident: Some("\"fig1\""), width: None}}, "return \"fig\", output_path, \"fig1\", \"some caption text\", None"}
+    test! {figure2_width, SyntaxData {indent: 0, syntax: Syntax::Figure{src:"output_path", caption: Some("\"some caption text\""), ident: Some("\"fig1\""), width: Some("0.75")}}, "return \"fig\", output_path, \"fig1\", \"some caption text\", 0.75"}
+    test! {figure3_width_expr, SyntaxData {indent: 0, syntax: Syntax::Figure{src:"output_path", caption: Some("\"some caption text\""), ident: Some("\"fig1\""), width: Some("W + 2")}}, "return \"fig\", output_path, \"fig1\", \"some caption text\", W + 2"}
     test! {csv_table1, SyntaxData {
         indent: 0,
         syntax: Syntax::CsvTable {
@@ -1240,13 +1255,13 @@ mod last_line_tests {
     test! {nothing2, "\"resulting string!\"", "return \"resulting string!\""}
     test! {dev1, "@dev: 2.0, -0.34E4", "return \"err\", 2.0, -0.34E4"}
 
-    test! {fig1, "@fig: src=\"./picture.jpg\"", "return \"fig\", \"./picture.jpg\", None, None"}
+    test! {fig1, "@fig: src=\"./picture.jpg\"", "return \"fig\", \"./picture.jpg\", None, None, None"}
     test! {fig2, "@fig: caption=\"Some very cool picture\", src=\"./picture.jpg\"",
-    "return \"fig\", \"./picture.jpg\", None, \"Some very cool picture\""}
+    "return \"fig\", \"./picture.jpg\", None, \"Some very cool picture\", None"}
     test! {fig3, "@fig: ident=\"cool\", caption=\"Some very cool picture\", src=\"./picture.jpg\"",
-    "return \"fig\", \"./picture.jpg\", \"cool\", \"Some very cool picture\""}
+    "return \"fig\", \"./picture.jpg\", \"cool\", \"Some very cool picture\", None"}
     test! {fig4, "@fig: caption=\"Some very cool picture\", src=\"./picture.jpg\", ident=\"cool\"",
-    "return \"fig\", \"./picture.jpg\", \"cool\", \"Some very cool picture\""}
+    "return \"fig\", \"./picture.jpg\", \"cool\", \"Some very cool picture\", None"}
     test! {fig5, "@fig: caption=\"Some very cool picture\", ident=\"cool\"", -, SyntaxError::MissingArgument("src".into())}
     test! {fig6, "@fig: caption=\"Some very cool picture\", ident=\"cool\", coolness=1000", -, SyntaxError::UnknownArgument("coolness".to_string().into())}
     test! {fig7, "@fig: caption=\"Some very cool picture\", ident=\"cool\", coolness=1000, src=\"path.png\"", -, SyntaxError::UnknownArgument("coolness".to_string().into())}
@@ -1471,10 +1486,18 @@ fn parse_ayano(python_output: &PyAny) -> Result<Token<'static>, ParsingError> {
                             crate::lexer::inner_lex::<KyomatoLexError>(caption_str)?;
                         Some(Box::new(caption_token.to_static_token()))
                     };
+                    let width = throw_syntax!(tuple.get_item(4))?;
+                    let width = if width.is_none() {
+                        None
+                    } else {
+                        let width_str = throw_syntax!(width.str().and_then(|s| s.to_str()))?;
+                        Some(width_str.parse()?)
+                    };
                     return Ok(Token::Figure {
                         src_name: Cow::Owned(PathBuf::from(src)),
                         caption,
                         ident: ident.map(|i| Cow::Owned(i.to_string())),
+                        width,
                     });
                 }
                 "tab" => {
@@ -1598,16 +1621,27 @@ mod parsing_tests {
     Ok(value_error_token(1.9876543, 0.0000012))}
     // TODO probably should add some more tests for value-error formatting
 
-    test! {figure_nocaption1, |py| PyTuple::new(py, ["fig".into_py(py), "path/to/file.png".into_py(py), "circle".into_py(py), None::<()>.into_py(py)]),
+    test! {figure_nocaption1, |py| PyTuple::new(py, ["fig".into_py(py), "path/to/file.png".into_py(py), "circle".into_py(py), None::<()>.into_py(py), None::<f32>.into_py(py)]),
     Ok(Token::Figure {
         src_name: Cow::Owned(PathBuf::from("path/to/file.png")),
         caption: None,
-        ident: Some("circle".into()) })}
-    test! {figure_caption, |py| PyTuple::new(py, [<&'static str as IntoPy<pyo3::Py<PyString>>>::into_py("fig", py), "path/to/file.png".into_py(py), "circle".into_py(py), "figure caption".into_py(py)]),
+        ident: Some("circle".into()),
+        width: None,
+    })}
+    test! {figure_caption, |py| PyTuple::new(py, ["fig".into_py(py), "path/to/file.png".into_py(py), "circle".into_py(py), "figure caption".into_py(py), None::<f32>.into_py(py)]),
     Ok(Token::Figure {
         src_name: Cow::Owned(PathBuf::from("path/to/file.png")),
         caption: Some(Box::new(Token::text("figure caption"))),
-        ident: Some("circle".into()) })}
+        ident: Some("circle".into()),
+        width: None,
+    })}
+    test! {figure_width, |py| PyTuple::new(py, ["fig".into_py(py), "path/to/file.png".into_py(py), "circle".into_py(py), "figure caption".into_py(py), 0.625.into_py(py)]),
+    Ok(Token::Figure {
+        src_name: Cow::Owned(PathBuf::from("path/to/file.png")),
+        caption: Some(Box::new(Token::text("figure caption"))),
+        ident: Some("circle".into()),
+        width: Some(0.625),
+    })}
 
     test! {table_nocaption, |py| {
         PyTuple::new(py, [
