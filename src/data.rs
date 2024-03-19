@@ -143,8 +143,6 @@ pub enum Token<'source> {
         list_type: ListType,
         content: Tokens<'source>,
     },
-    #[deprecated = "`Font`-thing inside paragraph token does similar thing, so it would be wise to merge them"]
-    Formatted(Formatting, Box<Token<'source>>),
     Text {
         tokens: Tokens<'source>,
     },
@@ -301,9 +299,6 @@ impl<'source> Token<'source> {
                 list_type: list_type.clone(),
                 content: Tokens::Borrowed(&content),
             },
-            Token::Formatted(formatting, content) => {
-                Token::Formatted(formatting.clone(), Box::new(content.borrow_ref()))
-            }
             Token::Text { tokens } => Token::Text {
                 tokens: Tokens::Borrowed(tokens),
             },
@@ -386,9 +381,6 @@ impl<'source> Token<'source> {
                 list_type: list_type.clone(),
                 content: content.to_static(),
             },
-            Token::Formatted(formatting, inner) => {
-                Token::Formatted(formatting.clone(), inner.to_static())
-            }
             Token::Text { tokens } => Token::Text {
                 tokens: tokens.to_static(),
             },

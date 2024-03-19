@@ -100,7 +100,6 @@ where
         | Token::Header { .. }
         | Token::Href { .. }
         | Token::List { .. }
-        | Token::Formatted(_, _)
         | Token::Paragraph { .. }
         | Token::InlineMathmode { .. }
         | Token::Reference { .. }

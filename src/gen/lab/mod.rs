@@ -208,22 +208,6 @@ where
                 output.write_str("\n")?;
                 output.write_str(end)?;
             }
-            Token::Formatted(formatting, content) => {
-                let start: &str = match formatting {
-                    crate::data::Formatting::Bold => "\\textbf{",
-                    crate::data::Formatting::Italic => "\\textit{",
-                    // TODO ADD \usepackage{soul} TO PREAMBLE!
-                    crate::data::Formatting::StrikeThrough => "\\st{",
-                };
-                let end: &str = match formatting {
-                    crate::data::Formatting::Bold
-                    | crate::data::Formatting::Italic
-                    | crate::data::Formatting::StrikeThrough => "}",
-                };
-                output.write_str(start)?;
-                self.write_to(output, meta, context, content)?;
-                output.write_str(end)?;
-            }
             Token::InlineMathmode { content } => {
                 write!(output, "${content}$")?;
             }

@@ -718,21 +718,6 @@ fn list<
     context("list", _list_inner)(input)
 }
 
-#[deprecated]
-fn _formatting_inner<
-    'source,
-    E: ParseError<&'source str>
-        + ContextError<&'source str>
-        + FromExternalError<&'source str, KyomatoLexError>
-        + 'source,
->(
-    input: &'source str,
-    style: crate::data::Formatting,
-) -> Result<Token<'source>, nom::Err<E>> {
-    let (_, content) = all_consuming(terminated(inner_lex, space0))(input)?;
-    Ok(Token::Formatted(style, Box::new(content)))
-}
-
 /// Parses formatting declaration (or whatever you wanna call that)
 ///
 /// **WARNING**: I expect this parse to be kinda-heavy. Consider using it *as late as possible*, but not before regular text parser, obviously.
