@@ -88,7 +88,7 @@ where
 
                 write!(output, "\n\\{command}{{{content}}}\n")?;
             }
-            Token::Equation { content, ident } => {
+            Token::DisplayMath { content, ident } => {
                 let label = ident
                     .as_ref()
                     .map(|ident| format!("\\label{{eq:{}}}", ident))
@@ -208,13 +208,13 @@ where
                 output.write_str("\n")?;
                 output.write_str(end)?;
             }
-            Token::InlineMathmode { content } => {
+            Token::InlineMath { content } => {
                 write!(output, "${content}$")?;
             }
             Token::Reference { ident } => {
                 write!(output, "\\ref{{{ident}}}")?;
             }
-            Token::FootNoteReference { ident } => {
+            Token::FootnoteReference { ident } => {
                 let (encountered, i) = {
                     // TODO probably should move this to separate function
                     let encountered_map = &mut context.encountered_footnotes;
@@ -242,7 +242,7 @@ where
                 }
             }
             // might seem weird at first, but these are basically useless at this point, as their content was presumably collected into context
-            Token::FootNoteContent { .. } => {}
+            Token::FootnoteContent { .. } => {}
             Token::Error { message } => {
                 eprintln!("{message}");
                 // TODO add representation in the document
@@ -268,7 +268,7 @@ where
             Token::Href { url, display } => {
                 write!(output, "\\href{{{url}}}{{{display}}}")?;
             }
-            Token::Text { tokens } => self.write_tokens_to(output, meta, context, tokens)?,
+            Token::Multiple { tokens } => self.write_tokens_to(output, meta, context, tokens)?,
             Token::CodeBlock { code, language } => {
                 if let Some(language) = language {
                     writeln!(
@@ -373,13 +373,13 @@ mod tests {
     test! {href2, Token::Href { url: "https://github.com/Dzuchun".parse().unwrap(), display: "Моя сторінка на гітхабі".into() }, r"\href{https://github.com/Dzuchun}{Моя сторінка на гітхабі}"}
 
     // Equations
-    test! {equations_1, Token::Equation { content: r"B(\alpha, \beta) = \int \limits_{0}^{1} x^{\alpha - 1} (1-x)^{\beta-1} dx".into(), ident: None },
+    test! {equations_1, Token::DisplayMath { content: r"B(\alpha, \beta) = \int \limits_{0}^{1} x^{\alpha - 1} (1-x)^{\beta-1} dx".into(), ident: None },
     r"
     \begin{equation}
     B(\alpha, \beta) = \int \limits_{0}^{1} x^{\alpha - 1} (1-x)^{\beta-1} dx
     \end{equation}
     "}
-    test! {equations_2, Token::Equation { content: r"B(\alpha, \beta) = \int \limits_{0}^{1} x^{\alpha - 1} (1-x)^{\beta-1} dx".into(), ident: Some("beta_def".into()) },
+    test! {equations_2, Token::DisplayMath { content: r"B(\alpha, \beta) = \int \limits_{0}^{1} x^{\alpha - 1} (1-x)^{\beta-1} dx".into(), ident: Some("beta_def".into()) },
     r"
     \begin{equation}
     B(\alpha, \beta) = \int \limits_{0}^{1} x^{\alpha - 1} (1-x)^{\beta-1} dx
@@ -389,7 +389,7 @@ mod tests {
     "}
 
     // Inline math
-    test! {inline_mathmode, Token::InlineMathmode{content:r"\dfrac{\partial x}{\partial t}".into()}, r"$ \dfrac{\partial x}{\partial t} $"}
+    test! {inline_mathmode, Token::InlineMath{content:r"\dfrac{\partial x}{\partial t}".into()}, r"$ \dfrac{\partial x}{\partial t} $"}
 
     // Figures
     test! {fig1, Token::Figure { src_name: Path::new("apple.jpg").into(), caption: Some(Box::new(text!("a very realistic-looking apple"))), ident: None, width: None }, r"
@@ -480,33 +480,33 @@ cell_21 & cell_22 & cell_23 \\ \hline
     "}
 
     // Text
-    test! {text, Token::Text{tokens:tokens![Token::PageDiv, Token::Header { order: 0, content: "Header".into() }, text!("Here's a little formula: "), Token::InlineMathmode{content:r"(a+b)^2 = a^2 + 2 \cdot a \cdot b + b^2".into()}, text!(". It's very useful, more useful than me!")]}, r"
+    test! {text, Token::Multiple{tokens:tokens![Token::PageDiv, Token::Header { order: 0, content: "Header".into() }, text!("Here's a little formula: "), Token::InlineMath{content:r"(a+b)^2 = a^2 + 2 \cdot a \cdot b + b^2".into()}, text!(". It's very useful, more useful than me!")]}, r"
     \clearpage
     \section{Header}
     Here's a little formula: $(a+b)^2 = a^2 + 2 \cdot a \cdot b + b^2$. It's very useful, more useful than me!
     "}
 
     // Footnotes
-    test! {footnote_single, Token::Text{tokens:tokens![
-        Token::FootNoteReference{ident:"explanation".into()},
-        Token::FootNoteContent { content: Box::new(text!("42")), ident: "explanation".into() }
+    test! {footnote_single, Token::Multiple{tokens:tokens![
+        Token::FootnoteReference{ident:"explanation".into()},
+        Token::FootnoteContent { content: Box::new(text!("42")), ident: "explanation".into() }
     ]}, r"
     \footnotemark[1]
     \footnotetext[1]{42}
     "}
 
-    test! {footnote_multiple, Token::Text{tokens:tokens![
+    test! {footnote_multiple, Token::Multiple{tokens:tokens![
         text!("Here's a first note"),
-        Token::FootNoteReference{ident:"explanation1".into()},
+        Token::FootnoteReference{ident:"explanation1".into()},
         text!(", there are also second"),
-        Token::FootNoteReference{ident: "explanation2".into()},
+        Token::FootnoteReference{ident: "explanation2".into()},
         text!(", and the third"),
-        Token::FootNoteReference{ident:"explanation3".into()},
-        Token::FootNoteContent { content: Box::new(text!("There are things in this world that's you're not meant to see")), ident: "explanation1".into() },
-        Token::FootNoteContent { content: Box::new(text!("now the voice of a deity permeates")), ident: "explanation2".into() },
-        Token::FootNoteContent { content: Box::new(text!("see notes 1 and 2")), ident: "explanation3".into() },
+        Token::FootnoteReference{ident:"explanation3".into()},
+        Token::FootnoteContent { content: Box::new(text!("There are things in this world that's you're not meant to see")), ident: "explanation1".into() },
+        Token::FootnoteContent { content: Box::new(text!("now the voice of a deity permeates")), ident: "explanation2".into() },
+        Token::FootnoteContent { content: Box::new(text!("see notes 1 and 2")), ident: "explanation3".into() },
         text!(". But notes will not be duplicated here!"),
-        Token::FootNoteReference{ident:"explanation1".into()}
+        Token::FootnoteReference{ident:"explanation1".into()}
 
     ]}, r"
     Here's a first note

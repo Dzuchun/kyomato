@@ -1564,10 +1564,10 @@ fn parse_ayano(python_output: &PyAny) -> Result<Token<'static>, ParsingError> {
 
 #[cfg(test)]
 fn value_error_token(value: f64, error: f64) -> Token<'static> {
-    Token::Text {
+    Token::Multiple {
         tokens: Tokens::new([
             Token::text(value.to_string()),
-            Token::InlineMathmode {
+            Token::InlineMath {
                 content: r"\pm".into(),
             },
             Token::text(error.to_string()),
@@ -1619,9 +1619,9 @@ mod parsing_tests {
     test! {err1, |py| PyTuple::new(py, ["err".into_py(py), ["yet another not a number"].into_py(py)]),
     Err(crate::gen::ayano::ParsingError::UnexpectedSyntax("('err', ['yet another not a number'])".to_string(), py_err!(py)))}
     test! {value_error1, |py| PyTuple::new(py, ["err".into_py(py), 1.0.into_py(py), 0.5.into_py(py)]),
-    Ok(Token::Text{tokens: Tokens::new([Token::text("1.0"), Token::InlineMathmode{content:r"\pm".into()}, Token::text("0.5")])})}
+    Ok(Token::Multiple{tokens: Tokens::new([Token::text("1.0"), Token::InlineMath{content:r"\pm".into()}, Token::text("0.5")])})}
     test! {value_error2, |py| PyTuple::new(py, ["err".into_py(py), "1.0".into_py(py), 0.5.into_py(py)]),
-    Ok(Token::Text{tokens:Tokens::new([Token::text("1.0"), Token::InlineMathmode{content:r"\pm".into()}, Token::text("0.5")])})}
+    Ok(Token::Multiple{tokens:Tokens::new([Token::text("1.0"), Token::InlineMath{content:r"\pm".into()}, Token::text("0.5")])})}
     test! {value_error_format1, |py| PyTuple::new(py, ["err".into_py(py), "1.987654321".into_py(py), 0.00000123456.into_py(py)]),
     Ok(value_error_token(1.9876543, 0.0000012))}
     // TODO probably should add some more tests for value-error formatting
@@ -1711,7 +1711,7 @@ mod parsing_tests {
                 Token::text("cell_11"), Token::text("0.25"),
                 Token::text("cell_21"), Token::text("-2"),
             ]),
-            caption: Some(Box::new(Token::Text{tokens:Tokens::new([Token::text("table caption with some"),Token::InlineMathmode{content:"formula".into()}])})),
+            caption: Some(Box::new(Token::Multiple{tokens:Tokens::new([Token::text("table caption with some"),Token::InlineMath{content:"formula".into()}])})),
             ident: Some("table1".into())
         })
     }
@@ -2226,14 +2226,14 @@ pub fn value_error_format<'v, 'e>(
 ) -> Result<Token<'static>, ParsingError> {
     let (value, error) = value_error_format_inner(value.into().as_ref(), error.into().as_ref())?;
     // Result is a combination of text tokens with mathmode +- in between
-    Ok(Token::Text {
+    Ok(Token::Multiple {
         tokens: Tokens::new([
             Token::Paragraph {
                 is_newline: false,
                 formatting: None,
                 content: value.into(),
             },
-            Token::InlineMathmode {
+            Token::InlineMath {
                 content: r"\pm".into(),
             },
             Token::Paragraph {

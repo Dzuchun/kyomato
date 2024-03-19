@@ -1,4 +1,4 @@
-Text {
+Multiple {
     tokens: Owned(
         [
             Header {
@@ -10,7 +10,7 @@ Text {
                 formatting: None,
                 content: "Тут трохи тексту і пояснень про квантові мультивироджені рефурбалідзери змішаного типу. Це нудно, тож тримайте формулу:",
             },
-            Equation {
+            DisplayMath {
                 content: "Ref(z) = \\int \\limits_{0}^{1} t^{z-1} \\cdot \\exp(-t) dt",
                 ident: Some(
                     "refurbalidzer_1",
@@ -29,7 +29,7 @@ Text {
                 list_type: Bullet,
                 content: Owned(
                     [
-                        Text {
+                        Multiple {
                             tokens: Owned(
                                 [
                                     Paragraph {
@@ -37,13 +37,13 @@ Text {
                                         formatting: None,
                                         content: "Нормувальний множник",
                                     },
-                                    InlineMathmode {
+                                    InlineMath {
                                         content: "|\\psi|^{2} = 3/4",
                                     },
                                 ],
                             ),
                         },
-                        Text {
+                        Multiple {
                             tokens: Owned(
                                 [
                                     Paragraph {
@@ -51,7 +51,7 @@ Text {
                                         formatting: None,
                                         content: "Кількість хромосом -",
                                     },
-                                    InlineMathmode {
+                                    InlineMath {
                                         content: "\\exp(\\pi)",
                                     },
                                 ],
@@ -94,7 +94,7 @@ Text {
                 formatting: None,
                 content: "можна бачити принципову схему влаштування рефурбалідзера. Неважно помітити великі очі",
             },
-            FootNoteReference {
+            FootnoteReference {
                 ident: "1",
             },
             Paragraph {
@@ -102,7 +102,7 @@ Text {
                 formatting: None,
                 content: ", і два термоядерних реактори, що оточують їх. Точні реакції всередині невідомі, але цілком можливо що там женуть",
             },
-            InlineMathmode {
+            InlineMath {
                 content: "du + t -> {}^{5}_{6}C",
             },
             Paragraph {
@@ -110,7 +110,7 @@ Text {
                 formatting: None,
                 content: "...",
             },
-            FootNoteContent {
+            FootnoteContent {
                 content: Paragraph {
                     is_newline: false,
                     formatting: None,

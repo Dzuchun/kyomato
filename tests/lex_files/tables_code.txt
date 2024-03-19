@@ -1,4 +1,4 @@
-Text {
+Multiple {
     tokens: Owned(
         [
             Paragraph {
@@ -71,25 +71,25 @@ Text {
                             formatting: None,
                             content: "2",
                         },
-                        InlineMathmode {
+                        InlineMath {
                             content: "3 + e ^{\\pi}",
                         },
-                        Text {
+                        Multiple {
                             tokens: Owned(
                                 [
-                                    InlineMathmode {
+                                    InlineMath {
                                         content: "e",
                                     },
-                                    FootNoteReference {
+                                    FootnoteReference {
                                         ident: "euler",
                                     },
                                 ],
                             ),
                         },
-                        InlineMathmode {
+                        InlineMath {
                             content: "\\cdot \\pm 1",
                         },
-                        Text {
+                        Multiple {
                             tokens: Owned(
                                 [
                                     Paragraph {
@@ -115,7 +115,7 @@ Text {
                     ],
                 ),
                 caption: Some(
-                    Text {
+                    Multiple {
                         tokens: Owned(
                             [
                                 Paragraph {
@@ -192,8 +192,8 @@ Text {
                     "table_2",
                 ),
             },
-            FootNoteContent {
-                content: Text {
+            FootnoteContent {
+                content: Multiple {
                     tokens: Owned(
                         [
                             Paragraph {
@@ -239,7 +239,7 @@ Text {
                 formatting: None,
                 content: "Наразі мають досить обмежену підтримку, адже у",
             },
-            InlineMathmode {
+            InlineMath {
                 content: "\\LaTeX",
             },
             Paragraph {
@@ -264,7 +264,7 @@ Text {
                 formatting: None,
                 content: "таке поняття є",
             },
-            FootNoteReference {
+            FootnoteReference {
                 ident: "code",
             },
             Paragraph {
@@ -278,8 +278,8 @@ Text {
                     "rust",
                 ),
             },
-            FootNoteContent {
-                content: Text {
+            FootnoteContent {
+                content: Multiple {
                     tokens: Owned(
                         [
                             Paragraph {

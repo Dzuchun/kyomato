@@ -238,7 +238,7 @@ fn equation<
     )(input)?;
     Ok((
         rest,
-        Token::Equation {
+        Token::DisplayMath {
             content: content.into(),
             ident: ident.map(Cow::from),
         },
@@ -796,7 +796,7 @@ fn inline_math<'source, E: ParseError<&'source str> + ContextError<&'source str>
             delimited(char('$'), take_till1(|c| c == '\n' || c == '$'), char('$')),
         ),
     )
-    .map(|content: &str| Token::InlineMathmode {
+    .map(|content: &str| Token::InlineMath {
         content: content.trim().into(),
     })
     .parse(input)
@@ -848,7 +848,7 @@ fn footnote_reference<'source, E: ParseError<&'source str> + ContextError<&'sour
     )(input)?;
     Ok((
         rest,
-        Token::FootNoteReference {
+        Token::FootnoteReference {
             ident: ident.trim().into(),
         },
     ))
@@ -883,7 +883,7 @@ fn footnote_content<
                 .and_then(cut(all_consuming(terminated(inner_lex, space0)))),
         )),
     )
-    .map(|(ident, content)| Token::FootNoteContent {
+    .map(|(ident, content)| Token::FootnoteContent {
         content: Box::new(content),
         ident: ident.trim().into(),
     })
@@ -1251,7 +1251,7 @@ fn tokens_many1<
             |inner_result| match inner_result {
                 InnerResult::None => Err(KyomatoLexError::no_tokens(outer_input)),
                 InnerResult::Single(token) => Ok(token),
-                InnerResult::Multiple(tokens) => Ok(Token::Text {
+                InnerResult::Multiple(tokens) => Ok(Token::Multiple {
                     tokens: Tokens::new(tokens),
                 }),
             },
@@ -1522,7 +1522,7 @@ mod tests {
 $$
 y = x^2
 $$
-12344", e: Ok(("\n12344", Token::Equation { content: Cow::Borrowed("y = x^2"), ident: None }))}
+12344", e: Ok(("\n12344", Token::DisplayMath { content: Cow::Borrowed("y = x^2"), ident: None }))}
     // Like that!
     test! {equation6, equation, r"
 $$y = x^2
@@ -1538,24 +1538,24 @@ z = y$$;
 $$
 y = x^2
 z = y
-$$;12344", e: Ok((";12344", Token::Equation { content: "y = x^2\nz = y".into(), ident: None }))}
+$$;12344", e: Ok((";12344", Token::DisplayMath { content: "y = x^2\nz = y".into(), ident: None }))}
     // This is alright, though
     test! {equation9, equation, r#"
 $$
 y = x^2
 $$
-{ref = parabola}"#, e: Ok(("", Token::Equation { content: "y = x^2".into(), ident: Some("parabola".into()) }))}
+{ref = parabola}"#, e: Ok(("", Token::DisplayMath { content: "y = x^2".into(), ident: Some("parabola".into()) }))}
     test! {equation9_5, equation, r#"
 $$
 y = x^2
 $$
-{ref = parabola_ref}"#, e: Ok(("", Token::Equation { content: "y = x^2".into(), ident: Some("parabola_ref".into()) }))}
+{ref = parabola_ref}"#, e: Ok(("", Token::DisplayMath { content: "y = x^2".into(), ident: Some("parabola_ref".into()) }))}
     // Equation ident example
     test! {equation10, equation, r#"
 $$
 y = x^2
 $$
-{ref = parabola_1}"#, e: Ok(("", Token::Equation { content: "y = x^2".into(), ident: Some("parabola_1".into()) }))}
+{ref = parabola_1}"#, e: Ok(("", Token::DisplayMath { content: "y = x^2".into(), ident: Some("parabola_1".into()) }))}
     // This is not ok
     // TODO although that's subject to change
     test! {equation11, equation, r#"
@@ -1568,13 +1568,13 @@ $$
 $$
 y = x^2   
 $$
-{ref=11    } якийсь текст тому що чому ні"#, e: Ok((" якийсь текст тому що чому ні", Token::Equation { content: "y = x^2   ".into(), ident: Some("11".into()) }))}
+{ref=11    } якийсь текст тому що чому ні"#, e: Ok((" якийсь текст тому що чому ні", Token::DisplayMath { content: "y = x^2   ".into(), ident: Some("11".into()) }))}
     // Any sort of whitespaces are preserved
     test! {equation13, equation, r#"
 $$
 y = x^2   
 $$
-{} якийсь текст тому що чому ні"#, e: Ok((" якийсь текст тому що чому ні", Token::Equation { content: "y = x^2   ".into(), ident: None }))}
+{} якийсь текст тому що чому ні"#, e: Ok((" якийсь текст тому що чому ні", Token::DisplayMath { content: "y = x^2   ".into(), ident: None }))}
     // You can explicitly provide no args - fun fact :idk:
 
     // `href` tests
@@ -1632,7 +1632,7 @@ $$
 
         macro_rules! test_ok {
             {$name:ident, $input:literal, $formula:literal, $left_over:literal} => {
-                test!{$name, inline_math, $input, e: Ok(($left_over, Token::InlineMathmode{content:$formula.into()}))}
+                test!{$name, inline_math, $input, e: Ok(($left_over, Token::InlineMath{content:$formula.into()}))}
             };
         }
 
@@ -1677,7 +1677,7 @@ $$
 
         macro_rules! test_ok {
             {$name:ident, $input:literal, $reference:literal, $left_over:literal} => {
-                test!{$name, footnote_reference, $input, e: Ok(($left_over, Token::FootNoteReference{ident:$reference.into()}))}
+                test!{$name, footnote_reference, $input, e: Ok(($left_over, Token::FootnoteReference{ident:$reference.into()}))}
             };
         }
 
@@ -1718,10 +1718,10 @@ $$
         /* test_ok! {ok_formatting_in_formatting, "\t    \n You can even use ~~__double-formatted__~~ things!", "You can even use",
         Some(Token::Formatted(Formatting::StrikeThrough, Box::new(Token::Formatted(Formatting::Bold, Box::new(Token::text("double-formatted")))))), " things!"} */
         test_ok! {ok_equation, "    \t Inline math is fine too: $y = x_{\text{поч}} + x_0$.", "Inline math is fine too:",
-        Some(Token::InlineMathmode{content: "y = x_{\text{поч}} + x_0".into()}), "."}
+        Some(Token::InlineMath{content: "y = x_{\text{поч}} + x_0".into()}), "."}
         test_ok! {ok_href, "   \t\t\n You can even [залишити посилання на свою сторінку на Гітхабі   ](https://www.github.com/Dzuchun)!", "You can even",
         Some(Token::Href { url: "https://www.github.com/Dzuchun".parse().expect("That's a valid url"), display: "залишити посилання на свою сторінку на Гітхабі".into() }), "!", |}
-        test_ok! {ok_footnote_ref, "\t Footnote refs[^1] are also ok too!", "Footnote refs", Some(Token::FootNoteReference{ident: "1".into()}), " are also ok too!"}
+        test_ok! {ok_footnote_ref, "\t Footnote refs[^1] are also ok too!", "Footnote refs", Some(Token::FootnoteReference{ident: "1".into()}), " are also ok too!"}
         test_ok! {ok_obj_ref, "\n\t Thi[[ngs lik_e tables* ([@tab:results]) can also be referenced", "Thi[[ngs lik_e tables* (",
         Some(Token::Reference{ident: "tab:results".into()}), ") can also be referenced", |}
     }
@@ -1742,13 +1742,13 @@ $$
             eq!($eq, Some(Cow::Borrowed($ident)))
         };
         ($eq:literal, $ident:expr) => {
-            Token::Equation {
+            Token::DisplayMath {
                 content: Cow::Borrowed($eq),
                 ident: $ident,
             }
         };
         (!$eq:literal) => {
-            Token::InlineMathmode {
+            Token::InlineMath {
                 content: Cow::Borrowed($eq),
             }
         };
@@ -1782,7 +1782,7 @@ $$
             }
         };
         (^ $ident:literal) => {
-            Token::FootNoteReference {
+            Token::FootnoteReference {
                 ident: Cow::Borrowed($ident),
             }
         };
@@ -1810,7 +1810,7 @@ $$
     }
     macro_rules! tks {
         [$($token:expr), +] => {
-            Token::Text{tokens: Tokens::new([$($token), +])}
+            Token::Multiple{tokens: Tokens::new([$($token), +])}
         };
     }
     mod inner_lex {
@@ -2013,7 +2013,7 @@ $$
 
     macro_rules! foot {
         (^$ident:literal: $content:expr) => {
-            Token::FootNoteContent {
+            Token::FootnoteContent {
                 ident: Cow::Borrowed($ident),
                 content: Box::new($content),
             }

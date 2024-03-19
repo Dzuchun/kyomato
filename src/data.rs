@@ -115,7 +115,7 @@ pub enum Token<'source> {
         order: usize,
         content: Tx<'source>,
     },
-    Equation {
+    DisplayMath {
         content: Tx<'source>,
         ident: Option<Tx<'source>>,
     },
@@ -143,7 +143,7 @@ pub enum Token<'source> {
         list_type: ListType,
         content: Tokens<'source>,
     },
-    Text {
+    Multiple {
         tokens: Tokens<'source>,
     },
     // TODO move font and formatting exclusively to here
@@ -153,16 +153,16 @@ pub enum Token<'source> {
         formatting: Option<Formatting>,
         content: Tx<'source>,
     },
-    InlineMathmode {
+    InlineMath {
         content: Tx<'source>,
     },
     Reference {
         ident: Tx<'source>,
     },
-    FootNoteReference {
+    FootnoteReference {
         ident: Tx<'source>,
     },
-    FootNoteContent {
+    FootnoteContent {
         content: Box<Token<'source>>,
         ident: Tx<'source>,
     },
@@ -264,7 +264,7 @@ impl<'source> Token<'source> {
                 order: *order,
                 content: Cow::Borrowed(content),
             },
-            Token::Equation { content, ident } => Token::Equation {
+            Token::DisplayMath { content, ident } => Token::DisplayMath {
                 content: Cow::Borrowed(&content),
                 ident: ident.as_ref().map(|s| Cow::<'r, str>::Borrowed(s)),
             },
@@ -299,7 +299,7 @@ impl<'source> Token<'source> {
                 list_type: list_type.clone(),
                 content: Tokens::Borrowed(&content),
             },
-            Token::Text { tokens } => Token::Text {
+            Token::Multiple { tokens } => Token::Multiple {
                 tokens: Tokens::Borrowed(tokens),
             },
             Token::Paragraph {
@@ -311,16 +311,16 @@ impl<'source> Token<'source> {
                 formatting: formatting.clone(),
                 content: Cow::Borrowed(content),
             },
-            Token::InlineMathmode { content } => Token::InlineMathmode {
+            Token::InlineMath { content } => Token::InlineMath {
                 content: Cow::Borrowed(&content),
             },
             Token::Reference { ident } => Token::Reference {
                 ident: Cow::Borrowed(&ident),
             },
-            Token::FootNoteReference { ident } => Token::FootNoteReference {
+            Token::FootnoteReference { ident } => Token::FootnoteReference {
                 ident: Cow::Borrowed(ident),
             },
-            Token::FootNoteContent { content, ident } => Token::FootNoteContent {
+            Token::FootnoteContent { content, ident } => Token::FootnoteContent {
                 content: Box::new(content.borrow_ref()),
                 ident: Cow::Borrowed(ident),
             },
@@ -344,7 +344,7 @@ impl<'source> Token<'source> {
                 order: *order,
                 content: content.to_static(),
             },
-            Token::Equation { content, ident } => Token::Equation {
+            Token::DisplayMath { content, ident } => Token::DisplayMath {
                 content: content.to_static(),
                 ident: ident.as_ref().map(Cow::to_static),
             },
@@ -381,7 +381,7 @@ impl<'source> Token<'source> {
                 list_type: list_type.clone(),
                 content: content.to_static(),
             },
-            Token::Text { tokens } => Token::Text {
+            Token::Multiple { tokens } => Token::Multiple {
                 tokens: tokens.to_static(),
             },
             Token::Paragraph {
@@ -393,16 +393,16 @@ impl<'source> Token<'source> {
                 formatting: formatting.clone(),
                 content: content.to_static(),
             },
-            Token::InlineMathmode { content } => Token::InlineMathmode {
+            Token::InlineMath { content } => Token::InlineMath {
                 content: content.to_static(),
             },
             Token::Reference { ident } => Token::Reference {
                 ident: ident.to_static(),
             },
-            Token::FootNoteReference { ident } => Token::FootNoteReference {
+            Token::FootnoteReference { ident } => Token::FootnoteReference {
                 ident: ident.to_static(),
             },
-            Token::FootNoteContent { content, ident } => Token::FootNoteContent {
+            Token::FootnoteContent { content, ident } => Token::FootnoteContent {
                 content: content.to_static(),
                 ident: ident.to_static(),
             },

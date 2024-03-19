@@ -55,7 +55,7 @@ where
     'meta: 'r,
 {
     match token {
-        Token::Equation {
+        Token::DisplayMath {
             ident: Some(ident), ..
         } => {
             dest.refs.borrow_mut().insert(ident);
@@ -86,10 +86,10 @@ where
                 collect_single(caption, dest)?;
             }
         }
-        Token::Text { tokens, .. } => {
+        Token::Multiple { tokens, .. } => {
             collect_iterable(tokens, dest)?;
         }
-        Token::FootNoteContent { content, ident } => {
+        Token::FootnoteContent { content, ident } => {
             collect_single(content, dest)?;
             dest.footnotes.insert(ident, content.borrow_ref());
         }
@@ -101,11 +101,11 @@ where
         | Token::Href { .. }
         | Token::List { .. }
         | Token::Paragraph { .. }
-        | Token::InlineMathmode { .. }
+        | Token::InlineMath { .. }
         | Token::Reference { .. }
-        | Token::FootNoteReference { .. }
+        | Token::FootnoteReference { .. }
         | Token::Figure { .. }
-        | Token::Equation { .. }
+        | Token::DisplayMath { .. }
         | Token::CodeBlock { .. } => {}
         Token::Error { .. } => {}
     }

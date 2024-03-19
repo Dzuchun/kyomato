@@ -1,4 +1,4 @@
-Text {
+Multiple {
     tokens: Owned(
         [
             Paragraph {
@@ -123,7 +123,7 @@ Text {
                 formatting: None,
                 content: "Inline:",
             },
-            InlineMathmode {
+            InlineMath {
                 content: "y = x ^ 2",
             },
             Paragraph {
@@ -131,7 +131,7 @@ Text {
                 formatting: None,
                 content: "Display:",
             },
-            Equation {
+            DisplayMath {
                 content: "y = x ^ 2",
                 ident: None,
             },
@@ -179,7 +179,7 @@ Text {
                 formatting: None,
                 content: "(this should be display mathmode):",
             },
-            Equation {
+            DisplayMath {
                 content: "|x|",
                 ident: None,
             },
@@ -203,7 +203,7 @@ Text {
                 formatting: None,
                 content: "Figure is defined by a ![[ sequence at a start of the line. Same points should be uphold here:",
             },
-            Equation {
+            DisplayMath {
                 content: "![[",
                 ident: None,
             },
@@ -310,7 +310,7 @@ Text {
                 formatting: None,
                 content: "Here are correct footnote refs:",
             },
-            FootNoteReference {
+            FootnoteReference {
                 ident: "1",
             },
             Paragraph {
@@ -318,7 +318,7 @@ Text {
                 formatting: None,
                 content: ",",
             },
-            FootNoteReference {
+            FootnoteReference {
                 ident: "source",
             },
             Paragraph {
@@ -486,7 +486,7 @@ Text {
                 formatting: None,
                 content: "These start with '",
             },
-            FootNoteReference {
+            FootnoteReference {
                 ident: "ID",
             },
             Paragraph {
@@ -499,7 +499,7 @@ Text {
                 formatting: None,
                 content: "Example of valid content:",
             },
-            FootNoteContent {
+            FootnoteContent {
                 content: Paragraph {
                     is_newline: false,
                     formatting: None,
@@ -517,7 +517,7 @@ Text {
                 formatting: None,
                 content: "[^source2: This is invalid content",
             },
-            FootNoteReference {
+            FootnoteReference {
                 ident: "source2",
             },
             Paragraph {
@@ -525,7 +525,7 @@ Text {
                 formatting: None,
                 content: ": This is invalid content",
             },
-            FootNoteReference {
+            FootnoteReference {
                 ident: "source2",
             },
             Paragraph {
@@ -538,7 +538,7 @@ Text {
                 formatting: None,
                 content: "They also must start at the beginning of the line. If fact, this:",
             },
-            FootNoteReference {
+            FootnoteReference {
                 ident: "source2",
             },
             Paragraph {
