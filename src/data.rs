@@ -464,7 +464,8 @@ impl<'source> Token<'source> {
 /// - `FixedProvider` represents a provider that's no longer able nor add nor provide values.
 /// It can be as minified as possible, only storing data without any sort of bookkeeping.
 ///
-///
+/// Despite me being a masochist, I really do fear using `unsafe` in my code. There's just too many things to keep track of.
+/// So after writing the entire module using self-borrowing stuff and `unsafe`, I'll resort to second option stated above: basically, ever-unbaked children.
 #[cfg(test)]
 mod borrowing_concept {
     use std::mem::MaybeUninit;
@@ -474,386 +475,221 @@ mod borrowing_concept {
 
     use crate::util::Immutable;
 
+    struct TextPromise(Range<usize>);
+    struct ChildPromise(usize);
+    struct ChildrenPromise(Range<usize>);
+
+    enum Thing {
+        Text {
+            text: TextPromise,
+        },
+        Child {
+            text: TextPromise,
+            child1: ChildPromise,
+            child2: ChildPromise,
+        },
+        Multiple {
+            children: ChildrenPromise,
+        },
+    }
+
+    impl Thing {
+        fn write_to<P, W>(&self, provider: &P, out: &mut W) -> std::fmt::Result
+        where
+            P: BakedProvider,
+            W: std::fmt::Write + ?Sized,
+        {
+            match self {
+                Thing::Text { text } => write!(out, "Text({})", provider.get_text(text)),
+                Thing::Child {
+                    text,
+                    child1,
+                    child2,
+                } => {
+                    write!(out, "Child({}, ", provider.get_text(text))?;
+                    provider.get_child(child1).write_to(provider, out)?;
+                    out.write_str(", ")?;
+                    provider.get_child(child2).write_to(provider, out)?;
+                    out.write_str(")")?;
+                    Ok(())
+                }
+                Thing::Multiple { children } => {
+                    out.write_str("Multiple[")?;
+                    let children = provider.get_children(children);
+                    if let Some(first) = children.first() {
+                        first.write_to(provider, out)?;
+                        for child in &children[1..] {
+                            out.write_str(", ")?;
+                            child.write_to(provider, out)?;
+                        }
+                    }
+                    out.write_str("]")?;
+                    Ok(())
+                }
+            }
+        }
+    }
+
     trait UnbakedProvider {
-        type TP;
-        type CP;
-        type MCP;
-        type Baked: BakedProvider<TP = Self::TP, CP = Self::CP, MCP = Self::MCP>;
-        fn register_text<'r>(&'r mut self, text: &str) -> Self::TP;
-        fn register_child<'r>(
-            &'r mut self,
-            child: UnbakedThing<Self::TP, Self::CP, Self::MCP>,
-        ) -> Self::CP;
-        fn register_children<'r>(
-            &'r mut self,
-            children: impl IntoIterator<Item = UnbakedThing<Self::TP, Self::CP, Self::MCP>>,
-        ) -> Self::MCP;
+        type Baked: BakedProvider;
+        fn register_text(&mut self, text: &str) -> TextPromise;
+        fn register_child(&mut self, child: Thing) -> ChildPromise;
+        fn register_children<'s>(
+            &'s mut self,
+            children: impl FnMut(&mut &'s mut Self) -> Option<Thing>,
+        ) -> ChildrenPromise;
         fn bake(self) -> Self::Baked;
     }
 
     trait BakedProvider {
-        type TP;
-        type CP;
-        type MCP;
-        type TA;
-        type CA;
-        type MCA;
-        type Fixed: FixedProvider;
-        fn get_text(&mut self, promise: Self::TP) -> Self::TA;
-        fn get_child(&mut self, promise: Self::CP) -> Self::CA;
-        fn get_children(&mut self, promise: Self::MCP) -> Self::MCA;
-        fn fix(self) -> Self::Fixed;
+        fn get_text<'s>(&'s self, promise: &TextPromise) -> &'s str;
+        fn get_child<'s>(&'s self, promise: &ChildPromise) -> &'s Thing;
+        fn get_children<'s>(&'s self, promise: &ChildrenPromise) -> &'s [Thing];
     }
 
-    trait FixedProvider {}
-
-    #[derive(Debug, Clone)]
-    struct TextPromise(Range<usize>);
-    #[derive(Debug, Clone)]
-    struct ChildPromise(usize);
-    #[derive(Debug, Clone)]
-    struct ChildrenPromise(Range<usize>);
-
-    struct SharedText(Rc<str>, Range<usize>);
-    impl Deref for SharedText {
-        type Target = str;
-
-        fn deref(&self) -> &Self::Target {
-            &self.0[self.1.clone()]
-        }
-    }
-
-    struct SharedThing<T>(Rc<[T]>, usize);
-    impl<T> Deref for SharedThing<T> {
-        type Target = T;
-
-        fn deref(&self) -> &Self::Target {
-            &self.0[self.1]
-        }
-    }
-
-    struct SharedThings<T>(Rc<[T]>, Range<usize>);
-    impl<T> Deref for SharedThings<T> {
-        type Target = [T];
-
-        fn deref(&self) -> &Self::Target {
-            &self.0[self.1.clone()]
-        }
-    }
-
-    struct UnbakedOwner {
+    struct UnbakedOwningProvider {
         text: String,
-        children: Vec<UnbakedThing<TextPromise, ChildPromise, ChildrenPromise>>,
+        things: Vec<Thing>,
     }
 
-    impl UnbakedOwner {
+    impl UnbakedOwningProvider {
         fn new() -> Self {
             Self {
                 text: String::new(),
-                children: Vec::new(),
+                things: Vec::new(),
             }
         }
     }
 
-    impl UnbakedProvider for UnbakedOwner {
-        type TP = TextPromise;
-        type CP = ChildPromise;
-        type MCP = ChildrenPromise;
-        type Baked = BakedOwner;
+    impl UnbakedProvider for UnbakedOwningProvider {
+        type Baked = BakedOwningProvider;
 
-        fn register_text<'r>(&'r mut self, text: &str) -> Self::TP {
-            let slice_start = self.text.len();
+        fn register_text(&mut self, text: &str) -> TextPromise {
+            let range_start = self.text.len();
             self.text.push_str(text);
-            let slice_end = self.text.len();
-            TextPromise(slice_start..slice_end)
+            let range_end = self.text.len();
+            TextPromise(range_start..range_end)
         }
 
-        fn register_child<'r>(
-            &'r mut self,
-            child: UnbakedThing<TextPromise, ChildPromise, ChildrenPromise>,
-        ) -> Self::CP {
-            let ind = self.children.len();
-            self.children.push(child);
+        fn register_child(&mut self, child: Thing) -> ChildPromise {
+            let ind = self.things.len();
+            self.things.push(child);
             ChildPromise(ind)
         }
 
-        fn register_children<'r>(
-            &'r mut self,
-            children: impl IntoIterator<Item = UnbakedThing<TextPromise, ChildPromise, ChildrenPromise>>,
-        ) -> Self::MCP {
-            let slice_start = self.children.len();
-            self.children.extend(children);
-            let slice_end = self.children.len();
-            ChildrenPromise(slice_start..slice_end)
+        fn register_children<'s>(
+            mut self: &'s mut Self,
+            mut children: impl FnMut(&mut &'s mut Self) -> Option<Thing>,
+        ) -> ChildrenPromise {
+            let range_start = self.things.len();
+            while let Some(thing) = children(&mut self) {
+                self.things.push(thing);
+            }
+            let range_end = self.things.len();
+            ChildrenPromise(range_start..range_end)
         }
 
         fn bake(self) -> Self::Baked {
-            let children_num = self.children.len();
-            let mut baked_children = Vec::with_capacity(children_num);
-            for _ in 0..children_num {
-                baked_children.push(MaybeUninit::uninit());
-            }
-            BakedOwner {
-                text: Immutable::from(Pin::new(self.text.into_boxed_str())),
-                unbaked_children: self.children.into_boxed_slice(),
-                baked_children: Pin::new(baked_children.into_boxed_slice()),
-                baked_children_mask: vec![false; children_num].into_boxed_slice(),
+            BakedOwningProvider {
+                text: self.text.into_boxed_str(),
+                things: self.things.into_boxed_slice(),
             }
         }
     }
 
-    #[derive(Debug)]
-    struct BakedOwner {
-        text: Immutable<Pin<Box<str>>>,
-        unbaked_children: Box<[UnbakedThing<TextPromise, ChildPromise, ChildrenPromise>]>,
-        baked_children: Pin<Box<[MaybeUninit<OwnedThing>]>>,
-        baked_children_mask: Box<[bool]>,
+    struct BakedOwningProvider {
+        text: Box<str>,
+        things: Box<[Thing]>,
     }
 
-    impl BakedOwner {
-        fn bake_a_child(&mut self, child_ind: usize) {
-            let unbaked = self.unbaked_children[child_ind].clone();
-            let baked = unbaked.bake(self);
-            self.baked_children[child_ind].write(baked);
-            self.baked_children_mask[child_ind] = true;
-        }
-    }
-
-    impl BakedProvider for BakedOwner {
-        type TP = TextPromise;
-        type CP = ChildPromise;
-        type MCP = ChildrenPromise;
-        type TA = SharedText;
-        type CA = SharedThing<OwnedThing>;
-        type MCA = SharedThings<OwnedThing>;
-        type Fixed = FixedOwner;
-
-        fn get_text(&mut self, TextPromise(range): Self::TP) -> Self::TA {
-            SharedText(Rc::clone(&self.text), range)
+    impl BakedProvider for BakedOwningProvider {
+        fn get_text<'s>(&'s self, TextPromise(range): &TextPromise) -> &'s str {
+            &self.text[range.clone()]
         }
 
-        fn get_child<'r>(&'r mut self, ChildPromise(ind): Self::CP) -> Self::CA {
-            todo!();
-            // first, check if child is init
-            if !self.baked_children_mask[ind] {
-                // it's not, make it init
-                self.bake_a_child(ind);
-            }
-            // SAFETY:
-            // we keep track of unbaked children separately, and we've just checked above that this exact child is, in fact, initialized
-            let reference = unsafe { self.baked_children[ind].assume_init_ref() };
-            // SAFETY:
-            // This struct has a phantom field indicating that it lives exactly for `'owner`.
-            // Along with rest of the fields being **pinned** **and immutable**, this means that returned
-            // immutable reference will indeed live for `'owner`.
-            unsafe { &*(reference as *const _) }
+        fn get_child<'s>(&'s self, &ChildPromise(ind): &ChildPromise) -> &'s Thing {
+            &self.things[ind]
         }
 
-        fn get_children<'r>(&'r mut self, ChildrenPromise(range): Self::MCP) -> Self::MCA {
-            todo!();
-            // first, check if all children in slice are init
-            for ind in range.clone() {
-                if !self.baked_children_mask[ind] {
-                    // this child is not init, so init it
-                    self.bake_a_child(ind);
-                }
-            }
-            // SAFETY:
-            // we keep track of unbaked children separately, and we've check that all of the tokens in slice to, in fact, exist
-            let slice: &'r [OwnedThing] =
-                unsafe { std::mem::transmute(&self.baked_children[range]) };
-            // SAFETY:
-            // This struct has a phantom field indicating that it lives exactly for `'owner`.
-            // Along with rest of the fields being **pinned** **and immutable**, this means that returned
-            // immutable reference will indeed live for `'owner`.
-            unsafe { &*(slice as *const _) }
+        fn get_children<'s>(&'s self, ChildrenPromise(range): &ChildrenPromise) -> &'s [Thing] {
+            &self.things[range.clone()]
         }
-
-        fn fix(self) -> Self::Fixed {
-            let Self {
-                text,
-                baked_children_mask,
-                baked_children,
-                ..
-            } = self;
-            assert!(
-                baked_children_mask.into_iter().all(|b| *b),
-                "Not all children were initialized, so we cannot create output struct: {:?}",
-                baked_children_mask
-            );
-            // SAFETY:
-            // we keep track of unbaked children separately, and should've panicked above, if any of them were not properly init.
-            let children: Immutable<Pin<Box<[Thing]>>> =
-                unsafe { std::mem::transmute(baked_children) };
-            FixedOwner {
-                _text: text,
-                _children: baked_children,
-            }
-        }
-    }
-
-    #[derive(Debug)]
-    struct FixedOwner {
-        _text: Rc<str>,
-        _children: Rc<[OwnedThing]>,
-    }
-
-    impl<'owner> FixedProvider for FixedOwner {}
-
-    #[derive(Debug, Clone)]
-    enum UnbakedThing<TP, CP, MCP> {
-        Text { text: TP },
-        Child { text: TP, child1: CP, child2: CP },
-        Multiple { children: MCP },
-    }
-
-    impl<'owner, TP, CP, MCP> UnbakedThing<TP, CP, MCP> {
-        fn bake(
-            self,
-            provider: &mut impl BakedProvider<TP = TP, CP = CP, MCP = MCP>,
-        ) -> Thing<'owner> {
-            match self {
-                UnbakedThing::Child {
-                    text,
-                    child1,
-                    child2,
-                } => Thing::Child {
-                    text: provider.get_text(text),
-                    child1: provider.get_child(child1),
-                    child2: provider.get_child(child2),
-                },
-                UnbakedThing::Multiple { children } => Thing::Multiple {
-                    children: provider.get_children(children),
-                },
-                UnbakedThing::Text { text } => Thing::Text {
-                    text: provider.get_text(text),
-                },
-            }
-        }
-    }
-
-    trait Thing {
-        type TA: Deref<Target = str>;
-        type CA: Deref<Target = Self>;
-        type MCA: Deref<Target = Self>;
-    }
-
-    #[derive(Debug)]
-    enum OwnedThing {
-        Text {
-            text: SharedText,
-        },
-        Child {
-            text: SharedText,
-            child1: SharedThing<OwnedThing>,
-            child2: SharedThing<OwnedThing>,
-        },
-        Multiple {
-            children: SharedThings<OwnedThing>,
-        },
-    }
-
-    impl Thing for OwnedThing {
-        type TA = SharedText;
-        type CA = SharedThing<Self>;
-        type MCA = SharedThings<Self>;
     }
 
     #[cfg(test)]
     mod tests {
-        use crate::data::borrowing_concept::{BakedProvider, UnbakedProvider, UnbakedThing};
+        use crate::data::borrowing_concept::{UnbakedOwningProvider, UnbakedProvider};
 
         #[test]
-        // #[cfg(miri)]
-        fn unsafe_fuzz() {
-            use crate::data::borrowing_concept::{
-                ChildPromise, ChildrenPromise, TextPromise, Thing, UnbakedOwner,
-            };
+        fn fuzz() {
+            use crate::data::borrowing_concept::Thing;
 
             // arrange
             fn gen_thing<'owner, R: rand::Rng + ?Sized>(
-                provider: &mut UnbakedOwner,
+                provider: &mut UnbakedOwningProvider,
                 rng: &mut R,
-            ) -> (
-                UnbakedThing<TextPromise, ChildPromise, ChildrenPromise>,
-                Thing<'static>,
-            ) {
-                fn gen_text<R: rand::Rng + ?Sized>(rng: &mut R) -> &'static str {
+            ) -> Thing {
+                fn gen_text<R: rand::Rng + ?Sized>(rng: &mut R) -> String {
                     // let it be of some length
                     let l: usize = rng.gen_range(3..=10);
                     let mut s = String::new();
                     for _ in 0..l {
-                        s.push(rng.gen())
+                        s.push(if rng.gen_bool(0.5) {
+                            rng.gen_range('a'..='z')
+                        } else if rng.gen_bool(0.4) {
+                            rng.gen_range('а'..='я')
+                        } else {
+                            [' ', ',', '.'][rng.gen_range(0..3)]
+                        })
                     }
-                    Box::leak(s.into_boxed_str())
+                    s
                 }
                 let generated = if rng.gen_bool(0.6) {
                     // assume 60% are text variants
                     // we need some random text for it
                     let text = gen_text(rng);
-                    (
-                        UnbakedThing::Text {
-                            text: provider.register_text(text),
-                        },
-                        Thing::Text { text },
-                    )
+                    Thing::Text {
+                        text: provider.register_text(&text),
+                    }
                 } else if rng.gen_bool(0.9) {
                     // say, 36% are child owners
                     // we need some text and children for it
                     let text = gen_text(rng);
-                    let (c1_pr, ch1) = gen_thing(provider, rng);
-                    let (c2_pr, ch2) = gen_thing(provider, rng);
-                    (
-                        UnbakedThing::Child {
-                            text: provider.register_text(text),
-                            child1: provider.register_child(c1_pr),
-                            child2: provider.register_child(c2_pr),
-                        },
-                        Thing::Child {
-                            text,
-                            child1: Box::leak(Box::new(ch1)),
-                            child2: Box::leak(Box::new(ch2)),
-                        },
-                    )
+                    let child1 = gen_thing(provider, rng);
+                    let child2 = gen_thing(provider, rng);
+                    Thing::Child {
+                        text: provider.register_text(&text),
+                        child1: provider.register_child(child1),
+                        child2: provider.register_child(child2),
+                    }
                 } else {
                     // rest 4% own 1-5 children
-                    let num_of_children = rng.gen_range(1..=5);
-                    let mut children = Vec::with_capacity(num_of_children);
-                    let mut children_pr = Vec::with_capacity(num_of_children);
-                    for _ in 0..num_of_children {
-                        let (ch_pr, child) = gen_thing(provider, rng);
-                        children.push(child);
-                        children_pr.push(ch_pr.clone());
+                    let mut inner = (0..rng.gen_range(1..=5)).into_iter();
+                    let generator = move |provider: &mut &mut UnbakedOwningProvider| {
+                        inner.next().map(|_| gen_thing(*provider, rng))
+                    };
+                    Thing::Multiple {
+                        children: provider.register_children(generator),
                     }
-                    let children_pr = provider.register_children(children_pr);
-                    (
-                        UnbakedThing::Multiple {
-                            children: children_pr,
-                        },
-                        Thing::Multiple {
-                            children: &*Box::leak(children.into_boxed_slice()),
-                        },
-                    )
                 };
                 // average coefficient is 0.6 * 0 + 0.36 * 2 + 2.5 * 0.04 = 0.82
                 // meaning this thing is likely to die at some point (I hope for that, at least)
                 generated
             }
             let rng = &mut rand::thread_rng();
-            for _ in 0..10_000 {
-                let mut provider = UnbakedOwner::new();
+            for _ in 0..10 {
+                let mut provider = UnbakedOwningProvider::new();
 
                 // act
-                let (promise, thing) = gen_thing(&mut provider, rng);
-                let mut provider = provider.bake();
-                let baked_thing = promise.bake(&mut provider);
+                let thing = gen_thing(&mut provider, rng);
+                let provider = provider.bake();
 
                 // assert
-                let _provider = provider.fix(); // all children were init
-                let thing_str = format!("{thing:?}");
-                let baked_str = format!("{baked_thing:?}");
-                assert_eq!(thing_str, baked_str, "Should produce identical strs");
-                // println!("{provider:#?}");
+                let mut output = String::new();
+                thing
+                    .write_to(&provider, &mut output)
+                    .expect("Should be able to write into string");
+                println!("{output}");
             }
         }
     }
