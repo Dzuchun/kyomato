@@ -438,7 +438,7 @@ impl<'source> Token<'source> {
 /// - same as before, but children never get to see pointers themselves. this will allow `Owner` to freely mutate data, but will add an extra cost for some sort of
 /// internal identifier resolution and a couple more function calls.
 ///
-/// Being a masochist I am, of course I went on with the first option. Following is a log of the development
+/// ~~Being a masochist I am, of course I went on with the first option. Following is a log of the development~~
 ///
 /// # LOG
 ///
@@ -466,37 +466,47 @@ impl<'source> Token<'source> {
 ///
 /// Despite me being a masochist, I really do fear using `unsafe` in my code. There's just too many things to keep track of.
 /// So after writing the entire module using self-borrowing stuff and `unsafe`, I'll resort to second option stated above: basically, ever-unbaked children.
+///
+/// A format of so-called "promise" that provider uses to return actual child/text can be different and it ultimately of to provider to decide:
+/// - the simplest would be a provider that owns all of the data tokens refer to
+/// - a provider could be relaying calls to some other provider to take care of
+/// - a provider could refer to some plain text buffer, like &str to recognize and store it's data
+///
+/// All of that means, that both tokens and providers must be defined at generic over promise types.
+/// This will allow provider to select in which way they would store and manipulate data.
+///
+/// This approach is less optimized then the `unsafe` one, but `miri` scared me away from pointer manipulation, so here I am, I guess
+///
+/// I see now, that providers can be composed into each other to build desired behavior step-by-step. That's really desireable too.
 #[cfg(test)]
 mod borrowing_concept {
-    use std::mem::MaybeUninit;
-    use std::ops::{Deref, Range};
-    use std::pin::Pin;
-    use std::rc::Rc;
+    use std::{marker::PhantomData, ops::Range};
 
-    use crate::util::Immutable;
-
+    #[derive(Debug, derive_more::From, derive_more::AsRef)]
     struct TextPromise(Range<usize>);
+    #[derive(Debug, derive_more::From, derive_more::AsRef)]
     struct ChildPromise(usize);
+    #[derive(Debug, derive_more::From, derive_more::AsRef)]
     struct ChildrenPromise(Range<usize>);
 
-    enum Thing {
+    enum Thing<Text, Child, Children> {
         Text {
-            text: TextPromise,
+            text: Text,
         },
         Child {
-            text: TextPromise,
-            child1: ChildPromise,
-            child2: ChildPromise,
+            text: Text,
+            child1: Child,
+            child2: Child,
         },
         Multiple {
-            children: ChildrenPromise,
+            children: Children,
         },
     }
 
-    impl Thing {
+    impl<Text, Child, Children> Thing<Text, Child, Children> {
         fn write_to<P, W>(&self, provider: &P, out: &mut W) -> std::fmt::Result
         where
-            P: BakedProvider,
+            P: BakedProvider<Text, Child, Children>,
             W: std::fmt::Write + ?Sized,
         {
             match self {
@@ -530,26 +540,333 @@ mod borrowing_concept {
         }
     }
 
-    trait UnbakedProvider {
-        type Baked: BakedProvider;
-        fn register_text(&mut self, text: &str) -> TextPromise;
-        fn register_child(&mut self, child: Thing) -> ChildPromise;
+    trait UnbakedProvider<Text, Child, Children> {
+        type Baked: BakedProvider<Text, Child, Children>;
+        fn register_text(&mut self, text: &str) -> Text;
+        fn register_child(&mut self, child: Thing<Text, Child, Children>) -> Child;
         fn register_children<'s>(
             &'s mut self,
-            children: impl FnMut(&mut &'s mut Self) -> Option<Thing>,
-        ) -> ChildrenPromise;
+            children: impl FnMut(&mut &'s mut Self) -> Option<Thing<Text, Child, Children>>,
+        ) -> Children;
         fn bake(self) -> Self::Baked;
     }
 
-    trait BakedProvider {
-        fn get_text<'s>(&'s self, promise: &TextPromise) -> &'s str;
-        fn get_child<'s>(&'s self, promise: &ChildPromise) -> &'s Thing;
-        fn get_children<'s>(&'s self, promise: &ChildrenPromise) -> &'s [Thing];
+    trait BakedProvider<Text, Child, Children> {
+        fn get_text<'s>(&'s self, promise: &Text) -> &'s str;
+        fn get_child<'s>(&'s self, promise: &Child) -> &'s Thing<Text, Child, Children>;
+        fn get_children<'s>(&'s self, promise: &Children) -> &'s [Thing<Text, Child, Children>];
     }
 
-    struct UnbakedOwningProvider {
+    trait UnbakedProviderExt<Text, Child, Children>: UnbakedProvider<Text, Child, Children> {
+        fn with_text_ref<'text>(
+            self,
+            text: &'text str,
+        ) -> UnbakedTextRefProvider<'text, Text, Child, Children, Self> {
+            UnbakedTextRefProvider { text, inner: self }
+        }
+    }
+    impl<Text, Child, Children, P: UnbakedProvider<Text, Child, Children>>
+        UnbakedProviderExt<Text, Child, Children> for P
+    {
+    }
+
+    enum NeverText {}
+    enum NeverChild {}
+    enum NeverChildren {}
+
+    /// Provider that holds nothing and panics at any call to it.
+    struct UnbakedBottomProvider<Text = NeverText, Child = NeverChild, Children = NeverChildren>;
+    impl<Text, Child, Children> UnbakedProvider<Text, Child, Children>
+        for UnbakedBottomProvider<Text, Child, Children>
+    {
+        type Baked = BakedBottomProvider;
+        fn register_text(&mut self, text: &str) -> Text {
+            unimplemented!("This provider does not support text saving")
+        }
+
+        fn register_child(&mut self, child: Thing<Text, Child, Children>) -> Child {
+            unimplemented!("This provider does not support child saving")
+        }
+
+        fn register_children<'s>(
+            &'s mut self,
+            children: impl FnMut(&mut &'s mut Self) -> Option<Thing<Text, Child, Children>>,
+        ) -> Children {
+            unimplemented!("This provider does not support children saving")
+        }
+
+        fn bake(self) -> Self::Baked {
+            BakedBottomProvider
+        }
+    }
+    struct BakedBottomProvider<Text = NeverText, Child = NeverChild, Children = NeverChildren>;
+    impl<Text, Child, Children> BakedProvider<Text, Child, Children> for BakedBottomProvider {
+        fn get_text<'s>(&'s self, promise: &Text) -> &'s str {
+            unimplemented!("This provider does not provide text")
+        }
+
+        fn get_child<'s>(&'s self, promise: &Child) -> &'s Thing<Text, Child, Children> {
+            unimplemented!("This provider does not provide children")
+        }
+
+        fn get_children<'s>(&'s self, promise: &Children) -> &'s [Thing<Text, Child, Children>] {
+            unimplemented!("This provider does not provide children")
+        }
+    }
+
+    trait MaybeTextRef<'text>: From<&'text str> {
+        fn text_ref(&self) -> Option<&'text str>;
+    }
+
+    struct UnbakedTextRefProvider<'text, Text, Child, Children, P> {
+        text: &'text str,
+        inner: P,
+    }
+
+    impl<'text, Text, Child, Children, P> UnbakedProvider<Text, Child, Children>
+        for UnbakedTextRefProvider<'text, Text, Child, Children, P>
+    where
+        P: UnbakedProvider<Text, Child, Children>,
+    {
+        type Baked = BakedTextRefProvider<'text, Text, Child, Children, P>;
+
+        fn register_text(&mut self, text: &str) -> Text {
+            // first, check out if this text, as a pointer, points inside this provider's referee:
+            'nah: {
+                let referee_ptr = self.text.as_ptr() as usize;
+                let text_ptr = text.as_ptr() as usize;
+                if text_ptr < referee_ptr {
+                    break 'nah;
+                }
+                let index_guess = text_ptr - referee_ptr;
+                let self_len = self.text.len();
+                if index_guess >= self_len {
+                    break 'nah;
+                }
+                // yeah, seems like it
+                // lastly, lets rule out partial overlap:
+                let text_len = text.len();
+                if text_len + index_guess > self_len {
+                    // buffers overlap partially, which is weird, probably should
+                    // TODO warn about that too
+                    break 'nah;
+                }
+                // let's check that literally, for a good measure:
+                // TODO probably add cfg to remove that in release build?
+                if !self.text[index_guess..].starts_with(text) {
+                    // huh? that's something weird, probably must
+                    // TODO warn about it
+                    break 'nah;
+                }
+                // ok, so it seems like we've found a match using nothing but pointer-things.
+                // that's great, cause it's literally O(1) for any buffer size
+                return &self.text[index_guess..index_guess + text_len].into();
+            }
+
+            // then, let's try finding this sort of sequence in the entire referee:
+            if let Some(ind) = self.text.find(text) {
+                // well, return corresponding slice, then
+                return TextRefPromise::Ref(&self.text[ind..ind + text.len()]);
+            }
+
+            // lastly, refer to inner provider
+            self.inner.register_text(text)
+        }
+
+        fn register_child(&mut self, child: Thing<Text, Child, Children>) -> Child {
+            self.inner.register_child(child)
+        }
+
+        fn register_children<'s>(
+            &'s mut self,
+            children: impl FnMut(&mut &'s mut Self) -> Option<Thing<Text, Child, Children>>,
+        ) -> Children {
+            self.inner.register_children(children)
+        }
+
+        fn bake(self) -> Self::Baked {
+            BakedTextRefProvider { inner: self.inner }
+        }
+    }
+
+    struct BakedTextRefProvider<'text, Text, Child, Children, P> {
+        inner: P,
+    }
+
+    impl<'text, Text, Child, Children, P> BakedProvider<Text, Child, Children>
+        for BakedTextRefProvider<'text, Text, Child, Children, P>
+    where
+        P: BakedProvider<Text, Child, Children>,
+        Text: MaybeTextRef<'text>,
+    {
+        fn get_text<'s>(&'s self, promise: &Text) -> &'s str {
+            if let Some(res) = promise.text_ref() {
+                res
+            } else {
+                self.inner.get_text(promise)
+            }
+        }
+
+        fn get_child<'s>(&'s self, promise: &Child) -> &'s Thing<Text, Child, Children> {
+            self.inner.get_child(promise)
+        }
+
+        fn get_children<'s>(&'s self, promise: &Children) -> &'s [Thing<Text, Child, Children>] {
+            self.inner.get_children(promise)
+        }
+    }
+
+    trait MaybeTextOwnRange: From<Range<usize>> {
+        fn own_range(&self) -> &Range<usize>;
+    }
+
+    struct UnbakedTextOwnProvider<Text, Child, Children, P> {
         text: String,
-        things: Vec<Thing>,
+        inner: P,
+    }
+
+    impl<Text, Child, Children, P> UnbakedProvider<Text, Child, Children>
+        for UnbakedTextOwnProvider<Text, Child, Children, P>
+    where
+        P: UnbakedProvider<Text, Child, Children>,
+    {
+        type Baked = BakedTextOwnProvider<Text, Child, Children, P>;
+
+        fn register_text(&mut self, text: &str) -> Text {
+            let range_start = self.text.len();
+            self.text.push_str(text);
+            let range_end = self.text.len();
+            Text::from(range_start..range_end)
+        }
+
+        fn register_child(&mut self, child: Thing<Text, Child, Children>) -> Child {
+            self.inner.register_child(child)
+        }
+
+        fn register_children<'s>(
+            &'s mut self,
+            children: impl FnMut(&mut &'s mut Self) -> Option<Thing<Text, Child, Children>>,
+        ) -> Children {
+            self.register_children(children)
+        }
+
+        fn bake(self) -> Self::Baked {
+            BakedTextOwnProvider {
+                text: self.text.into_boxed_str(),
+                inner: self.inner.bake(),
+            }
+        }
+    }
+
+    struct BakedTextOwnProvider<Text, Child, Children, P> {
+        text: Box<str>,
+        inner: P,
+    }
+
+    impl<Text, Child, Children, P> BakedProvider<Text, Child, Children>
+        for BakedTextOwnProvider<Text, Child, Children, P>
+    where
+        P: BakedProvider<Text, Child, Children>,
+        Text: MaybeTextOwnRange,
+    {
+        fn get_text<'s>(&'s self, promise: &Text) -> &'s str {
+            if let Some(range) = promise.own_range() {
+                &self.text[range.clone()]
+            } else {
+                self.inner.get_text(promise)
+            }
+        }
+
+        fn get_child<'s>(&'s self, promise: &Child) -> &'s Thing<Text, Child, Children> {
+            self.inner.get_child(promise)
+        }
+
+        fn get_children<'s>(&'s self, promise: &Children) -> &'s [Thing<Text, Child, Children>] {
+            self.inner.get_children(promise)
+        }
+    }
+
+    trait MaybeChildInd: From<usize> {
+        fn own_ind(&self) -> usize;
+    }
+
+    trait MaybeChildrenRange: From<Range<usize>> {
+        fn own_range(&self) -> &Range<usize>;
+    }
+
+    struct UnbakedChildrenOwnProvider<Text, Child, Children, P> {
+        children: Vec<Thing<Text, Child, Children>>,
+        inner: P,
+    }
+
+    impl<Text, Child, Children, P> UnbakedProvider<Text, Child, Children>
+        for UnbakedChildrenOwnProvider<Text, Child, Children, P>
+    where
+        P: UnbakedProvider<Text, Child, Children>,
+    {
+        type Baked = BakedChildrenOwnProvider<Text, Child, Children, P::Baked>;
+
+        fn register_text(&mut self, text: &str) -> Text {
+            self.inner.register_text(text)
+        }
+
+        fn register_child(&mut self, child: Thing<Text, Child, Children>) -> Child {
+            let ind = self.things.len();
+            self.things.push(child);
+            ChildPromise(ind)
+        }
+
+        fn register_children<'s>(
+            &'s mut self,
+            children: impl FnMut(&mut &'s mut Self) -> Option<Thing<Text, Child, Children>>,
+        ) -> Children {
+            todo!()
+        }
+
+        fn bake(self) -> Self::Baked {
+            BakedChildrenOwnProvider {
+                children: self.children.into_boxed_slice(),
+                inner: self.inner.bake(),
+            }
+        }
+    }
+
+    struct BakedChildrenOwnProvider<Text, Child, Children, P> {
+        children: Box<[Thing<Text, Child, Children>]>,
+        inner: P,
+    }
+
+    impl<Text, Child, Children, P> BakedProvider<Text, Child, Children>
+        for BakedChildrenOwnProvider<Text, Child, Children, P>
+    where
+        P: BakedProvider<Text, Child, Children>,
+        Child: MaybeChildInd,
+        Children: MaybeChildrenRange,
+    {
+        fn get_text<'s>(&'s self, promise: &Text) -> &'s str {
+            self.inner.get_text(promise)
+        }
+
+        fn get_child<'s>(&'s self, promise: &Child) -> &'s Thing<Text, Child, Children> {
+            if let Some(ind) = promise.own_ind() {
+                &self.children[ind]
+            } else {
+                self.inner.get_child(promise)
+            }
+        }
+
+        fn get_children<'s>(&'s self, promise: &Children) -> &'s [Thing<Text, Child, Children>] {
+            if let Some(range) = promise.own_range() {
+                &self.children[range.clone()]
+            } else {
+                self.inner.get_children(promise)
+            }
+        }
+    }
+
+    struct UnbakedOwningProvider<Text, Child, Children> {
+        text: String,
+        things: Vec<OwnedThing>,
     }
 
     impl UnbakedOwningProvider {
@@ -562,6 +879,9 @@ mod borrowing_concept {
     }
 
     impl UnbakedProvider for UnbakedOwningProvider {
+        type Text = TextPromise;
+        type Child = ChildPromise;
+        type Children = ChildrenPromise;
         type Baked = BakedOwningProvider;
 
         fn register_text(&mut self, text: &str) -> TextPromise {
@@ -571,7 +891,7 @@ mod borrowing_concept {
             TextPromise(range_start..range_end)
         }
 
-        fn register_child(&mut self, child: Thing) -> ChildPromise {
+        fn register_child(&mut self, child: OwnedThing) -> ChildPromise {
             let ind = self.things.len();
             self.things.push(child);
             ChildPromise(ind)
@@ -579,7 +899,7 @@ mod borrowing_concept {
 
         fn register_children<'s>(
             mut self: &'s mut Self,
-            mut children: impl FnMut(&mut &'s mut Self) -> Option<Thing>,
+            mut children: impl FnMut(&mut &'s mut Self) -> Option<OwnedThing>,
         ) -> ChildrenPromise {
             let range_start = self.things.len();
             while let Some(thing) = children(&mut self) {
@@ -597,38 +917,150 @@ mod borrowing_concept {
         }
     }
 
-    struct BakedOwningProvider {
-        text: Box<str>,
-        things: Box<[Thing]>,
+    enum TextRefPromise<'text> {
+        Ref(&'text str),
+        Owned(Range<usize>),
     }
 
-    impl BakedProvider for BakedOwningProvider {
-        fn get_text<'s>(&'s self, TextPromise(range): &TextPromise) -> &'s str {
-            &self.text[range.clone()]
+    type RefThing<'text> = Thing<TextRefPromise<'text>, ChildPromise, ChildrenPromise>;
+
+    struct UnbakedTextRefProvider<'text, P> {
+        text: &'text str,
+        inner: P,
+    }
+
+    impl<'text, P> UnbakedProvider for UnbakedTextRefProvider<'text, P>
+    where
+        P: UnbakedProvider<Text = Self::Text, Child = Self::Child, Children = Self::Children>,
+    {
+        type Text = TextRefPromise<'text>;
+        type Child = ChildPromise;
+        type Children = ChildrenPromise;
+        type Baked = BakedTextRefProvider<'text, P::Baked>;
+
+        fn register_text(&mut self, text: &str) -> Self::Text {
+            // first, check out if this text, as a pointer, points inside this provider's referee:
+            'nah: {
+                let referee_ptr = self.text.as_ptr() as usize;
+                let text_ptr = text.as_ptr() as usize;
+                if text_ptr < referee_ptr {
+                    break 'nah;
+                }
+                let index_guess = text_ptr - referee_ptr;
+                let self_len = self.text.len();
+                if index_guess >= self_len {
+                    break 'nah;
+                }
+                // yeah, seems like it
+                // lastly, lets rule out partial overlap:
+                let text_len = text.len();
+                if text_len + index_guess > self_len {
+                    // buffers overlap partially, which is weird, probably should
+                    // TODO warn about that too
+                    break 'nah;
+                }
+                // let's check that literally, for a good measure:
+                // TODO probably add cfg to remove that in release build?
+                if !self.text[index_guess..].starts_with(text) {
+                    // huh? that's something weird, probably must
+                    // TODO warn about it
+                    break 'nah;
+                }
+                // ok, so it seems like we've found a match using nothing but pointer-things.
+                // that's great, cause it's literally O(1) for any buffer size
+                return TextRefPromise::Ref(&self.text[index_guess..index_guess + text_len]);
+            }
+
+            // then, let's try finding this sort of sequence in the entire referee:
+            if let Some(ind) = self.text.find(text) {
+                // well, return corresponding slice, then
+                return TextRefPromise::Ref(&self.text[ind..ind + text.len()]);
+            }
+
+            // lastly, refer to inner provider
+            TextRefPromise::Owned(self.inner.register_text(text))
         }
 
-        fn get_child<'s>(&'s self, &ChildPromise(ind): &ChildPromise) -> &'s Thing {
-            &self.things[ind]
+        fn register_child(
+            &mut self,
+            child: Thing<Self::Text, Self::Child, Self::Children>,
+        ) -> Self::Child {
+            self.inner.register_child(child)
         }
 
-        fn get_children<'s>(&'s self, ChildrenPromise(range): &ChildrenPromise) -> &'s [Thing] {
+        fn register_children<'s>(
+            &'s mut self,
+            children: impl FnMut(
+                &mut &'s mut Self,
+            ) -> Option<Thing<Self::Text, Self::Child, Self::Children>>,
+        ) -> Self::Children {
+            self.inner.register_children(children)
+        }
+
+        fn bake(self) -> Self::Baked {
+            BakedTextRefProvider {
+                inner: self.inner.bake(),
+                owned_text: todo!(),
+                _phantom: PhantomData,
+            }
+        }
+    }
+
+    struct BakedTextRefProvider<'text, P> {
+        owned_text: Box<str>,
+        inner: P,
+        _phantom: PhantomData<&'text ()>,
+    }
+
+    impl<'text, P> BakedProvider for BakedTextRefProvider<'text, P>
+    where
+        P: BakedProvider<
+            Text = TextRefPromise<'text>,
+            Child = ChildPromise,
+            Children = ChildrenPromise,
+        >,
+    {
+        type Text = TextRefPromise<'text>;
+        type Child = ChildPromise;
+        type Children = ChildrenPromise;
+
+        fn get_text<'s>(&'s self, promise: &Self::Text) -> &'s str {
+            match promise {
+                TextRefPromise::Ref(reference) => reference,
+                TextRefPromise::Owned(owning) => &self.owned_text[owning.clone()],
+            }
+        }
+
+        fn get_child<'s>(
+            &'s self,
+            ChildPromise(ind): &Self::Child,
+        ) -> &'s Thing<Self::Text, Self::Child, Self::Children> {
+            &self.things[*ind]
+        }
+
+        fn get_children<'s>(
+            &'s self,
+            ChildrenPromise(range): &Self::Children,
+        ) -> &'s [Thing<Self::Text, Self::Child, Self::Children>] {
             &self.things[range.clone()]
         }
     }
 
     #[cfg(test)]
     mod tests {
-        use crate::data::borrowing_concept::{UnbakedOwningProvider, UnbakedProvider};
+        use crate::data::borrowing_concept::{OwnedThing, UnbakedOwningProvider, UnbakedProvider};
 
         #[test]
-        fn fuzz() {
+        fn owned_fuzz() {
             use crate::data::borrowing_concept::Thing;
 
             // arrange
             fn gen_thing<'owner, R: rand::Rng + ?Sized>(
                 provider: &mut UnbakedOwningProvider,
                 rng: &mut R,
-            ) -> Thing {
+                nodes_left: &mut usize,
+            ) -> OwnedThing {
+                *nodes_left = nodes_left.saturating_sub(1);
                 fn gen_text<R: rand::Rng + ?Sized>(rng: &mut R) -> String {
                     // let it be of some length
                     let l: usize = rng.gen_range(3..=10);
@@ -644,8 +1076,8 @@ mod borrowing_concept {
                     }
                     s
                 }
-                let generated = if rng.gen_bool(0.6) {
-                    // assume 60% are text variants
+                let generated = if *nodes_left == 0 || rng.gen_bool(0.6) {
+                    // assume 60% or anything over specified number are text variants
                     // we need some random text for it
                     let text = gen_text(rng);
                     Thing::Text {
@@ -655,8 +1087,8 @@ mod borrowing_concept {
                     // say, 36% are child owners
                     // we need some text and children for it
                     let text = gen_text(rng);
-                    let child1 = gen_thing(provider, rng);
-                    let child2 = gen_thing(provider, rng);
+                    let child1 = gen_thing(provider, rng, nodes_left);
+                    let child2 = gen_thing(provider, rng, nodes_left);
                     Thing::Child {
                         text: provider.register_text(&text),
                         child1: provider.register_child(child1),
@@ -666,7 +1098,7 @@ mod borrowing_concept {
                     // rest 4% own 1-5 children
                     let mut inner = (0..rng.gen_range(1..=5)).into_iter();
                     let generator = move |provider: &mut &mut UnbakedOwningProvider| {
-                        inner.next().map(|_| gen_thing(*provider, rng))
+                        inner.next().map(|_| gen_thing(*provider, rng, nodes_left))
                     };
                     Thing::Multiple {
                         children: provider.register_children(generator),
@@ -677,11 +1109,11 @@ mod borrowing_concept {
                 generated
             }
             let rng = &mut rand::thread_rng();
-            for _ in 0..10 {
+            for _ in 0..100_000 {
                 let mut provider = UnbakedOwningProvider::new();
 
                 // act
-                let thing = gen_thing(&mut provider, rng);
+                let thing = gen_thing(&mut provider, rng, &mut 100);
                 let provider = provider.bake();
 
                 // assert
@@ -689,7 +1121,6 @@ mod borrowing_concept {
                 thing
                     .write_to(&provider, &mut output)
                     .expect("Should be able to write into string");
-                println!("{output}");
             }
         }
     }
