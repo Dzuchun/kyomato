@@ -1021,54 +1021,21 @@ mod borrowing_concept {
             .things_owned()
     }
 
-    trait AsOwnedPromise<OwnedPromise, FromProvider, ToProvider> {
-        type TransformContext;
-        fn to_owned_promise(&self, from: &FromProvider, to: &mut ToProvider) -> OwnedPromise;
-    }
-
-    // TODO I don't like that. It kinda restricts provider's inner structure
-    // Takes out text buffer. This trait must not be made public.
-    trait TakeText<Text, Child, Children> {
-        fn take_out(&mut self) -> Box<str>
-        where
-            Self: Sized;
-    }
-
-    impl<'text, Text, Child, Children, P> TakeText<Text, Child, Children>
-        for BakedTextRefProvider<'text, Text, Child, Children, P>
-    where
-        P: TakeText<Text, Child, Children>,
-    {
-        fn take_out(&mut self) -> Box<str>
-        where
-            Self: Sized,
-        {
-            self.inner.take_out()
-        }
-    }
-
-    impl<Text, Child, Children, P> TakeText<Text, Child, Children>
-        for BakedTextOwnProvider<Text, Child, Children, P>
-    {
-        fn take_out(&mut self) -> Box<str>
-        where
-            Self: Sized,
-        {
-            std::mem::replace(&mut self.text, String::new().into_boxed_str())
-        }
-    }
-
-    impl<Text, Child, Children, P> TakeText<Text, Child, Children>
-        for BakedChildrenOwnProvider<Text, Child, Children, P>
-    where
-        P: TakeText<Text, Child, Children>,
-    {
-        fn take_out(&mut self) -> Box<str>
-        where
-            Self: Sized,
-        {
-            self.inner.take_out()
-        }
+    pub fn transfer_nodes<
+        FromText,
+        FromChild,
+        FromChildren,
+        ToText,
+        ToChild,
+        ToChildren,
+        FromProvider,
+        ToProvider,
+    >(
+        root: Thing<FromText, FromChild, FromChildren>,
+        from_provider: &FromProvider,
+        to_provider: &mut ToProvider,
+    ) -> Thing<ToText, ToChild, ToChildren> {
+        todo!()
     }
 
     // pub fn to_owning_provider<Text, Child, Children, OwnedText, OwnedChild, OwnedChildren, OwnedProvider, P: ToOwnedProvider<Text, Child, Children>>(provider: P, root: Child) -> (P)
