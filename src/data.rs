@@ -478,9 +478,18 @@ impl<'source> Token<'source> {
 /// This approach is less optimized then the `unsafe` one, but `miri` scared me away from pointer manipulation, so here I am, I guess
 ///
 /// I see now, that providers can be composed into each other to build desired behavior step-by-step. That's really desireable too.
+///
+/// All of the wrapper providers were implemented, along with a special `FullOwning`-provider to allow text ownership transfer.
+/// All the basic functions are fuzz-tested now.
+///
+/// The main motivation behind all of this mess is to "only pay for what you need" - tokens may or may not own their data,
+/// but if you happen to know that for sure, you'll end up using much less memory, as their size will not include any sort of discriminator.
+///
+/// Also, you have the opportunity to actually convert any provider referring to data into fully-owning provider, if you happen to own data they refer
+/// to or a copy of the data they refer to. That's an unsafe process, unfortunately, as provider has no way to know if you give it the correct data.
 #[cfg(test)]
 mod borrowing_concept {
-    use std::{marker::PhantomData, ops::Range};
+    use std::{borrow::Cow, marker::PhantomData, ops::Range};
 
     pub enum Thing<Text, Child, Children> {
         Text {
@@ -564,6 +573,19 @@ mod borrowing_concept {
                 _phantom: PhantomData,
             }
         }
+        fn with_text_find(
+            self,
+            text: impl Into<String>,
+        ) -> UnbakedTextFindProvider<Text, Child, Children, Self>
+        where
+            Self: Sized,
+        {
+            UnbakedTextFindProvider {
+                text: text.into(),
+                inner: self,
+                _phantom: PhantomData,
+            }
+        }
         fn text_owned(self) -> UnbakedTextOwnProvider<Text, Child, Children, Self>
         where
             Self: Sized,
@@ -599,6 +621,37 @@ mod borrowing_concept {
         _phantom: PhantomData<(Text, Child, Children)>,
     }
 
+    fn try_find_pointer_match<'h, 'f>(haystack: &'h str, find: &'f str) -> Option<Range<usize>> {
+        let referee_ptr = haystack.as_ptr() as usize;
+        let text_ptr = find.as_ptr() as usize;
+        if text_ptr < referee_ptr {
+            return None;
+        }
+        let index_guess = text_ptr - referee_ptr;
+        let self_len = haystack.len();
+        if index_guess >= self_len {
+            return None;
+        }
+        // yeah, seems like it
+        // lastly, lets rule out partial overlap:
+        let text_len = find.len();
+        if text_len + index_guess > self_len {
+            // buffers overlap partially, which is weird, probably should
+            // TODO warn about that too
+            return None;
+        }
+        // let's check that literally, for a good measure:
+        // TODO probably add cfg to remove that in release build?
+        if !haystack[index_guess..].starts_with(find) {
+            // huh? that's something weird, probably must
+            // TODO warn about it
+            return None;
+        }
+        // ok, so it seems like we've found a match using nothing but pointer-things.
+        // that's great, cause it's literally O(1) for any buffer size
+        return Some(index_guess..index_guess + text_len);
+    }
+
     impl<'text, Text, Child, Children, P> UnbakedProvider<Text, Child, Children>
         for UnbakedTextRefProvider<'text, Text, Child, Children, P>
     where
@@ -609,35 +662,8 @@ mod borrowing_concept {
 
         fn register_text(&mut self, text: &str) -> Text {
             // first, check out if this text, as a pointer, points inside this provider's referee:
-            'nah: {
-                let referee_ptr = self.text.as_ptr() as usize;
-                let text_ptr = text.as_ptr() as usize;
-                if text_ptr < referee_ptr {
-                    break 'nah;
-                }
-                let index_guess = text_ptr - referee_ptr;
-                let self_len = self.text.len();
-                if index_guess >= self_len {
-                    break 'nah;
-                }
-                // yeah, seems like it
-                // lastly, lets rule out partial overlap:
-                let text_len = text.len();
-                if text_len + index_guess > self_len {
-                    // buffers overlap partially, which is weird, probably should
-                    // TODO warn about that too
-                    break 'nah;
-                }
-                // let's check that literally, for a good measure:
-                // TODO probably add cfg to remove that in release build?
-                if !self.text[index_guess..].starts_with(text) {
-                    // huh? that's something weird, probably must
-                    // TODO warn about it
-                    break 'nah;
-                }
-                // ok, so it seems like we've found a match using nothing but pointer-things.
-                // that's great, cause it's literally O(1) for any buffer size
-                return self.text[index_guess..index_guess + text_len].into();
+            if let Some(range) = try_find_pointer_match(self.text, text) {
+                return self.text[range].into();
             }
 
             // then, let's try finding this sort of sequence in the entire referee:
@@ -750,6 +776,78 @@ mod borrowing_concept {
 
     impl<Text, Child, Children, P> BakedProvider<Text, Child, Children>
         for BakedTextOwnProvider<Text, Child, Children, P>
+    where
+        P: BakedProvider<Text, Child, Children>,
+        Text: MaybeTextOwnRange,
+    {
+        fn get_text<'s>(&'s self, promise: &Text) -> &'s str {
+            if let Some(range) = promise.own_range() {
+                &self.text[range.clone()]
+            } else {
+                self.inner.get_text(promise)
+            }
+        }
+
+        fn get_child<'s>(&'s self, promise: &Child) -> &'s Thing<Text, Child, Children> {
+            self.inner.get_child(promise)
+        }
+
+        fn get_children<'s>(&'s self, promise: &Children) -> &'s [Thing<Text, Child, Children>] {
+            self.inner.get_children(promise)
+        }
+    }
+    pub struct UnbakedTextFindProvider<Text, Child, Children, P> {
+        text: String,
+        inner: P,
+        _phantom: PhantomData<(Text, Child, Children)>,
+    }
+
+    impl<Text, Child, Children, P> UnbakedProvider<Text, Child, Children>
+        for UnbakedTextFindProvider<Text, Child, Children, P>
+    where
+        P: UnbakedProvider<Text, Child, Children>,
+        Text: MaybeTextOwnRange,
+    {
+        type Baked = BakedTextOwnProvider<Text, Child, Children, P::Baked>;
+
+        fn register_text(&mut self, text: &str) -> Text {
+            if let Some(ind) = self.text.find(text) {
+                return Text::from(ind..ind + text.len());
+            }
+            let range_start = self.text.len();
+            self.text.push_str(text);
+            let range_end = self.text.len();
+            Text::from(range_start..range_end)
+        }
+
+        fn register_child(&mut self, child: Thing<Text, Child, Children>) -> Child {
+            self.inner.register_child(child)
+        }
+
+        fn register_children<'s>(
+            &'s mut self,
+            children: impl Iterator<Item = Thing<Text, Child, Children>>,
+        ) -> Children {
+            self.inner.register_children(children)
+        }
+
+        fn bake(self) -> Self::Baked {
+            Self::Baked {
+                text: self.text.into_boxed_str(),
+                inner: self.inner.bake(),
+                _phantom: PhantomData,
+            }
+        }
+    }
+
+    pub struct BakedTextFindProvider<Text, Child, Children, P> {
+        text: Box<str>,
+        inner: P,
+        _phantom: PhantomData<(Text, Child, Children)>,
+    }
+
+    impl<Text, Child, Children, P> BakedProvider<Text, Child, Children>
+        for BakedTextFindProvider<Text, Child, Children, P>
     where
         P: BakedProvider<Text, Child, Children>,
         Text: MaybeTextOwnRange,
@@ -1021,7 +1119,25 @@ mod borrowing_concept {
             .things_owned()
     }
 
-    pub fn transfer_nodes<
+    pub fn text_maybe_own_find_provider<'text>(
+        ref_text: &'text str,
+        own_text: impl Into<String>,
+    ) -> impl UnbakedProvider<TextMaybeOwn<'text>, ChildInd, ChildrenRange> {
+        UnbakedBottomProvider::new()
+            .with_text_find(own_text)
+            .with_text_ref(ref_text)
+            .things_owned()
+    }
+
+    pub fn text_own_find_provider(
+        own_text: impl Into<String>,
+    ) -> impl UnbakedProvider<TextOwn, ChildInd, ChildrenRange> {
+        UnbakedBottomProvider::new()
+            .with_text_find(own_text)
+            .things_owned()
+    }
+
+    fn transfer_nodes<
         FromText,
         FromChild,
         FromChildren,
@@ -1031,14 +1147,166 @@ mod borrowing_concept {
         FromProvider,
         ToProvider,
     >(
-        root: Thing<FromText, FromChild, FromChildren>,
+        root: &Thing<FromText, FromChild, FromChildren>,
         from_provider: &FromProvider,
         to_provider: &mut ToProvider,
-    ) -> Thing<ToText, ToChild, ToChildren> {
-        todo!()
+        buf: &mut Vec<Thing<ToText, ToChild, ToChildren>>,
+    ) -> Thing<ToText, ToChild, ToChildren>
+    where
+        FromProvider: BakedProvider<FromText, FromChild, FromChildren>,
+        ToProvider: UnbakedProvider<ToText, ToChild, ToChildren>,
+    {
+        match root {
+            Thing::Text { text } => {
+                let s = from_provider.get_text(&text);
+                let text = to_provider.register_text(s);
+                Thing::Text { text }
+            }
+            Thing::Child {
+                text,
+                child1,
+                child2,
+            } => {
+                let s = from_provider.get_text(text);
+                let text = to_provider.register_text(s);
+                let ch1 = from_provider.get_child(child1);
+                let ch1 = transfer_nodes(ch1, from_provider, to_provider, buf);
+                let child1 = to_provider.register_child(ch1);
+                let ch2 = from_provider.get_child(child2);
+                let ch2 = transfer_nodes(ch2, from_provider, to_provider, buf);
+                let child2 = to_provider.register_child(ch2);
+                Thing::Child {
+                    text,
+                    child1,
+                    child2,
+                }
+            }
+            Thing::Multiple { children } => {
+                let ch = from_provider.get_children(children);
+                let start_ind = buf.len();
+                for child in ch {
+                    let to_child = transfer_nodes(child, from_provider, to_provider, buf);
+                    buf.push(to_child);
+                }
+                let children = to_provider.register_children(buf.drain(start_ind..));
+                Thing::Multiple { children }
+            }
+        }
     }
 
-    // pub fn to_owning_provider<Text, Child, Children, OwnedText, OwnedChild, OwnedChildren, OwnedProvider, P: ToOwnedProvider<Text, Child, Children>>(provider: P, root: Child) -> (P)
+    struct UnbakedFullOwner<'text> {
+        yet_unowned_text: Cow<'text, str>,
+        owned_text: String,
+        children: Vec<Thing<TextOwn, ChildInd, ChildrenRange>>,
+    }
+
+    impl<'text> UnbakedFullOwner<'text> {
+        pub fn new(yet_unowned: &'text str) -> Self {
+            Self {
+                yet_unowned_text: yet_unowned.into(),
+                owned_text: String::new(),
+                children: Vec::new(),
+            }
+        }
+        pub unsafe fn drop_unowned(self) -> UnbakedFullOwner<'static> {
+            let Self {
+                owned_text,
+                children,
+                ..
+            } = self;
+            UnbakedFullOwner {
+                yet_unowned_text: "".into(),
+                owned_text,
+                children,
+            }
+        }
+        // TODO add panic info
+        pub unsafe fn provide(&mut self, data: impl Into<String>) {
+            let s = data.into();
+            // assert_eq!(self.yet_unowned_text, s, "Provided data must be the same!");
+            self.yet_unowned_text = Cow::Owned(s)
+        }
+    }
+
+    impl<'text> UnbakedProvider<TextOwn, ChildInd, ChildrenRange> for UnbakedFullOwner<'text> {
+        type Baked = FullOwner;
+
+        fn register_text(&mut self, text: &str) -> TextOwn {
+            if let Some(range) = try_find_pointer_match(&self.yet_unowned_text, text) {
+                return TextOwn(range);
+            }
+            if let Some(ind) = self.yet_unowned_text.find(text) {
+                return TextOwn(ind..ind + text.len());
+            }
+            let len = self.yet_unowned_text.len();
+            if let Some(mut ind) = self.owned_text.find(text) {
+                ind += len;
+                return TextOwn(ind..ind + text.len());
+            }
+            let start_ind = self.owned_text.len() + len;
+            self.owned_text.push_str(text);
+            let end_ind = self.owned_text.len() + len;
+            TextOwn(start_ind..end_ind)
+        }
+
+        fn register_child(&mut self, child: Thing<TextOwn, ChildInd, ChildrenRange>) -> ChildInd {
+            let ind = self.children.len();
+            self.children.push(child);
+            ChildInd(ind)
+        }
+
+        fn register_children<'s>(
+            &'s mut self,
+            children: impl Iterator<Item = Thing<TextOwn, ChildInd, ChildrenRange>>,
+        ) -> ChildrenRange {
+            let start_ind = self.children.len();
+            self.children.extend(children);
+            let end_ind = self.children.len();
+            ChildrenRange(start_ind..end_ind)
+        }
+
+        fn bake(self) -> Self::Baked {
+            let Cow::Owned(s) = self.yet_unowned_text else {
+                panic!("Full Owner cannot be baked until data is provided to it")
+            };
+            FullOwner {
+                now_owned_text: s.into_boxed_str(),
+                owned_text: self.owned_text.into_boxed_str(),
+                children: self.children.into_boxed_slice(),
+            }
+        }
+    }
+
+    struct FullOwner {
+        now_owned_text: Box<str>,
+        owned_text: Box<str>,
+        children: Box<[Thing<TextOwn, ChildInd, ChildrenRange>]>,
+    }
+
+    impl BakedProvider<TextOwn, ChildInd, ChildrenRange> for FullOwner {
+        fn get_text<'s>(&'s self, TextOwn(range): &TextOwn) -> &'s str {
+            let (start, end) = (range.start, range.end);
+            let len = self.now_owned_text.len();
+            if start >= len {
+                return &self.owned_text[start - len..end - len];
+            }
+            &self.now_owned_text[start..end]
+        }
+
+        fn get_child<'s>(
+            &'s self,
+            &ChildInd(i): &ChildInd,
+        ) -> &'s Thing<TextOwn, ChildInd, ChildrenRange> {
+            &self.children[i]
+        }
+
+        fn get_children<'s>(
+            &'s self,
+            ChildrenRange(range): &ChildrenRange,
+        ) -> &'s [Thing<TextOwn, ChildInd, ChildrenRange>] {
+            &self.children[range.clone()]
+        }
+    }
 
     #[cfg(test)]
     mod tests {
@@ -1135,9 +1403,11 @@ mod borrowing_concept {
             generated
         }
 
-        use crate::data::borrowing_concept::UnbakedProvider;
+        use crate::data::borrowing_concept::{UnbakedFullOwner, UnbakedProvider};
 
-        use super::{text_maybe_own_provider, text_own_provider, text_ref_provider, Thing};
+        use super::{
+            text_maybe_own_provider, text_own_provider, text_ref_provider, transfer_nodes, Thing,
+        };
 
         // TODO check these versions of fuzzes to actually run correctly
         #[test]
@@ -1208,6 +1478,103 @@ mod borrowing_concept {
                 thing
                     .write_to(&provider, &mut output)
                     .expect("Should be able to write into string");
+            }
+        }
+
+        #[test]
+        fn fuzz_transfer() {
+            // arrange
+            let rng = &mut rand::thread_rng();
+            let text = "Lorem ipsum dolor sir ammet, concestesometghing idk never learned latin";
+            for _ in 0..100_000 {
+                let mut provider = text_maybe_own_provider(text);
+                let thing = generate_thing(
+                    &mut provider,
+                    rng,
+                    &mut gen_maybe_contained_text(text),
+                    &mut Vec::new(),
+                    &mut 100,
+                );
+                let original_provider = provider.bake();
+
+                // act
+                let mut moved_provider = text_own_provider();
+                let moved_thing = transfer_nodes(
+                    &thing,
+                    &original_provider,
+                    &mut moved_provider,
+                    &mut Vec::new(),
+                );
+                let moved_provider = moved_provider.bake();
+
+                // assert
+                let mut original = String::new();
+                thing
+                    .write_to(&original_provider, &mut original)
+                    .expect("Should be able to write into string");
+                let mut moved = String::new();
+                moved_thing
+                    .write_to(&moved_provider, &mut moved)
+                    .expect("Should be able to write into string");
+                assert_eq!(
+                    original, moved,
+                    "Moved things should produce the same result"
+                );
+            }
+        }
+
+        #[test]
+        fn fuzz_to_owned() {
+            // arrange
+            let rng = &mut rand::thread_rng();
+            for _ in 0..100_000 {
+                let text =
+                    "Lorem ipsum dolor sir ammet, concestesometghing idk never learned latin"
+                        .to_string()
+                        .into_boxed_str();
+                let mut provider = text_maybe_own_provider(&text);
+                let thing = generate_thing(
+                    &mut provider,
+                    rng,
+                    &mut gen_maybe_contained_text(&text),
+                    &mut Vec::new(),
+                    &mut 100,
+                );
+                let original_provider = provider.bake();
+
+                // act
+                let mut owning_provider = UnbakedFullOwner::new(&text);
+                let owning_thing = transfer_nodes(
+                    &thing,
+                    &original_provider,
+                    &mut owning_provider,
+                    &mut Vec::new(),
+                );
+                let mut original = String::new();
+                thing
+                    .write_to(&original_provider, &mut original)
+                    .expect("Should be able to write into string");
+                // SAFETY:
+                // data provided and data `OwnedProvider` referred to here is the same,
+                // as it's contained in the same immutable variable
+                let owning_provider = unsafe {
+                    let mut owning_provider = owning_provider.drop_unowned();
+                    drop(original_provider);
+                    owning_provider.provide(text);
+                    owning_provider
+                };
+
+                let owning_provider = owning_provider.bake();
+
+                // assert
+                let mut owned = String::new();
+                owning_thing
+                    .write_to(&owning_provider, &mut owned)
+                    .expect("Should be able to write into string");
+                assert_eq!(
+                    original, owned,
+                    "Owned things should produce the same result"
+                );
             }
         }
     }
