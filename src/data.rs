@@ -417,78 +417,26 @@ impl<'source> Token<'source> {
     }
 }
 
-/// This module contains, documents and helps developing my concept for refined token borrowing.
+/// # On token storage
 ///
-/// Main idea is to ALWAYS delegate token information storage. This is expected to minimize token size.
-/// Problem with that idea - some tokens need to own their data, they need to be independent and live indefinitely.
+/// Basically, tokens are not manipulated directly; Instead, they are aggregated into so-called "trees" to allow efficient data storage.
 ///
-/// To allow this, there would be a special token type - so-called `Owner` - holding text buffer for all their children to interpret and refer to.
-/// A now-implemented with cloning `to_static` method would instead wrap token(s) into a new `Owner`, allowing them to exist indefinitely,
-/// while in fact only cheap pointers were substituted.
+/// Tree consists of storage and a root, "pointing" somewhere inside it.
 ///
-/// The next step would be to realize that tokens don't even need to own their children - instead upper-standing owned could own them instead,
-/// providing references to children tokens. This should **DRAMATICALLY** decrease number of heap allocations, as it would allow tokens for centralized data storage,
-/// allocating only two memory arrays.
+/// To create a tree, `Unsealed Storage` must be created first. While storage is unsealed, one can add a text, a token or a token slice (iterator of tokens)
+/// for it to store. Once data was stored, `Unsealed Storage` will return a `Promise` to said data. Exact form of this `Promise` is up to storage to
+/// decide, and that's exactly what allows token tree to only store stuff it needs, and the way it needs.
 ///
-/// Now, here's a thing - vectors can be re-allocated in-memory, when their size reached their capacity. This presents another challenge: we should somehow guarantee,
-/// that data referred by child tokens will not be moved out of the pointers (compiler will **force** us to do that, actually). I see two possible solutions on that matter:
+/// Once all tokens were added to `Unsealed Storage`, it can be transformed into a regular `Storage`. `Storage` allows to see text and token(s) with
+/// the promises returned by `Unsealed Storage`.
 ///
-/// - while token tree creation, `Owner` holds data in a regular vector, giving children only a *promise* to data (not a pointer).
-/// once generation is complete, token tree is not supposed to be changed. at this point, `Owner` will allow children to *obtain* the pointers to now-immovable data.
-/// - same as before, but children never get to see pointers themselves. this will allow `Owner` to freely mutate data, but will add an extra cost for some sort of
-/// internal identifier resolution and a couple more function calls.
+/// ## Capabilities
+/// If you happen to know, that all of your data is contained within a certain string, you may pass a reference to it, for storage to use.
+/// At any time, if you decide to transfer your data from one storage to another - you can absolutely do it via dedicated method.
+/// This also covers situations where you don't wanna hold onto some reference, and decide to copy over all of the data
 ///
-/// ~~Being a masochist I am, of course I went on with the first option. Following is a log of the development~~
-///
-/// # LOG
-///
-/// After brief prototyping, this looks really promising; New tokens type's size is only 40 (5 bytes). Paired with TWO allocations per tree this should be insane.
-///
-/// When I revised once again my design, It seems that there's no reason to make `Owner` a variant of token. In fact, we can call it a `TokenOwner` and call it a day.
-/// Any place concerned about token's life would accept `TokenOwner`.
-///
-/// Since `TokenOwner` will own EVERYTHING about `Token`s inside it, ~~there's no need for lifetimes on it.~~
-/// it's lifetime should not be used in any way, it's just a way to avoid `'static` lifetime, which can be used here, since,
-/// IN FACT, data DOES NOT live to the end of the program. I would *probably ok* to use them, but I won't do that.
-///
-/// Seems like there's no crate achieving exactly what I want, meaning I'll have to result to **unsafe** myself.
-///
-/// New idiom: `Token` can't exist int a vacuum anymore, it's an internal implementation of `TokenTree`
-///
-/// `Owner` was renamed into `Provider`. Now inner token and text storage is generalized by a trait;
-/// `Provider` can decide themselves, if they want to actually store the data, or keep as a reference to th.
-///
-/// There are now three traits related to provider concept:
-/// - `UnbackedProvider` represents a provider that's ready to accept new things to be stored.
-/// - `BackedProvider` represents a provider that's no longer able to accept new values, but instead can provide references to them
-/// - `FixedProvider` represents a provider that's no longer able nor add nor provide values.
-/// It can be as minified as possible, only storing data without any sort of bookkeeping.
-///
-/// Despite me being a masochist, I really do fear using `unsafe` in my code. There's just too many things to keep track of.
-/// So after writing the entire module using self-borrowing stuff and `unsafe`, I'll resort to second option stated above: basically, ever-unbaked children.
-///
-/// A format of so-called "promise" that provider uses to return actual child/text can be different and it ultimately of to provider to decide:
-/// - the simplest would be a provider that owns all of the data tokens refer to
-/// - a provider could be relaying calls to some other provider to take care of
-/// - a provider could refer to some plain text buffer, like &str to recognize and store it's data
-///
-/// All of that means, that both tokens and providers must be defined at generic over promise types.
-/// This will allow provider to select in which way they would store and manipulate data.
-///
-/// This approach is less optimized then the `unsafe` one, but `miri` scared me away from pointer manipulation, so here I am, I guess
-///
-/// I see now, that providers can be composed into each other to build desired behavior step-by-step. That's really desireable too.
-///
-/// All of the wrapper providers were implemented, along with a special `FullOwning`-provider to allow text ownership transfer.
-/// All the basic functions are fuzz-tested now.
-///
-/// The main motivation behind all of this mess is to "only pay for what you need" - tokens may or may not own their data,
-/// but if you happen to know that for sure, you'll end up using much less memory, as their size will not include any sort of discriminator.
-///
-/// Also, you have the opportunity to actually convert any provider referring to data into fully-owning provider, if you happen to own data they refer
-/// to or a copy of the data they refer to. That's an unsafe process, unfortunately, as provider has no way to know if you give it the correct data.
-///
-/// Almost everything in the module is getting renamed to resemble more neutral "tree thing"
+/// There's also an ability to move the data into the storage, which can be useful for large text buffers.
+/// Please note that this last operation is hard to define properly, so some of the methods used for it, are marked `unsafe` (since they break the invariant)
 #[cfg(test)]
 mod borrowing_concept {
     use std::{borrow::Cow, marker::PhantomData, ops::Range};
@@ -1256,30 +1204,30 @@ mod borrowing_concept {
         }
     }
 
-    struct UnbakedFullOwner<'text> {
+    struct UnsealedFullOwner<'text> {
         yet_unowned_text: Cow<'text, str>,
         owned_text: String,
-        children: Vec<Thing<TextOwn, LeafInd, LeavesRange>>,
+        things: Vec<Thing<TextOwn, LeafInd, LeavesRange>>,
     }
 
-    impl<'text> UnbakedFullOwner<'text> {
+    impl<'text> UnsealedFullOwner<'text> {
         pub fn new(yet_unowned: &'text str) -> Self {
             Self {
                 yet_unowned_text: yet_unowned.into(),
                 owned_text: String::new(),
-                children: Vec::new(),
+                things: Vec::new(),
             }
         }
-        pub unsafe fn drop_unowned(self) -> UnbakedFullOwner<'static> {
+        pub unsafe fn drop_unowned(self) -> UnsealedFullOwner<'static> {
             let Self {
                 owned_text,
-                children,
+                things: children,
                 ..
             } = self;
-            UnbakedFullOwner {
+            UnsealedFullOwner {
                 yet_unowned_text: "".into(),
                 owned_text,
-                children,
+                things: children,
             }
         }
         // TODO add panic info
@@ -1290,7 +1238,7 @@ mod borrowing_concept {
         }
     }
 
-    impl<'text> UnsealedStorage<TextOwn, LeafInd, LeavesRange> for UnbakedFullOwner<'text> {
+    impl<'text> UnsealedStorage<TextOwn, LeafInd, LeavesRange> for UnsealedFullOwner<'text> {
         type Sealed = FullOwner;
 
         fn register_text(&mut self, text: &str) -> TextOwn {
@@ -1312,8 +1260,8 @@ mod borrowing_concept {
         }
 
         fn register_leaf(&mut self, child: Thing<TextOwn, LeafInd, LeavesRange>) -> LeafInd {
-            let ind = self.children.len();
-            self.children.push(child);
+            let ind = self.things.len();
+            self.things.push(child);
             LeafInd(ind)
         }
 
@@ -1321,9 +1269,9 @@ mod borrowing_concept {
             &'s mut self,
             children: impl Iterator<Item = Thing<TextOwn, LeafInd, LeavesRange>>,
         ) -> LeavesRange {
-            let start_ind = self.children.len();
-            self.children.extend(children);
-            let end_ind = self.children.len();
+            let start_ind = self.things.len();
+            self.things.extend(children);
+            let end_ind = self.things.len();
             LeavesRange(start_ind..end_ind)
         }
 
@@ -1334,7 +1282,7 @@ mod borrowing_concept {
             FullOwner {
                 now_owned_text: s.into_boxed_str(),
                 owned_text: self.owned_text.into_boxed_str(),
-                children: self.children.into_boxed_slice(),
+                things: self.things.into_boxed_slice(),
             }
         }
     }
@@ -1342,7 +1290,7 @@ mod borrowing_concept {
     struct FullOwner {
         now_owned_text: Box<str>,
         owned_text: Box<str>,
-        children: Box<[Thing<TextOwn, LeafInd, LeavesRange>]>,
+        things: Box<[Thing<TextOwn, LeafInd, LeavesRange>]>,
     }
 
     impl SealedStorage<TextOwn, LeafInd, LeavesRange> for FullOwner {
@@ -1359,14 +1307,14 @@ mod borrowing_concept {
             &'s self,
             &LeafInd(i): &LeafInd,
         ) -> &'s Thing<TextOwn, LeafInd, LeavesRange> {
-            &self.children[i]
+            &self.things[i]
         }
 
         fn get_leaves<'s>(
             &'s self,
             LeavesRange(range): &LeavesRange,
         ) -> &'s [Thing<TextOwn, LeafInd, LeavesRange>] {
-            &self.children[range.clone()]
+            &self.things[range.clone()]
         }
     }
 
@@ -1465,7 +1413,7 @@ mod borrowing_concept {
             generated
         }
 
-        use crate::data::borrowing_concept::{UnbakedFullOwner, UnsealedStorage};
+        use crate::data::borrowing_concept::{UnsealedFullOwner, UnsealedStorage};
 
         use super::{
             text_maybe_own_provider, text_own_provider, text_ref_provider, Thing, ThingTree,
@@ -1597,7 +1545,7 @@ mod borrowing_concept {
                 let original_tree = ThingTree::new(thing, provider);
 
                 // act
-                let mut owning_provider = UnbakedFullOwner::new(&text);
+                let mut owning_provider = UnsealedFullOwner::new(&text);
                 let owning_thing = original_tree.move_to(&mut owning_provider);
                 let mut original = String::new();
                 original_tree
