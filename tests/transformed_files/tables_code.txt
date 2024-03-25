@@ -11,7 +11,7 @@ Storage & Space & Number\\ \hline
 $e$\footnotemark[1]\footnotetext[1]{Це число Ейлера. Воно дуже корисне,\st{але не може бути записане}у вигляді\textit{десяткового}дробу.} & $\cdot \pm 1$ & І тут ще\textit{трохи}тексту \|\\ \hline
 \end{tabular}
 \stepcounter{tabnum}
-\caption{\capfnt Оце приклад таблиці. Як казав мій вчитель:\textbf{ВИКОРИСТОВУЙ БІЛЬШЕ ВИБУХІВКИ}(і \"лапок\")}
+\caption{\capfnt Оце приклад таблиці. Як казав мій вчитель:\textbf{ВИКОРИСТОВУЙ БІЛЬШЕ ВИБУХІВКИ}(і "лапок")}
 \label{tab:example_1}
 \end{center}
 \end{table}

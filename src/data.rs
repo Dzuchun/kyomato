@@ -437,7 +437,7 @@ impl<'source> Token<'source> {
 ///
 /// There's also an ability to move the data into the storage, which can be useful for large text buffers.
 /// Please note that this last operation is hard to define properly, so some of the methods used for it, are marked `unsafe` (since they break the invariant)
-#[cfg(test)]
+#[cfg(borrowing_concept)]
 mod borrowing_concept {
     use std::{borrow::Cow, marker::PhantomData, ops::Range};
 

@@ -132,7 +132,9 @@ where
                 output.write_str("\\end{tabular}\n\\stepcounter{tabnum}")?;
                 if let Some(caption) = caption {
                     output.write_str("\n\\caption{\\capfnt ")?;
+                    context.inside_caption = true;
                     self.write_to(output, meta, context, caption)?;
+                    context.inside_caption = false;
                     output.write_str("}\n")?;
                 }
                 if let Some(ident) = ident.as_ref() {
@@ -161,7 +163,9 @@ where
                 output.write_str("}\n")?;
                 if let Some(caption) = caption.as_ref() {
                     output.write_str("\\caption{\\capfnt ")?;
+                    context.inside_caption = true;
                     self.write_to(output, meta, context, caption)?;
+                    context.inside_caption = false;
                     output.write_str("}\n")?;
                 }
                 if let Some(ident) = ident.as_ref() {
@@ -262,7 +266,19 @@ where
                     Some(Formatting::StrikeThrough) => ("\\st{", "}"),
                 };
                 output.write_str(start)?;
-                output.write_str(&content)?;
+                if context.inside_caption {
+                    // We are generating text that was inside table/figure caption
+                    // meaning, we must un-escape double quotes
+                    let mut last_ind = 0;
+                    for (ind, _) in content.match_indices("\\\"") {
+                        output.write_str(&content[last_ind..ind])?;
+                        output.write_char('\"')?;
+                        last_ind = ind + 2;
+                    }
+                    output.write_str(&content[last_ind..])?;
+                } else {
+                    output.write_str(&content)?;
+                }
                 output.write_str(end)?;
             }
             Token::Href { url, display } => {
@@ -415,6 +431,13 @@ mod tests {
     \label{fig:schema-1}
     \end{figure}
     "}
+    test! {fig4_width, Token::Figure { src_name: Path::new("schema1.jpg").into(), caption: Some(Box::new(text!("This caption contains \\\"double quotes\\\""))), ident: None, width: None }, r#"
+    \begin{figure}[h!]
+    \centering
+    \includegraphics[width = 0.9 \textwidth]{schema1.jpg}
+    \caption{\capfnt This caption contains "double quotes"}
+    \end{figure}
+    "#}
     // Tables
     test! {tab1, Token::Table {
     header:
@@ -441,6 +464,31 @@ cell_21 & cell_22 & cell_23 \\ \hline
     \end{center}
     \end{table}
     "}
+    test! {tab_quotes, Token::Table {
+    header:
+    tokens![
+        text!("header1"), text!("header2"), text!("header3")
+    ],
+    cells: tokens![
+        text!("cell_11"),text!("cell_12"),text!("cell_13"),
+        text!("cell_21"),text!("cell_22"),text!("cell_23")
+    ],
+    caption: Some(Box::new(text!("We like \\\"math\\\" so much!"))),
+    ident: Some("example".into()) },
+    r#"
+    \begin{table}[h!]
+    \begin{center}
+    \begin{tabular}{|c|c|c|}\hline
+header1 & header2 & header3 \\ \hline \hline
+cell_11 & cell_12 & cell_13 \\ \hline
+cell_21 & cell_22 & cell_23 \\ \hline
+    \end{tabular}
+    \stepcounter{tabnum}
+    \caption{ \capfnt We like "math" so much!}
+    \label{tab:example}
+    \end{center}
+    \end{table}
+    "#}
 
     // Lists
     test! {list_bullets, Token::List { list_type: ListType::Bullet, content: tokens![
@@ -642,7 +690,7 @@ r#"
 \end{table}
 "#
     }
-    // TODO add tests with captions and csv-tables
+    // TODO add tests with csv-tables
 
     // TODO add minted to preamble
     // TODO add -shell-escape to script util
