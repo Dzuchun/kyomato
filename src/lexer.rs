@@ -21,7 +21,7 @@ use nom::{
 use url::Url;
 
 use crate::{
-    data::{AyanoBlock, Formatting, ListType, Token, Tokens},
+    data::{AyanoBlock, Formatting, ListType, TitleInfo, Token, Tokens},
     util::{optional_permutation, Equivalent, IteratorArrayCollectExt, VecTryExtendExt},
 };
 
@@ -1412,7 +1412,7 @@ pub fn inner_lex<
 }
 
 #[cfg(test)]
-mod tests {
+mod token_tests {
     use nom::character::complete::alphanumeric1;
 
     use super::*;
@@ -2168,4 +2168,42 @@ $$
         tx!("."), foot!(^"1": tx!("Для поливу."))]}
         test_ok! {ok_idk2, "\n\n## Підпункт\n\n", head!(##"Підпункт")}
     }
+}
+
+pub fn title_info<'source, Err: nom::error::ParseError<&'source str>>(
+    mut input: &'source str,
+) -> IResult<&'source str, TitleInfo<'source>, Err> {
+    const FIELD_NAMES: [&'static str; 12] = [
+        "header-line1",
+        "header-line2",
+        "document-type",
+        "title-line1",
+        "title-line2",
+        "title-line3",
+        "title-line4",
+        "author-line1",
+        "author-line2",
+        "author-line3",
+        "date",
+        "prof",
+    ];
+    let (rest, _) = tag("---")(input)?;
+    input = rest;
+    
+    let mut res = TitleInfo::default();
+    // ---
+    // article-type: ЗВІТ
+    // title-line1: про Виконання лабораторної роботи
+    // title-line2: з практикуму "Методи реєстрації іонізуючого випромінювання"
+    // title-line3:
+    // title-line4: СТАТИСТИЧНІ ТА СИСТЕМАТИЧНІ ПОХИБКИ ПРИ ДЕТЕКТУВАННІ ЯДЕРНОГО ВИПРОМІНЮВАННЯ
+    // date: листопад 2023
+    // keywords: ВИПРОМІНЮВАННЯ, РОЗПОДІЛ, СТАТИСТИЧНА ПРИРОДА.
+    // abstract: |-
+    //   Об’єкт дослідження - розподіл кількості зареєстрованих частинок протягом деякого однакового проміжку часу (часу усереднення).
+    //   Мета роботи - визначити умови застосовності розподілів Пуассона та Гауса, пересвідчитись у статистичній природi процесу радiактивного розпаду. Для виконання використано радiактивний зразок, детектор, підсилювач та формувач сигналiв, лічильник імпульсів.
+    // prof: Голінка-Безшийко Л.О.
+    // ---
+    let (input, _) = cut(tag("---"))(input)?;
+    Ok((todo!(), res))
 }
