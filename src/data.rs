@@ -487,9 +487,70 @@ impl<'source> Token<'source> {
 ///
 /// Also, you have the opportunity to actually convert any provider referring to data into fully-owning provider, if you happen to own data they refer
 /// to or a copy of the data they refer to. That's an unsafe process, unfortunately, as provider has no way to know if you give it the correct data.
+///
+/// Almost everything in the module is getting renamed to resemble more neutral "tree thing"
 #[cfg(test)]
 mod borrowing_concept {
     use std::{borrow::Cow, marker::PhantomData, ops::Range};
+
+    struct ThingTree<Text, Leaf, Leaves, Storage> {
+        root: Leaf,
+        provider: Storage,
+        _phantom: PhantomData<(Text, Leaves)>,
+    }
+
+    impl<Text, Leaf, Leaves, Storage> ThingTree<Text, Leaf, Leaves, Storage> {
+        fn new<ToStorage>(thing: Thing<Text, Leaf, Leaves>, mut storage: ToStorage) -> Self
+        where
+            ToStorage: UnsealedStorage<Text, Leaf, Leaves, Sealed = Storage>,
+        {
+            let child = storage.register_leaf(thing);
+            Self {
+                root: child,
+                provider: storage.seal(),
+                _phantom: PhantomData,
+            }
+        }
+
+        fn root(&self) -> &Leaf {
+            &self.root
+        }
+
+        fn root_thing(&self) -> &Thing<Text, Leaf, Leaves>
+        where
+            Storage: SealedStorage<Text, Leaf, Leaves>,
+        {
+            self.provider.get_leaf(&self.root)
+        }
+
+        fn storage(&self) -> &Storage {
+            &self.provider
+        }
+
+        fn move_to<OT, OL, OLS, ToStorage>(
+            &self,
+            other_storage: &mut ToStorage,
+        ) -> Thing<OT, OL, OLS>
+        where
+            ToStorage: UnsealedStorage<OT, OL, OLS>,
+            Storage: SealedStorage<Text, Leaf, Leaves>,
+        {
+            transfer_nodes(
+                self.root_thing(),
+                self.storage(),
+                other_storage,
+                &mut Vec::new(),
+            )
+        }
+
+        fn write_to<W: std::fmt::Write + ?Sized>(&self, output: &mut W) -> std::fmt::Result
+        where
+            Storage: SealedStorage<Text, Leaf, Leaves>,
+        {
+            let thing = self.root_thing();
+            thing.write_to(&self.provider, output)
+        }
+    }
 
     pub enum Thing<Text, Child, Children> {
         Text {
@@ -505,10 +566,10 @@ mod borrowing_concept {
         },
     }
 
-    impl<Text, Child, Children> Thing<Text, Child, Children> {
+    impl<Text, Leaf, Leaves> Thing<Text, Leaf, Leaves> {
         fn write_to<P, W>(&self, provider: &P, out: &mut W) -> std::fmt::Result
         where
-            P: BakedProvider<Text, Child, Children>,
+            P: SealedStorage<Text, Leaf, Leaves>,
             W: std::fmt::Write + ?Sized,
         {
             match self {
@@ -519,15 +580,15 @@ mod borrowing_concept {
                     child2,
                 } => {
                     write!(out, "Child({}, ", provider.get_text(text))?;
-                    provider.get_child(child1).write_to(provider, out)?;
+                    provider.get_leaf(child1).write_to(provider, out)?;
                     out.write_str(", ")?;
-                    provider.get_child(child2).write_to(provider, out)?;
+                    provider.get_leaf(child2).write_to(provider, out)?;
                     out.write_str(")")?;
                     Ok(())
                 }
                 Thing::Multiple { children } => {
                     out.write_str("Multiple[")?;
-                    let children = provider.get_children(children);
+                    let children = provider.get_leaves(children);
                     if let Some(first) = children.first() {
                         first.write_to(provider, out)?;
                         for child in &children[1..] {
@@ -542,83 +603,86 @@ mod borrowing_concept {
         }
     }
 
-    pub trait UnbakedProvider<Text, Child, Children> {
-        type Baked: BakedProvider<Text, Child, Children>;
+    pub trait UnsealedStorage<Text, Leaf, Leaves> {
+        type Sealed: SealedStorage<Text, Leaf, Leaves>;
         fn register_text(&mut self, text: &str) -> Text;
-        fn register_child(&mut self, child: Thing<Text, Child, Children>) -> Child;
-        fn register_children<'s>(
+        fn register_leaf(&mut self, leaf: Thing<Text, Leaf, Leaves>) -> Leaf;
+        fn register_leaves<'s>(
             &'s mut self,
-            children: impl Iterator<Item = Thing<Text, Child, Children>>,
-        ) -> Children;
-        fn bake(self) -> Self::Baked;
+            leaves: impl Iterator<Item = Thing<Text, Leaf, Leaves>>,
+        ) -> Leaves;
+        fn seal(self) -> Self::Sealed;
     }
 
-    pub trait BakedProvider<Text, Child, Children> {
+    pub trait SealedStorage<Text, Leaf, Leaves> {
         fn get_text<'s>(&'s self, promise: &Text) -> &'s str;
-        fn get_child<'s>(&'s self, promise: &Child) -> &'s Thing<Text, Child, Children>;
-        fn get_children<'s>(&'s self, promise: &Children) -> &'s [Thing<Text, Child, Children>];
+        fn get_leaf<'s>(&'s self, promise: &Leaf) -> &'s Thing<Text, Leaf, Leaves>;
+        fn get_leaves<'s>(&'s self, promise: &Leaves) -> &'s [Thing<Text, Leaf, Leaves>];
     }
 
-    trait UnbakedProviderExt<Text, Child, Children>: UnbakedProvider<Text, Child, Children> {
+    trait UnsealedStorageExt<Text, Leaf, Leaves>: UnsealedStorage<Text, Leaf, Leaves> {
         fn with_text_ref<'text>(
             self,
             text: &'text str,
-        ) -> UnbakedTextRefProvider<'text, Text, Child, Children, Self>
+        ) -> UnsealedTextRefStorage<'text, Text, Leaf, Leaves, Self>
         where
             Self: Sized,
         {
-            UnbakedTextRefProvider::<'text, Text, Child, Children, Self> {
+            UnsealedTextRefStorage::<'text, Text, Leaf, Leaves, Self> {
                 text,
                 inner: self,
                 _phantom: PhantomData,
             }
         }
+
         fn with_text_find(
             self,
             text: impl Into<String>,
-        ) -> UnbakedTextFindProvider<Text, Child, Children, Self>
+        ) -> UnsealedTextFindStorage<Text, Leaf, Leaves, Self>
         where
             Self: Sized,
         {
-            UnbakedTextFindProvider {
+            UnsealedTextFindStorage {
                 text: text.into(),
                 inner: self,
                 _phantom: PhantomData,
             }
         }
-        fn text_owned(self) -> UnbakedTextOwnProvider<Text, Child, Children, Self>
+
+        fn text_owned(self) -> UnsealedTextOwnStorage<Text, Leaf, Leaves, Self>
         where
             Self: Sized,
         {
-            UnbakedTextOwnProvider::<Text, Child, Children, Self> {
+            UnsealedTextOwnStorage::<Text, Leaf, Leaves, Self> {
                 text: String::new(),
                 inner: self,
                 _phantom: PhantomData,
             }
         }
 
-        fn things_owned(self) -> UnbakedChildrenOwnProvider<Text, Child, Children, Self>
+        fn leaves_owned(self) -> UnsealedLeavesOwnStorage<Text, Leaf, Leaves, Self>
         where
             Self: Sized,
         {
-            UnbakedChildrenOwnProvider::<Text, Child, Children, Self> {
-                children: Vec::new(),
+            UnsealedLeavesOwnStorage::<Text, Leaf, Leaves, Self> {
+                things: Vec::new(),
                 inner: self,
             }
         }
     }
-    impl<Text, Child, Children, P: UnbakedProvider<Text, Child, Children>>
-        UnbakedProviderExt<Text, Child, Children> for P
+    impl<Text, Leaf, Leaves, S: UnsealedStorage<Text, Leaf, Leaves>>
+        UnsealedStorageExt<Text, Leaf, Leaves> for S
     {
     }
-    trait MaybeTextRef<'text>: From<&'text str> {
-        fn text_ref(&self) -> Option<&'text str>;
+    trait OptPromiseInfo<PromiseInfo, StorageType>: From<PromiseInfo> {
+        fn info(&self) -> Option<&PromiseInfo>;
     }
 
-    pub struct UnbakedTextRefProvider<'text, Text, Child, Children, P> {
+    struct TextRefStorageType;
+    pub struct UnsealedTextRefStorage<'text, Text, Leaf, Leaves, InnerStorage> {
         text: &'text str,
-        inner: P,
-        _phantom: PhantomData<(Text, Child, Children)>,
+        inner: InnerStorage,
+        _phantom: PhantomData<(Text, Leaf, Leaves)>,
     }
 
     fn try_find_pointer_match<'h, 'f>(haystack: &'h str, find: &'f str) -> Option<Range<usize>> {
@@ -633,7 +697,7 @@ mod borrowing_concept {
             return None;
         }
         // yeah, seems like it
-        // lastly, lets rule out partial overlap:
+        // lastly, let's rule out partial overlap:
         let text_len = find.len();
         if text_len + index_guess > self_len {
             // buffers overlap partially, which is weird, probably should
@@ -652,13 +716,13 @@ mod borrowing_concept {
         return Some(index_guess..index_guess + text_len);
     }
 
-    impl<'text, Text, Child, Children, P> UnbakedProvider<Text, Child, Children>
-        for UnbakedTextRefProvider<'text, Text, Child, Children, P>
+    impl<'text, Text, Leaf, Leaves, InnerStorage> UnsealedStorage<Text, Leaf, Leaves>
+        for UnsealedTextRefStorage<'text, Text, Leaf, Leaves, InnerStorage>
     where
-        P: UnbakedProvider<Text, Child, Children>,
-        Text: MaybeTextRef<'text>,
+        InnerStorage: UnsealedStorage<Text, Leaf, Leaves>,
+        Text: OptPromiseInfo<&'text str, TextRefStorageType>,
     {
-        type Baked = BakedTextRefProvider<'text, Text, Child, Children, P::Baked>;
+        type Sealed = TextRefStorage<'text, Text, Leaf, Leaves, InnerStorage::Sealed>;
 
         fn register_text(&mut self, text: &str) -> Text {
             // first, check out if this text, as a pointer, points inside this provider's referee:
@@ -676,70 +740,67 @@ mod borrowing_concept {
             self.inner.register_text(text)
         }
 
-        fn register_child(&mut self, child: Thing<Text, Child, Children>) -> Child {
-            self.inner.register_child(child)
+        fn register_leaf(&mut self, leaf: Thing<Text, Leaf, Leaves>) -> Leaf {
+            self.inner.register_leaf(leaf)
         }
 
-        fn register_children<'s>(
+        fn register_leaves<'s>(
             &'s mut self,
-            children: impl Iterator<Item = Thing<Text, Child, Children>>,
-        ) -> Children {
-            self.inner.register_children(children)
+            leaves: impl Iterator<Item = Thing<Text, Leaf, Leaves>>,
+        ) -> Leaves {
+            self.inner.register_leaves(leaves)
         }
 
-        fn bake(self) -> Self::Baked {
-            Self::Baked {
-                inner: self.inner.bake(),
+        fn seal(self) -> Self::Sealed {
+            Self::Sealed {
+                inner: self.inner.seal(),
                 _phantom: PhantomData,
             }
         }
     }
 
-    pub struct BakedTextRefProvider<'text, Text, Child, Children, P> {
-        inner: P,
-        _phantom: PhantomData<(&'text (), Text, Child, Children)>,
+    pub struct TextRefStorage<'text, Text, Leaf, Leaves, InnerStorage> {
+        inner: InnerStorage,
+        _phantom: PhantomData<(&'text (), Text, Leaf, Leaves)>,
     }
 
-    impl<'text, Text, Child, Children, P> BakedProvider<Text, Child, Children>
-        for BakedTextRefProvider<'text, Text, Child, Children, P>
+    impl<'text, Text, Leaf, Leaves, InnerStorage> SealedStorage<Text, Leaf, Leaves>
+        for TextRefStorage<'text, Text, Leaf, Leaves, InnerStorage>
     where
-        P: BakedProvider<Text, Child, Children>,
-        Text: MaybeTextRef<'text>,
+        InnerStorage: SealedStorage<Text, Leaf, Leaves>,
+        Text: OptPromiseInfo<&'text str, TextRefStorageType>,
     {
         fn get_text<'s>(&'s self, promise: &Text) -> &'s str {
-            if let Some(res) = promise.text_ref() {
+            if let Some(res) = promise.info() {
                 res
             } else {
                 self.inner.get_text(promise)
             }
         }
 
-        fn get_child<'s>(&'s self, promise: &Child) -> &'s Thing<Text, Child, Children> {
-            self.inner.get_child(promise)
+        fn get_leaf<'s>(&'s self, promise: &Leaf) -> &'s Thing<Text, Leaf, Leaves> {
+            self.inner.get_leaf(promise)
         }
 
-        fn get_children<'s>(&'s self, promise: &Children) -> &'s [Thing<Text, Child, Children>] {
-            self.inner.get_children(promise)
+        fn get_leaves<'s>(&'s self, promise: &Leaves) -> &'s [Thing<Text, Leaf, Leaves>] {
+            self.inner.get_leaves(promise)
         }
     }
 
-    trait MaybeTextOwnRange: From<Range<usize>> {
-        fn own_range(&self) -> Option<&Range<usize>>;
-    }
-
-    pub struct UnbakedTextOwnProvider<Text, Child, Children, P> {
+    struct TextOwnStorageType;
+    pub struct UnsealedTextOwnStorage<Text, Leaf, Leaves, InnerStorage> {
         text: String,
-        inner: P,
-        _phantom: PhantomData<(Text, Child, Children)>,
+        inner: InnerStorage,
+        _phantom: PhantomData<(Text, Leaf, Leaves)>,
     }
 
-    impl<Text, Child, Children, P> UnbakedProvider<Text, Child, Children>
-        for UnbakedTextOwnProvider<Text, Child, Children, P>
+    impl<Text, Leaf, Leaves, InnerStorage> UnsealedStorage<Text, Leaf, Leaves>
+        for UnsealedTextOwnStorage<Text, Leaf, Leaves, InnerStorage>
     where
-        P: UnbakedProvider<Text, Child, Children>,
-        Text: MaybeTextOwnRange,
+        InnerStorage: UnsealedStorage<Text, Leaf, Leaves>,
+        Text: OptPromiseInfo<Range<usize>, TextOwnStorageType>,
     {
-        type Baked = BakedTextOwnProvider<Text, Child, Children, P::Baked>;
+        type Sealed = TextOwnStorage<Text, Leaf, Leaves, InnerStorage::Sealed>;
 
         fn register_text(&mut self, text: &str) -> Text {
             let range_start = self.text.len();
@@ -748,67 +809,69 @@ mod borrowing_concept {
             Text::from(range_start..range_end)
         }
 
-        fn register_child(&mut self, child: Thing<Text, Child, Children>) -> Child {
-            self.inner.register_child(child)
+        fn register_leaf(&mut self, leaf: Thing<Text, Leaf, Leaves>) -> Leaf {
+            self.inner.register_leaf(leaf)
         }
 
-        fn register_children<'s>(
+        fn register_leaves<'s>(
             &'s mut self,
-            children: impl Iterator<Item = Thing<Text, Child, Children>>,
-        ) -> Children {
-            self.inner.register_children(children)
+            leaves: impl Iterator<Item = Thing<Text, Leaf, Leaves>>,
+        ) -> Leaves {
+            self.inner.register_leaves(leaves)
         }
 
-        fn bake(self) -> Self::Baked {
-            Self::Baked {
+        fn seal(self) -> Self::Sealed {
+            Self::Sealed {
                 text: self.text.into_boxed_str(),
-                inner: self.inner.bake(),
+                inner: self.inner.seal(),
                 _phantom: PhantomData,
             }
         }
     }
 
-    pub struct BakedTextOwnProvider<Text, Child, Children, P> {
+    pub struct TextOwnStorage<Text, Leaf, Leaves, InnerStorage> {
         text: Box<str>,
-        inner: P,
-        _phantom: PhantomData<(Text, Child, Children)>,
+        inner: InnerStorage,
+        _phantom: PhantomData<(Text, Leaf, Leaves)>,
     }
 
-    impl<Text, Child, Children, P> BakedProvider<Text, Child, Children>
-        for BakedTextOwnProvider<Text, Child, Children, P>
+    impl<Text, Leaf, Leaves, InnerStorage> SealedStorage<Text, Leaf, Leaves>
+        for TextOwnStorage<Text, Leaf, Leaves, InnerStorage>
     where
-        P: BakedProvider<Text, Child, Children>,
-        Text: MaybeTextOwnRange,
+        InnerStorage: SealedStorage<Text, Leaf, Leaves>,
+        Text: OptPromiseInfo<Range<usize>, TextOwnStorageType>,
     {
         fn get_text<'s>(&'s self, promise: &Text) -> &'s str {
-            if let Some(range) = promise.own_range() {
+            if let Some(range) = promise.info() {
                 &self.text[range.clone()]
             } else {
                 self.inner.get_text(promise)
             }
         }
 
-        fn get_child<'s>(&'s self, promise: &Child) -> &'s Thing<Text, Child, Children> {
-            self.inner.get_child(promise)
+        fn get_leaf<'s>(&'s self, promise: &Leaf) -> &'s Thing<Text, Leaf, Leaves> {
+            self.inner.get_leaf(promise)
         }
 
-        fn get_children<'s>(&'s self, promise: &Children) -> &'s [Thing<Text, Child, Children>] {
-            self.inner.get_children(promise)
+        fn get_leaves<'s>(&'s self, promise: &Leaves) -> &'s [Thing<Text, Leaf, Leaves>] {
+            self.inner.get_leaves(promise)
         }
     }
-    pub struct UnbakedTextFindProvider<Text, Child, Children, P> {
+
+    struct TextFindStorageType;
+    pub struct UnsealedTextFindStorage<Text, Leaf, Leaves, InnerStorage> {
         text: String,
-        inner: P,
-        _phantom: PhantomData<(Text, Child, Children)>,
+        inner: InnerStorage,
+        _phantom: PhantomData<(Text, Leaf, Leaves)>,
     }
 
-    impl<Text, Child, Children, P> UnbakedProvider<Text, Child, Children>
-        for UnbakedTextFindProvider<Text, Child, Children, P>
+    impl<Text, Leaf, Leaves, InnerStorage> UnsealedStorage<Text, Leaf, Leaves>
+        for UnsealedTextFindStorage<Text, Leaf, Leaves, InnerStorage>
     where
-        P: UnbakedProvider<Text, Child, Children>,
-        Text: MaybeTextOwnRange,
+        InnerStorage: UnsealedStorage<Text, Leaf, Leaves>,
+        Text: OptPromiseInfo<Range<usize>, TextFindStorageType>,
     {
-        type Baked = BakedTextOwnProvider<Text, Child, Children, P::Baked>;
+        type Sealed = TextFindStorage<Text, Leaf, Leaves, InnerStorage::Sealed>;
 
         fn register_text(&mut self, text: &str) -> Text {
             if let Some(ind) = self.text.find(text) {
@@ -820,193 +883,191 @@ mod borrowing_concept {
             Text::from(range_start..range_end)
         }
 
-        fn register_child(&mut self, child: Thing<Text, Child, Children>) -> Child {
-            self.inner.register_child(child)
+        fn register_leaf(&mut self, leaf: Thing<Text, Leaf, Leaves>) -> Leaf {
+            self.inner.register_leaf(leaf)
         }
 
-        fn register_children<'s>(
+        fn register_leaves<'s>(
             &'s mut self,
-            children: impl Iterator<Item = Thing<Text, Child, Children>>,
-        ) -> Children {
-            self.inner.register_children(children)
+            leaves: impl Iterator<Item = Thing<Text, Leaf, Leaves>>,
+        ) -> Leaves {
+            self.inner.register_leaves(leaves)
         }
 
-        fn bake(self) -> Self::Baked {
-            Self::Baked {
+        fn seal(self) -> Self::Sealed {
+            Self::Sealed {
                 text: self.text.into_boxed_str(),
-                inner: self.inner.bake(),
+                inner: self.inner.seal(),
                 _phantom: PhantomData,
             }
         }
     }
 
-    pub struct BakedTextFindProvider<Text, Child, Children, P> {
+    pub struct TextFindStorage<Text, Leaf, Leaves, InnerStorage> {
         text: Box<str>,
-        inner: P,
-        _phantom: PhantomData<(Text, Child, Children)>,
+        inner: InnerStorage,
+        _phantom: PhantomData<(Text, Leaf, Leaves)>,
     }
 
-    impl<Text, Child, Children, P> BakedProvider<Text, Child, Children>
-        for BakedTextFindProvider<Text, Child, Children, P>
+    impl<Text, Leaf, Leaves, InnerStorage> SealedStorage<Text, Leaf, Leaves>
+        for TextFindStorage<Text, Leaf, Leaves, InnerStorage>
     where
-        P: BakedProvider<Text, Child, Children>,
-        Text: MaybeTextOwnRange,
+        InnerStorage: SealedStorage<Text, Leaf, Leaves>,
+        Text: OptPromiseInfo<Range<usize>, TextFindStorageType>,
     {
         fn get_text<'s>(&'s self, promise: &Text) -> &'s str {
-            if let Some(range) = promise.own_range() {
+            if let Some(range) = promise.info() {
                 &self.text[range.clone()]
             } else {
                 self.inner.get_text(promise)
             }
         }
 
-        fn get_child<'s>(&'s self, promise: &Child) -> &'s Thing<Text, Child, Children> {
-            self.inner.get_child(promise)
+        fn get_leaf<'s>(&'s self, promise: &Leaf) -> &'s Thing<Text, Leaf, Leaves> {
+            self.inner.get_leaf(promise)
         }
 
-        fn get_children<'s>(&'s self, promise: &Children) -> &'s [Thing<Text, Child, Children>] {
-            self.inner.get_children(promise)
+        fn get_leaves<'s>(&'s self, promise: &Leaves) -> &'s [Thing<Text, Leaf, Leaves>] {
+            self.inner.get_leaves(promise)
         }
     }
 
-    trait MaybeChildInd: From<usize> {
-        fn own_ind(&self) -> Option<usize>;
-    }
-
-    trait MaybeChildrenRange: From<Range<usize>> {
-        fn own_range(&self) -> Option<&Range<usize>>;
-    }
-
-    pub struct UnbakedChildrenOwnProvider<Text, Child, Children, P> {
-        children: Vec<Thing<Text, Child, Children>>,
+    struct LeavesOwnStorageType;
+    pub struct UnsealedLeavesOwnStorage<Text, Leaf, Leaves, P> {
+        things: Vec<Thing<Text, Leaf, Leaves>>,
         inner: P,
     }
 
-    impl<Text, Child, Children, P> UnbakedProvider<Text, Child, Children>
-        for UnbakedChildrenOwnProvider<Text, Child, Children, P>
+    impl<Text, Leaf, Leaves, InnerStorage> UnsealedStorage<Text, Leaf, Leaves>
+        for UnsealedLeavesOwnStorage<Text, Leaf, Leaves, InnerStorage>
     where
-        P: UnbakedProvider<Text, Child, Children>,
-        Child: MaybeChildInd,
-        Children: MaybeChildrenRange,
+        InnerStorage: UnsealedStorage<Text, Leaf, Leaves>,
+        Leaf: OptPromiseInfo<usize, LeavesOwnStorageType>,
+        Leaves: OptPromiseInfo<Range<usize>, LeavesOwnStorageType>,
     {
-        type Baked = BakedChildrenOwnProvider<Text, Child, Children, P::Baked>;
+        type Sealed = LeavesOwnStorage<Text, Leaf, Leaves, InnerStorage::Sealed>;
 
         fn register_text(&mut self, text: &str) -> Text {
             self.inner.register_text(text)
         }
 
-        fn register_child(&mut self, child: Thing<Text, Child, Children>) -> Child {
-            let ind = self.children.len();
-            self.children.push(child);
-            Child::from(ind)
+        fn register_leaf(&mut self, leaf: Thing<Text, Leaf, Leaves>) -> Leaf {
+            let ind = self.things.len();
+            self.things.push(leaf);
+            Leaf::from(ind)
         }
 
-        fn register_children<'s>(
+        fn register_leaves<'s>(
             &'s mut self,
-            children: impl Iterator<Item = Thing<Text, Child, Children>>,
-        ) -> Children {
-            let range_start = self.children.len();
-            self.children.extend(children);
-            let range_end = self.children.len();
-            Children::from(range_start..range_end)
+            leaves: impl Iterator<Item = Thing<Text, Leaf, Leaves>>,
+        ) -> Leaves {
+            let range_start = self.things.len();
+            self.things.extend(leaves);
+            let range_end = self.things.len();
+            Leaves::from(range_start..range_end)
         }
 
-        fn bake(self) -> Self::Baked {
-            BakedChildrenOwnProvider {
-                children: self.children.into_boxed_slice(),
-                inner: self.inner.bake(),
+        fn seal(self) -> Self::Sealed {
+            LeavesOwnStorage {
+                things: self.things.into_boxed_slice(),
+                inner: self.inner.seal(),
             }
         }
     }
 
-    pub struct BakedChildrenOwnProvider<Text, Child, Children, P> {
-        children: Box<[Thing<Text, Child, Children>]>,
-        inner: P,
+    pub struct LeavesOwnStorage<Text, Leaf, Leaves, InnerStorage> {
+        things: Box<[Thing<Text, Leaf, Leaves>]>,
+        inner: InnerStorage,
     }
 
-    impl<Text, Child, Children, P> BakedProvider<Text, Child, Children>
-        for BakedChildrenOwnProvider<Text, Child, Children, P>
+    impl<Text, Leaf, Leaves, InnerStorage> SealedStorage<Text, Leaf, Leaves>
+        for LeavesOwnStorage<Text, Leaf, Leaves, InnerStorage>
     where
-        P: BakedProvider<Text, Child, Children>,
-        Child: MaybeChildInd,
-        Children: MaybeChildrenRange,
+        InnerStorage: SealedStorage<Text, Leaf, Leaves>,
+        Leaf: OptPromiseInfo<usize, LeavesOwnStorageType>,
+        Leaves: OptPromiseInfo<Range<usize>, LeavesOwnStorageType>,
     {
         fn get_text<'s>(&'s self, promise: &Text) -> &'s str {
             self.inner.get_text(promise)
         }
 
-        fn get_child<'s>(&'s self, promise: &Child) -> &'s Thing<Text, Child, Children> {
-            if let Some(ind) = promise.own_ind() {
-                &self.children[ind]
+        fn get_leaf<'s>(&'s self, promise: &Leaf) -> &'s Thing<Text, Leaf, Leaves> {
+            if let Some(ind) = promise.info() {
+                &self.things[*ind]
             } else {
-                self.inner.get_child(promise)
+                self.inner.get_leaf(promise)
             }
         }
 
-        fn get_children<'s>(&'s self, promise: &Children) -> &'s [Thing<Text, Child, Children>] {
-            if let Some(range) = promise.own_range() {
-                &self.children[range.clone()]
+        fn get_leaves<'s>(&'s self, promise: &Leaves) -> &'s [Thing<Text, Leaf, Leaves>] {
+            if let Some(range) = promise.info() {
+                &self.things[range.clone()]
             } else {
-                self.inner.get_children(promise)
+                self.inner.get_leaves(promise)
             }
         }
     }
 
     enum NeverText {}
-    impl<'text> From<&'text str> for NeverText {
-        fn from(_: &'text str) -> Self {
-            unimplemented!("This data type is not supported")
-        }
-    }
-    impl<'text> MaybeTextRef<'text> for NeverText {
-        fn text_ref(&self) -> Option<&'text str> {
-            unimplemented!("This data type is not supported")
-        }
-    }
     impl From<Range<usize>> for NeverText {
         fn from(_: Range<usize>) -> Self {
             unimplemented!("This data type is not supported")
         }
     }
-    impl MaybeTextOwnRange for NeverText {
-        fn own_range(&self) -> Option<&Range<usize>> {
+    impl<'text> From<&'text str> for NeverText {
+        fn from(_: &'text str) -> Self {
             unimplemented!("This data type is not supported")
         }
     }
-    enum NeverChild {}
-    impl From<usize> for NeverChild {
+    impl<T, StorageType> OptPromiseInfo<T, StorageType> for NeverText
+    where
+        NeverText: From<T>,
+    {
+        fn info(&self) -> Option<&T> {
+            unimplemented!("This data type is not supported")
+        }
+    }
+    enum NeverLeaf {}
+    impl From<usize> for NeverLeaf {
         fn from(_: usize) -> Self {
             unimplemented!("This data type is not supported")
         }
     }
-    impl MaybeChildInd for NeverChild {
-        fn own_ind(&self) -> Option<usize> {
+    impl<T, StorageType> OptPromiseInfo<T, StorageType> for NeverLeaf
+    where
+        NeverLeaf: From<T>,
+    {
+        fn info(&self) -> Option<&T> {
             unimplemented!("This data type is not supported")
         }
     }
-    enum NeverChildren {}
-    impl From<Range<usize>> for NeverChildren {
+    enum NeverLeaves {}
+    impl From<Range<usize>> for NeverLeaves {
         fn from(_: Range<usize>) -> Self {
             unimplemented!("This data type is not supported")
         }
     }
-    impl MaybeChildrenRange for NeverChildren {
-        fn own_range(&self) -> Option<&Range<usize>> {
+    impl<T, StorageType> OptPromiseInfo<T, StorageType> for NeverLeaves
+    where
+        NeverLeaves: From<T>,
+    {
+        fn info(&self) -> Option<&T> {
             unimplemented!("This data type is not supported")
         }
     }
 
     #[derive(Debug, derive_more::From)]
     pub struct TextRef<'text>(&'text str);
-    impl<'text> MaybeTextRef<'text> for TextRef<'text> {
-        fn text_ref(&self) -> Option<&'text str> {
-            Some(self.0)
+    impl<'text, StorageType> OptPromiseInfo<&'text str, StorageType> for TextRef<'text> {
+        fn info(&self) -> Option<&&'text str> {
+            Some(&self.0)
         }
     }
+
     #[derive(Debug, derive_more::From)]
     pub struct TextOwn(Range<usize>);
-    impl MaybeTextOwnRange for TextOwn {
-        fn own_range(&self) -> Option<&Range<usize>> {
+    impl<StorageType> OptPromiseInfo<Range<usize>, StorageType> for TextOwn {
+        fn info(&self) -> Option<&Range<usize>> {
             Some(&self.0)
         }
     }
@@ -1015,8 +1076,8 @@ mod borrowing_concept {
         Ref(&'text str),
         Own(Range<usize>),
     }
-    impl<'text> MaybeTextRef<'text> for TextMaybeOwn<'text> {
-        fn text_ref(&self) -> Option<&'text str> {
+    impl<'text, StorageType> OptPromiseInfo<&'text str, StorageType> for TextMaybeOwn<'text> {
+        fn info(&self) -> Option<&&'text str> {
             if let Self::Ref(s) = self {
                 Some(s)
             } else {
@@ -1024,8 +1085,8 @@ mod borrowing_concept {
             }
         }
     }
-    impl MaybeTextOwnRange for TextMaybeOwn<'_> {
-        fn own_range(&self) -> Option<&Range<usize>> {
+    impl<StorageType> OptPromiseInfo<Range<usize>, StorageType> for TextMaybeOwn<'_> {
+        fn info(&self) -> Option<&Range<usize>> {
             if let Self::Own(range) = self {
                 Some(range)
             } else {
@@ -1035,106 +1096,107 @@ mod borrowing_concept {
     }
 
     #[derive(Debug, derive_more::From)]
-    pub struct ChildInd(usize);
-    impl MaybeChildInd for ChildInd {
-        fn own_ind(&self) -> Option<usize> {
-            Some(self.0)
+    pub struct LeafInd(usize);
+    impl<StorageType> OptPromiseInfo<usize, StorageType> for LeafInd {
+        fn info(&self) -> Option<&usize> {
+            Some(&self.0)
         }
     }
+
     #[derive(Debug, derive_more::From)]
-    pub struct ChildrenRange(Range<usize>);
-    impl MaybeChildrenRange for ChildrenRange {
-        fn own_range(&self) -> Option<&Range<usize>> {
+    pub struct LeavesRange(Range<usize>);
+    impl<StorageType> OptPromiseInfo<Range<usize>, StorageType> for LeavesRange {
+        fn info(&self) -> Option<&Range<usize>> {
             Some(&self.0)
         }
     }
 
     /// Provider that holds nothing and panics at any call to it.
-    struct UnbakedBottomProvider<Text = NeverText, Child = NeverChild, Children = NeverChildren>(
-        PhantomData<(Text, Child, Children)>,
+    struct UnsealedBottomStorage<Text = NeverText, Leaf = NeverLeaf, Leaves = NeverLeaves>(
+        PhantomData<(Text, Leaf, Leaves)>,
     );
-    impl<Text, Child, Children> UnbakedProvider<Text, Child, Children>
-        for UnbakedBottomProvider<Text, Child, Children>
+    impl<Text, Leaf, Leaves> UnsealedStorage<Text, Leaf, Leaves>
+        for UnsealedBottomStorage<Text, Leaf, Leaves>
     {
-        type Baked = BakedBottomProvider;
+        type Sealed = BottomStorage;
         fn register_text(&mut self, _: &str) -> Text {
             unimplemented!("This provider does not support text saving")
         }
 
-        fn register_child(&mut self, _: Thing<Text, Child, Children>) -> Child {
+        fn register_leaf(&mut self, _: Thing<Text, Leaf, Leaves>) -> Leaf {
             unimplemented!("This provider does not support child saving")
         }
 
-        fn register_children<'s>(
+        fn register_leaves<'s>(
             &'s mut self,
-            _: impl Iterator<Item = Thing<Text, Child, Children>>,
-        ) -> Children {
+            _: impl Iterator<Item = Thing<Text, Leaf, Leaves>>,
+        ) -> Leaves {
             unimplemented!("This provider does not support children saving")
         }
 
-        fn bake(self) -> Self::Baked {
-            BakedBottomProvider(PhantomData)
+        fn seal(self) -> Self::Sealed {
+            BottomStorage(PhantomData)
         }
     }
-    impl<Text, Child, Children> UnbakedBottomProvider<Text, Child, Children> {
+    impl<Text, Leaf, Leaves> UnsealedBottomStorage<Text, Leaf, Leaves> {
         fn new() -> Self {
-            UnbakedBottomProvider(PhantomData)
+            UnsealedBottomStorage(PhantomData)
         }
     }
-    struct BakedBottomProvider<Text = NeverText, Child = NeverChild, Children = NeverChildren>(
-        PhantomData<(Text, Child, Children)>,
+    struct BottomStorage<Text = NeverText, Leaf = NeverLeaf, Leaves = NeverLeaves>(
+        PhantomData<(Text, Leaf, Leaves)>,
     );
-    impl<Text, Child, Children> BakedProvider<Text, Child, Children> for BakedBottomProvider {
+    impl<Text, Leaf, Leaves> SealedStorage<Text, Leaf, Leaves> for BottomStorage {
         fn get_text<'s>(&'s self, _: &Text) -> &'s str {
             unimplemented!("This provider does not provide text")
         }
 
-        fn get_child<'s>(&'s self, _: &Child) -> &'s Thing<Text, Child, Children> {
+        fn get_leaf<'s>(&'s self, _: &Leaf) -> &'s Thing<Text, Leaf, Leaves> {
             unimplemented!("This provider does not provide children")
         }
 
-        fn get_children<'s>(&'s self, _: &Children) -> &'s [Thing<Text, Child, Children>] {
+        fn get_leaves<'s>(&'s self, _: &Leaves) -> &'s [Thing<Text, Leaf, Leaves>] {
             unimplemented!("This provider does not provide children")
         }
     }
 
     pub fn text_ref_provider<'text>(
         text: &'text str,
-    ) -> impl UnbakedProvider<TextRef<'text>, ChildInd, ChildrenRange> {
-        UnbakedBottomProvider::new()
+    ) -> impl UnsealedStorage<TextRef<'text>, LeafInd, LeavesRange> {
+        UnsealedBottomStorage::new()
             .with_text_ref(text)
-            .things_owned()
+            .leaves_owned()
     }
 
-    pub fn text_own_provider() -> impl UnbakedProvider<TextOwn, ChildInd, ChildrenRange> {
-        UnbakedBottomProvider::new().text_owned().things_owned()
+    pub fn text_own_provider() -> impl UnsealedStorage<TextOwn, LeafInd, LeavesRange> {
+        UnsealedBottomStorage::new().text_owned().leaves_owned()
     }
 
     pub fn text_maybe_own_provider<'text>(
         ref_text: &'text str,
-    ) -> impl UnbakedProvider<TextMaybeOwn<'text>, ChildInd, ChildrenRange> {
-        UnbakedBottomProvider::new()
+    ) -> impl UnsealedStorage<TextMaybeOwn<'text>, LeafInd, LeavesRange> {
+        UnsealedBottomStorage::new()
             .text_owned()
             .with_text_ref(ref_text)
-            .things_owned()
+            .leaves_owned()
     }
 
     pub fn text_maybe_own_find_provider<'text>(
         ref_text: &'text str,
         own_text: impl Into<String>,
-    ) -> impl UnbakedProvider<TextMaybeOwn<'text>, ChildInd, ChildrenRange> {
-        UnbakedBottomProvider::new()
+    ) -> impl UnsealedStorage<TextMaybeOwn<'text>, LeafInd, LeavesRange> {
+        UnsealedBottomStorage::new()
             .with_text_find(own_text)
             .with_text_ref(ref_text)
-            .things_owned()
+            .leaves_owned()
     }
 
     pub fn text_own_find_provider(
         own_text: impl Into<String>,
-    ) -> impl UnbakedProvider<TextOwn, ChildInd, ChildrenRange> {
-        UnbakedBottomProvider::new()
+    ) -> impl UnsealedStorage<TextOwn, LeafInd, LeavesRange> {
+        UnsealedBottomStorage::new()
             .with_text_find(own_text)
-            .things_owned()
+            .leaves_owned()
     }
 
     fn transfer_nodes<
@@ -1153,8 +1215,8 @@ mod borrowing_concept {
         buf: &mut Vec<Thing<ToText, ToChild, ToChildren>>,
     ) -> Thing<ToText, ToChild, ToChildren>
     where
-        FromProvider: BakedProvider<FromText, FromChild, FromChildren>,
-        ToProvider: UnbakedProvider<ToText, ToChild, ToChildren>,
+        FromProvider: SealedStorage<FromText, FromChild, FromChildren>,
+        ToProvider: UnsealedStorage<ToText, ToChild, ToChildren>,
     {
         match root {
             Thing::Text { text } => {
@@ -1169,12 +1231,12 @@ mod borrowing_concept {
             } => {
                 let s = from_provider.get_text(text);
                 let text = to_provider.register_text(s);
-                let ch1 = from_provider.get_child(child1);
+                let ch1 = from_provider.get_leaf(child1);
                 let ch1 = transfer_nodes(ch1, from_provider, to_provider, buf);
-                let child1 = to_provider.register_child(ch1);
-                let ch2 = from_provider.get_child(child2);
+                let child1 = to_provider.register_leaf(ch1);
+                let ch2 = from_provider.get_leaf(child2);
                 let ch2 = transfer_nodes(ch2, from_provider, to_provider, buf);
-                let child2 = to_provider.register_child(ch2);
+                let child2 = to_provider.register_leaf(ch2);
                 Thing::Child {
                     text,
                     child1,
@@ -1182,13 +1244,13 @@ mod borrowing_concept {
                 }
             }
             Thing::Multiple { children } => {
-                let ch = from_provider.get_children(children);
+                let ch = from_provider.get_leaves(children);
                 let start_ind = buf.len();
                 for child in ch {
                     let to_child = transfer_nodes(child, from_provider, to_provider, buf);
                     buf.push(to_child);
                 }
-                let children = to_provider.register_children(buf.drain(start_ind..));
+                let children = to_provider.register_leaves(buf.drain(start_ind..));
                 Thing::Multiple { children }
             }
         }
@@ -1197,7 +1259,7 @@ mod borrowing_concept {
     struct UnbakedFullOwner<'text> {
         yet_unowned_text: Cow<'text, str>,
         owned_text: String,
-        children: Vec<Thing<TextOwn, ChildInd, ChildrenRange>>,
+        children: Vec<Thing<TextOwn, LeafInd, LeavesRange>>,
     }
 
     impl<'text> UnbakedFullOwner<'text> {
@@ -1228,8 +1290,8 @@ mod borrowing_concept {
         }
     }
 
-    impl<'text> UnbakedProvider<TextOwn, ChildInd, ChildrenRange> for UnbakedFullOwner<'text> {
-        type Baked = FullOwner;
+    impl<'text> UnsealedStorage<TextOwn, LeafInd, LeavesRange> for UnbakedFullOwner<'text> {
+        type Sealed = FullOwner;
 
         fn register_text(&mut self, text: &str) -> TextOwn {
             if let Some(range) = try_find_pointer_match(&self.yet_unowned_text, text) {
@@ -1249,23 +1311,23 @@ mod borrowing_concept {
             TextOwn(start_ind..end_ind)
         }
 
-        fn register_child(&mut self, child: Thing<TextOwn, ChildInd, ChildrenRange>) -> ChildInd {
+        fn register_leaf(&mut self, child: Thing<TextOwn, LeafInd, LeavesRange>) -> LeafInd {
             let ind = self.children.len();
             self.children.push(child);
-            ChildInd(ind)
+            LeafInd(ind)
         }
 
-        fn register_children<'s>(
+        fn register_leaves<'s>(
             &'s mut self,
-            children: impl Iterator<Item = Thing<TextOwn, ChildInd, ChildrenRange>>,
-        ) -> ChildrenRange {
+            children: impl Iterator<Item = Thing<TextOwn, LeafInd, LeavesRange>>,
+        ) -> LeavesRange {
             let start_ind = self.children.len();
             self.children.extend(children);
             let end_ind = self.children.len();
-            ChildrenRange(start_ind..end_ind)
+            LeavesRange(start_ind..end_ind)
         }
 
-        fn bake(self) -> Self::Baked {
+        fn seal(self) -> Self::Sealed {
             let Cow::Owned(s) = self.yet_unowned_text else {
                 panic!("Full Owner cannot be baked until data is provided to it")
             };
@@ -1280,10 +1342,10 @@ mod borrowing_concept {
     struct FullOwner {
         now_owned_text: Box<str>,
         owned_text: Box<str>,
-        children: Box<[Thing<TextOwn, ChildInd, ChildrenRange>]>,
+        children: Box<[Thing<TextOwn, LeafInd, LeavesRange>]>,
     }
 
-    impl BakedProvider<TextOwn, ChildInd, ChildrenRange> for FullOwner {
+    impl SealedStorage<TextOwn, LeafInd, LeavesRange> for FullOwner {
         fn get_text<'s>(&'s self, TextOwn(range): &TextOwn) -> &'s str {
             let (start, end) = (range.start, range.end);
             let len = self.now_owned_text.len();
@@ -1293,17 +1355,17 @@ mod borrowing_concept {
             &self.now_owned_text[start..end]
         }
 
-        fn get_child<'s>(
+        fn get_leaf<'s>(
             &'s self,
-            &ChildInd(i): &ChildInd,
-        ) -> &'s Thing<TextOwn, ChildInd, ChildrenRange> {
+            &LeafInd(i): &LeafInd,
+        ) -> &'s Thing<TextOwn, LeafInd, LeavesRange> {
             &self.children[i]
         }
 
-        fn get_children<'s>(
+        fn get_leaves<'s>(
             &'s self,
-            ChildrenRange(range): &ChildrenRange,
-        ) -> &'s [Thing<TextOwn, ChildInd, ChildrenRange>] {
+            LeavesRange(range): &LeavesRange,
+        ) -> &'s [Thing<TextOwn, LeafInd, LeavesRange>] {
             &self.children[range.clone()]
         }
     }
@@ -1360,7 +1422,7 @@ mod borrowing_concept {
             Text,
             Child,
             Children,
-            P: UnbakedProvider<Text, Child, Children>,
+            P: UnsealedStorage<Text, Child, Children>,
             S: AsRef<str>,
         >(
             provider: &mut P,
@@ -1385,8 +1447,8 @@ mod borrowing_concept {
                 let child2 = generate_thing(provider, rng, text_gen, children_buf, nodes_left);
                 Thing::Child {
                     text: provider.register_text(text.as_ref()),
-                    child1: provider.register_child(child1),
-                    child2: provider.register_child(child2),
+                    child1: provider.register_leaf(child1),
+                    child2: provider.register_leaf(child2),
                 }
             } else {
                 // rest 4% own 1-5 children
@@ -1395,7 +1457,7 @@ mod borrowing_concept {
                     let child = generate_thing(provider, rng, text_gen, children_buf, nodes_left);
                     children_buf.push(child);
                 }
-                let children = provider.register_children(children_buf.drain(buf_start..));
+                let children = provider.register_leaves(children_buf.drain(buf_start..));
                 Thing::Multiple { children }
             };
             // average coefficient is 0.6 * 0 + 0.36 * 2 + 2.5 * 0.04 = 0.82
@@ -1403,10 +1465,10 @@ mod borrowing_concept {
             generated
         }
 
-        use crate::data::borrowing_concept::{UnbakedFullOwner, UnbakedProvider};
+        use crate::data::borrowing_concept::{UnbakedFullOwner, UnsealedStorage};
 
         use super::{
-            text_maybe_own_provider, text_own_provider, text_ref_provider, transfer_nodes, Thing,
+            text_maybe_own_provider, text_own_provider, text_ref_provider, Thing, ThingTree,
         };
 
         // TODO check these versions of fuzzes to actually run correctly
@@ -1426,12 +1488,11 @@ mod borrowing_concept {
                     &mut Vec::new(),
                     &mut 100,
                 );
-                let provider = provider.bake();
+                let tree = ThingTree::new(thing, provider);
 
                 // assert
                 let mut output = String::new();
-                thing
-                    .write_to(&provider, &mut output)
+                tree.write_to(&mut output)
                     .expect("Should be able to write into string");
             }
         }
@@ -1445,12 +1506,11 @@ mod borrowing_concept {
                 // act
                 let thing =
                     generate_thing(&mut provider, rng, &mut gen_text, &mut Vec::new(), &mut 100);
-                let provider = provider.bake();
+                let tree = ThingTree::new(thing, provider);
 
                 // assert
                 let mut output = String::new();
-                thing
-                    .write_to(&provider, &mut output)
+                tree.write_to(&mut output)
                     .expect("Should be able to write into string");
             }
         }
@@ -1471,12 +1531,11 @@ mod borrowing_concept {
                     &mut Vec::new(),
                     &mut 100,
                 );
-                let provider = provider.bake();
+                let tree = ThingTree::new(thing, provider);
 
                 // assert
                 let mut output = String::new();
-                thing
-                    .write_to(&provider, &mut output)
+                tree.write_to(&mut output)
                     .expect("Should be able to write into string");
             }
         }
@@ -1495,26 +1554,21 @@ mod borrowing_concept {
                     &mut Vec::new(),
                     &mut 100,
                 );
-                let original_provider = provider.bake();
+                let original_tree = ThingTree::new(thing, provider);
 
                 // act
                 let mut moved_provider = text_own_provider();
-                let moved_thing = transfer_nodes(
-                    &thing,
-                    &original_provider,
-                    &mut moved_provider,
-                    &mut Vec::new(),
-                );
-                let moved_provider = moved_provider.bake();
+                let moved_thing = original_tree.move_to(&mut moved_provider);
+                let moved_tree = ThingTree::new(moved_thing, moved_provider);
 
                 // assert
                 let mut original = String::new();
-                thing
-                    .write_to(&original_provider, &mut original)
+                original_tree
+                    .write_to(&mut original)
                     .expect("Should be able to write into string");
                 let mut moved = String::new();
-                moved_thing
-                    .write_to(&moved_provider, &mut moved)
+                moved_tree
+                    .write_to(&mut moved)
                     .expect("Should be able to write into string");
                 assert_eq!(
                     original, moved,
@@ -1540,36 +1594,30 @@ mod borrowing_concept {
                     &mut Vec::new(),
                     &mut 100,
                 );
-                let original_provider = provider.bake();
+                let original_tree = ThingTree::new(thing, provider);
 
                 // act
                 let mut owning_provider = UnbakedFullOwner::new(&text);
-                let owning_thing = transfer_nodes(
-                    &thing,
-                    &original_provider,
-                    &mut owning_provider,
-                    &mut Vec::new(),
-                );
+                let owning_thing = original_tree.move_to(&mut owning_provider);
                 let mut original = String::new();
-                thing
-                    .write_to(&original_provider, &mut original)
+                original_tree
+                    .write_to(&mut original)
                     .expect("Should be able to write into string");
+                drop(original_tree);
                 // SAFETY:
                 // data provided and data `OwnedProvider` referred to here is the same,
                 // as it's contained in the same immutable variable
                 let owning_provider = unsafe {
                     let mut owning_provider = owning_provider.drop_unowned();
-                    drop(original_provider);
                     owning_provider.provide(text);
                     owning_provider
                 };
-
-                let owning_provider = owning_provider.bake();
+                let owning_tree = ThingTree::new(owning_thing, owning_provider);
 
                 // assert
                 let mut owned = String::new();
-                owning_thing
-                    .write_to(&owning_provider, &mut owned)
+                owning_tree
+                    .write_to(&mut owned)
                     .expect("Should be able to write into string");
                 assert_eq!(
                     original, owned,
