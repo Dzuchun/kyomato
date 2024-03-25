@@ -6,6 +6,22 @@ use std::{
 
 use url::Url;
 
+#[derive(Debug, Default)]
+pub struct TitleInfo<'source> {
+    pub header_line1: Option<Tx<'source>>,
+    pub header_line2: Option<Tx<'source>>,
+    pub document_type: Option<Tx<'source>>,
+    pub title_line1: Option<Tx<'source>>,
+    pub title_line2: Option<Tx<'source>>,
+    pub title_line3: Option<Tx<'source>>,
+    pub title_line4: Option<Tx<'source>>,
+    pub author_line1: Option<Tx<'source>>,
+    pub author_line2: Option<Tx<'source>>,
+    pub author_line3: Option<Tx<'source>>,
+    pub date: Option<Tx<'source>>,
+    pub prof: Option<Tx<'source>>,
+}
+
 // For whatever reason, std library Cow requires ToOwned for it's contained value to be cloned
 // That makes NO SENSE in my case.
 // I do not need a functionality to obtain owned value here,

@@ -1,5 +1,5 @@
 \documentclass[a4paper]{article}
-\usepackage{graphicx, hyperref, xcolor, gensymb, amssymb, mathtools, wrapfig, mathtools, microtype, lastpage, caption, titlesec, paracol, longtable, booktabs, cancel, soul}
+\usepackage{graphicx, hyperref, xcolor, gensymb, amssymb, mathtools, wrapfig, mathtools, microtype, lastpage, caption, titlesec, paracol, longtable, booktabs, cancel}
 \usepackage[T2A, T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage[russian, ukrainian]{babel}
@@ -110,3 +110,49 @@
 % \renewcommand{\caption}[1] {
 %     \oldCaption{\fnt #1}
 % }
+
+% markdown strikeouts
+\usepackage{soul}
+
+% codeblocks
+\usepackage{minted}
+
+\titleformat*{\section}{\fnt\LARGE\bfseries}
+\titleformat*{\subsection}{\fnt\Large\bfseries}
+\titleformat*{\subsubsection}{\fnt\Large}
+
+\begin{document}
+\thispagestyle{empty} % [A]:for cropping
+% ------------
+% source: https://tex.stackexchange.com/questions/173651/need-help-to-create-such-a-beautiful-title-page
+\begingroup
+\centering
+\obeylines
+\topskip0pt % source: https://tex.stackexchange.com/questions/2326/vertically-center-text-on-a-page
+\vspace*{\fill}
+\textbf{
+\LARGE $header-line1$
+\LARGE $header-line2$
+\vspace{100pt}
+\LARGE $document_type$
+\Large $title-line1$
+\Large $title-line2$
+\Large $title-line3$
+\huge $title-line4$
+\vspace{50pt}
+\large $author-line1$
+\large $author-line2$
+\large $author-line3$
+\large $date$
+\vspace*{\fill}
+\hspace{\fill}\large $prof$ \rule{20mm}{0.4pt}
+\vspace{10pt}
+}
+\endgroup
+% ------------
+\newpage
+\tableofcontents
+
+\newpage
+\fnt
+   

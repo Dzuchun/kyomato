@@ -27,6 +27,7 @@
 //! Well, unless there's a way to efficiently write to a single output from multiple threads, while preserving output order.
 //! Any sort of "collect" function would've destroyed the purpose anyway.
 
+use data::TitleInfo;
 use gen::OutputGenerator;
 use lexer::KyomatoLexError;
 
@@ -47,20 +48,28 @@ pub fn lex<'source>(input: &'source str) -> Result<data::Token<'source>, Kyomato
 }
 pub fn gen<'token, 'source: 'token>(
     token: &'token data::Token<'source>,
+    title_info: impl Into<Option<TitleInfo<'source>>>,
     mut output: impl std::io::Write,
 ) -> Result<(), Box<dyn std::error::Error + 'token>> {
-    let buf = gen_to_string(token)?;
+    let buf = gen_to_string(token, title_info)?;
     // TODO make a transformer struct
     output.write_all(buf.as_bytes())?;
     Ok(())
 }
 pub fn gen_to_string<'token, 'source: 'token>(
     token: &'token data::Token<'source>,
+    title_info: impl Into<Option<TitleInfo<'source>>>,
 ) -> Result<String, Box<dyn std::error::Error + 'token>> {
     let generator = gen::lab::LabaLatex::new(path_engine::primitive());
-    let meta = gen::lab::SourceMeta::collect(&token)?.init_ayano()?;
+    let mut meta = gen::lab::SourceMeta::collect(&token)?.init_ayano()?;
+    if let Some(title_info) = title_info.into() {
+        meta.title_info = title_info;
+    }
     let mut buf = String::new();
-    generator.write_to(&mut buf, &meta, &mut gen::lab::Context::default(), token)?;
+    generator.write_preamble(&mut buf, &meta)?;
+    let mut context = gen::lab::Context::default();
+    generator.write_to(&mut buf, &meta, &mut context, token)?;
+    generator.write_postamble(&mut buf, &meta, &mut context)?;
     Ok(buf)
 }
 

@@ -6,7 +6,7 @@ use std::{
 use itertools::Itertools;
 use pyo3::PyErr;
 
-use crate::data::Token;
+use crate::data::{TitleInfo, Token};
 
 use super::super::ayano::{self, AyanoBuilder, AyanoExecutor};
 
@@ -21,6 +21,7 @@ pub struct SourceMeta<'source, Ayano> {
     pub footnotes: HashMap<&'source str, Token<'source>>,
     pub refs: HashSet<&'source str>,
     pub ayano: Ayano,
+    pub title_info: TitleInfo<'source>,
 }
 
 impl<'meta> SourceMeta<'meta, AyanoBuilder> {
@@ -42,6 +43,7 @@ impl<'meta> SourceMeta<'meta, AyanoBuilder> {
             ayano: self.ayano.initialize()?,
             footnotes: self.footnotes,
             refs: self.refs,
+            title_info: self.title_info,
         })
     }
 }

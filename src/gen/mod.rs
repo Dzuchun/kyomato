@@ -48,4 +48,19 @@ pub trait OutputGenerator<'source, Meta, Context> {
             .map(|t| self.write_to(output, meta, context, t))
             .try_collect()
     }
+    fn write_preamble<'meta, W: Write + ?Sized>(
+        &self,
+        _: &mut W,
+        _: &'meta Meta,
+    ) -> Res<'source> {
+        Ok(())
+    }
+    fn write_postamble<'meta, 'context, W: Write + ?Sized>(
+        &self,
+        _: &mut W,
+        _: &'meta Meta,
+        _: &'context mut Context,
+    ) -> Res<'source> {
+        Ok(())
+    }
 }

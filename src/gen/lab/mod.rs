@@ -5,9 +5,10 @@ pub use context::Context;
 pub use meta::SourceMeta;
 
 use itertools::Itertools;
+use regex::Replacer;
 
 use crate::{
-    data::{Formatting, Token},
+    data::{Formatting, TitleInfo, Token},
     path_engine::PathEngine,
 };
 use std::{borrow::Borrow, fmt::Write, marker::PhantomData};
@@ -324,6 +325,77 @@ where
                 }
             }
         };
+        Ok(())
+    }
+
+    fn write_preamble<'meta, W: Write + ?Sized>(
+        &self,
+        output: &mut W,
+        meta: &'meta SourceMeta<'source, AyanoExecutor>,
+    ) -> Res<'source> {
+        let mut preamble = include_str!("lab_preamble.tex").to_string();
+        const PATTERNS: [&'static str; 12] = [
+            "$header-line1$",
+            "$header-line2$",
+            "$document-type$",
+            "$title-line1$",
+            "$title-line2$",
+            "$title-line3$",
+            "$title-line4$",
+            "$author-line1$",
+            "$author-line2$",
+            "$author-line3$",
+            "$date$",
+            "$prof$",
+        ];
+        let TitleInfo {
+            header_line1,
+            header_line2,
+            document_type,
+            title_line1,
+            title_line2,
+            title_line3,
+            title_line4,
+            author_line1,
+            author_line2,
+            author_line3,
+            date,
+            prof,
+        } = &meta.title_info;
+        let replacements = [
+            header_line1,
+            header_line2,
+            document_type,
+            title_line1,
+            title_line2,
+            title_line3,
+            title_line4,
+            author_line1,
+            author_line2,
+            author_line3,
+            date,
+            prof,
+        ];
+        for i in 0..PATTERNS.len() {
+            let pat = PATTERNS[i];
+            if let Some(ind) = preamble.find(pat) {
+                preamble.replace_range(
+                    ind..ind + pat.len(),
+                    &replacements[i].as_ref().unwrap_or(&"".into()),
+                );
+            }
+        }
+        output.write_str(&preamble)?;
+        Ok(())
+    }
+
+    fn write_postamble<'meta, 'context, W: Write + ?Sized>(
+        &self,
+        output: &mut W,
+        _: &'meta SourceMeta<'source, AyanoExecutor>,
+        _: &'context mut Context,
+    ) -> Res<'source> {
+        output.write_str("\n\n\\end{document}")?;
         Ok(())
     }
 }
@@ -695,7 +767,7 @@ y = 0.4
     }
 
     test! {ayano_fig2, Token::Ayano{data: AyanoBlock{is_display: false,is_static: false,code: r"@fig: src = 'path/to/image.jpg'".into(),insert_path: None,
-                    is_space_before: false,}},
+                                                                        is_space_before: false,}},
 r"
 \begin{figure}[h!]
 \centering

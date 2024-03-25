@@ -29,7 +29,7 @@ fn show_transform() {
                 panic!("Should successfully parse the input: {err:#?}");
             }
         };
-        let repr = kyomato::gen_to_string(&parsed).expect("Should be able to transform tokens");
+        let repr = kyomato::gen_to_string(&parsed, None).expect("Should be able to transform tokens");
         println!("{repr}");
         std::io::stdin()
             .read_line(&mut String::new())
@@ -86,7 +86,7 @@ fn gen_transform_output() {
             output_file
         };
         // write the result to output file
-        kyomato::gen(&parsed, &mut output_file).expect("Failed to generate output");
+        kyomato::gen(&parsed, None, &mut output_file).expect("Failed to generate output");
     }
 }
 
@@ -104,7 +104,7 @@ fn test_transform() {
                 panic!("Should successfully parse the input: {err:#?}");
             }
         };
-        let repr = kyomato::gen_to_string(&parsed).expect("Failed to generate output");
+        let repr = kyomato::gen_to_string(&parsed, None).expect("Failed to generate output");
         // write the result to output directory
         let expected_output = {
             output_path.push(&filename);
