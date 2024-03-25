@@ -3,6 +3,7 @@ Multiple {
         [
             Paragraph {
                 is_newline: false,
+                space_before: false,
                 formatting: None,
                 content: "This test is dedicated to attempts of parser deception, i.e. usage of special symbols in wrong places to see if parser recognizes them as control symbols. There we go:",
             },
@@ -12,38 +13,45 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Page dividers are represented by ------",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "If the line above has dashes     ^^^^^^ here, it probably works alright.",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Here's a genuine divider",
             },
             PageDiv,
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Fun fact: there can be a paragraph right after it!",
             },
             PageDiv,
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: None,
                 content: "Some text, cause why not",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "But this",
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: Some(
                     Bold,
                 ),
@@ -51,6 +59,7 @@ Multiple {
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: None,
                 content: "look cursed, don't do it.",
             },
@@ -60,11 +69,13 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Headers are most recognizable by '#'-symbol. For it to actually represent a header, it needs to at the beginning of the line and there should be no more than 6 of them.",
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: Some(
                     Bold,
                 ),
@@ -72,11 +83,13 @@ Multiple {
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: None,
                 content: "up to the end of line will be included into a header, then.",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Example:",
             },
@@ -86,21 +99,25 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Here's an example of incorrect header:",
             },
             Paragraph {
                 is_newline: true,
+                space_before: true,
                 formatting: None,
                 content: "###### This header is considered incorrect for this application, and will be parsed as regular paragraph instead",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Another example of incorrect header, featuring 7 hash-symbols:",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "####### This will be parsed as a regular paragraph",
             },
@@ -110,24 +127,29 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "There are two types of equations in markdown/latex: inline mathmode and display mathmode",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Both of them are defined by $-symbols. However, they must be paired to actually represent these. Here are examples:",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Inline:",
             },
             InlineMath {
+                space_before: true,
                 content: "y = x ^ 2",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Display:",
             },
@@ -137,26 +159,31 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Note that display mathmode should ALWAYS start from a new line for this application.",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Basically, there's not much to deceive for: you can do that:",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "$",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "$",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "(the above should not be mathmode), and that's it, basically :sad:",
             },
@@ -166,16 +193,19 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Tables are defined by |-symbol. But the actual table will happen only if they are the first thing on the line.",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Due to current implementation, there's no cure apart from display mathmode and code:",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "(this should be display mathmode):",
             },
@@ -185,6 +215,7 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "(this should be a code block):",
             },
@@ -200,6 +231,7 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Figure is defined by a ![[ sequence at a start of the line. Same points should be uphold here:",
             },
@@ -217,6 +249,7 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "These start with []",
             },
@@ -226,15 +259,18 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "These are followed by parentheses (). Nothing is allowed between them, thus",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Here's a correct href:",
             },
             Href {
+                space_before: true,
                 url: Url {
                     scheme: "https",
                     cannot_be_a_base: false,
@@ -254,16 +290,19 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Here are incorrect refs:",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "[my gh page] (https://youtu.be/rickroll",
             },
             Paragraph {
                 is_newline: false,
+                space_before: false,
                 formatting: Some(
                     Italic,
                 ),
@@ -271,21 +310,25 @@ Multiple {
             },
             Paragraph {
                 is_newline: false,
+                space_before: false,
                 formatting: None,
                 content: "lol)",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "[my gh page]",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "(https://youtu.be/rickroll",
             },
             Paragraph {
                 is_newline: false,
+                space_before: false,
                 formatting: Some(
                     Italic,
                 ),
@@ -293,6 +336,7 @@ Multiple {
             },
             Paragraph {
                 is_newline: false,
+                space_before: false,
                 formatting: None,
                 content: "lol)",
             },
@@ -302,47 +346,57 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "These are started by [^.",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Here are correct footnote refs:",
             },
             FootnoteReference {
+                space_before: true,
                 ident: "1",
             },
             Paragraph {
                 is_newline: false,
+                space_before: false,
                 formatting: None,
                 content: ",",
             },
             FootnoteReference {
+                space_before: true,
                 ident: "source",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Here are incorrect ones: [^1, ^1],",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "[^",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "1",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "]",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "So on",
             },
@@ -352,44 +406,53 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "These refer to objects like figures, tables and equations.",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Started by [@.",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Here's a correct ref:",
             },
             Reference {
+                space_before: true,
                 ident: "fig:experiment_schema",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Here's are bad ones: [@ fig:1, @  source3],",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "[@",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "eq2",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "]",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: Some(
                     Bold,
                 ),
@@ -397,11 +460,13 @@ Multiple {
             },
             Paragraph {
                 is_newline: false,
+                space_before: false,
                 formatting: None,
                 content: ": despite object types being prepended with 'eq', 'fig' or 'tab' in refs, you",
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: Some(
                     Italic,
                 ),
@@ -409,6 +474,7 @@ Multiple {
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: None,
                 content: "use regular latex to define your custom refs. In fact, LaTeX doesn't care about all of these at all; I'm doing these transformations just for my own comfort, as I've been doing this manually.",
             },
@@ -418,11 +484,13 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "This object's type is deprecated and will be removed soon.",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "It starts and ends with",
             },
@@ -432,16 +500,19 @@ Multiple {
                     [
                         Paragraph {
                             is_newline: false,
+                            space_before: false,
                             formatting: None,
                             content: "* or _",
                         },
                         Paragraph {
                             is_newline: false,
+                            space_before: false,
                             formatting: None,
                             content: "** or __",
                         },
                         Paragraph {
                             is_newline: false,
+                            space_before: false,
                             formatting: None,
                             content: "~~",
                         },
@@ -450,6 +521,7 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: Some(
                     Bold,
                 ),
@@ -457,11 +529,13 @@ Multiple {
             },
             Paragraph {
                 is_newline: false,
+                space_before: false,
                 formatting: None,
                 content: ": As of now, these",
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: Some(
                     Italic,
                 ),
@@ -469,11 +543,13 @@ Multiple {
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: None,
                 content: "cause cause massive problems if encountered at the start of the line.",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Basically, parsers for these tokens attempt parse everything up until they find a closing token. But if they are inserted in a middle of the text, then it's ok - they will be limited by current paragraph, and (most likely) will find no match inside it, if their use was unintended.",
             },
@@ -483,25 +559,30 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "These start with '",
             },
             FootnoteReference {
+                space_before: false,
                 ident: "ID",
             },
             Paragraph {
                 is_newline: false,
+                space_before: false,
                 formatting: None,
                 content: ":' and proceed to the end of line.",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Example of valid content:",
             },
             FootnoteContent {
                 content: Paragraph {
                     is_newline: false,
+                    space_before: false,
                     formatting: None,
                     content: "Explanation of source2.",
                 },
@@ -509,45 +590,55 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Example of invalid content:",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "[^source2: This is invalid content",
             },
             FootnoteReference {
+                space_before: false,
                 ident: "source2",
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: None,
                 content: ": This is invalid content",
             },
             FootnoteReference {
+                space_before: true,
                 ident: "source2",
             },
             Paragraph {
                 is_newline: false,
+                space_before: false,
                 formatting: None,
                 content: ": This is invalid content",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "They also must start at the beginning of the line. If fact, this:",
             },
             FootnoteReference {
+                space_before: true,
                 ident: "source2",
             },
             Paragraph {
                 is_newline: false,
+                space_before: false,
                 formatting: None,
                 content: ": Some content",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Is expected to be a footnote ref with a colon.",
             },
@@ -557,11 +648,13 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "There are two fundamental types of code blocks: normal code block and",
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: Some(
                     Bold,
                 ),
@@ -569,6 +662,7 @@ Multiple {
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: None,
                 content: "code block.",
             },
@@ -578,11 +672,13 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "These start and end with '```' on a newline. There can be",
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: Some(
                     Bold,
                 ),
@@ -590,6 +686,7 @@ Multiple {
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: None,
                 content: "inside. Example:",
             },
@@ -601,6 +698,7 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "There can be anything after code block had closed:",
             },
@@ -612,36 +710,43 @@ Multiple {
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: None,
                 content: "Here's some text that's ok to be here",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "There can't be any spaces before delimiting ```s:",
             },
             Paragraph {
                 is_newline: true,
+                space_before: true,
                 formatting: None,
                 content: "```python",
             },
             Paragraph {
                 is_newline: true,
+                space_before: true,
                 formatting: None,
                 content: "# This here is not really a python block",
             },
             Paragraph {
                 is_newline: true,
+                space_before: true,
                 formatting: None,
                 content: "x = 2",
             },
             Paragraph {
                 is_newline: true,
+                space_before: true,
                 formatting: None,
                 content: "print(x)",
             },
             Paragraph {
                 is_newline: true,
+                space_before: true,
                 formatting: None,
                 content: "```",
             },
@@ -651,6 +756,7 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: Some(
                     Italic,
                 ),
@@ -658,11 +764,13 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "This object looks and behaves just like normal code block, but is only limited to",
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: Some(
                     Italic,
                 ),
@@ -670,17 +778,20 @@ Multiple {
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: None,
                 content: "language, can have spacial arguments in a language line, may leave something behind in the document. For example:",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "This Ayano block will leave plain \"2\" behind it:",
             },
             Ayano {
                 data: AyanoBlock {
                     is_display: false,
+                    is_space_before: false,
                     is_static: false,
                     code: "2",
                     insert_path: None,
@@ -688,6 +799,7 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Akin to normal blocks, it's ok to leave something trailing:",
             },
@@ -699,11 +811,13 @@ Multiple {
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: None,
                 content: "This text is ok to be here",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "And these are invalid Ayano blocks:",
             },
@@ -715,16 +829,19 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: true,
                 formatting: None,
                 content: "```ayano",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "2",
             },
             Paragraph {
                 is_newline: true,
+                space_before: true,
                 formatting: None,
                 content: "```",
             },

@@ -7,6 +7,7 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Тут трохи тексту і пояснень про квантові мультивироджені рефурбалідзери змішаного типу. Це нудно, тож тримайте формулу:",
             },
@@ -22,6 +23,7 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Рефурбалідзери можуть виявитись дуже важливими для збереження екологічної безпеки нашої планети. До прикладу, в них є наступні переваги:",
             },
@@ -34,10 +36,12 @@ Multiple {
                                 [
                                     Paragraph {
                                         is_newline: false,
+                                        space_before: false,
                                         formatting: None,
                                         content: "Нормувальний множник",
                                     },
                                     InlineMath {
+                                        space_before: true,
                                         content: "|\\psi|^{2} = 3/4",
                                     },
                                 ],
@@ -48,10 +52,12 @@ Multiple {
                                 [
                                     Paragraph {
                                         is_newline: false,
+                                        space_before: false,
                                         formatting: None,
                                         content: "Кількість хромосом -",
                                     },
                                     InlineMath {
+                                        space_before: true,
                                         content: "\\exp(\\pi)",
                                     },
                                 ],
@@ -59,6 +65,7 @@ Multiple {
                         },
                         Paragraph {
                             is_newline: false,
+                            space_before: false,
                             formatting: None,
                             content: "Поживна цінність - 20 дптр/см",
                         },
@@ -70,6 +77,7 @@ Multiple {
                 caption: Some(
                     Paragraph {
                         is_newline: false,
+                        space_before: false,
                         formatting: None,
                         content: "Принципове влаштування рефурбалідзера",
                     },
@@ -83,36 +91,44 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "На світлині",
             },
             Reference {
+                space_before: true,
                 ident: "fig:refurb",
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: None,
                 content: "можна бачити принципову схему влаштування рефурбалідзера. Неважно помітити великі очі",
             },
             FootnoteReference {
+                space_before: false,
                 ident: "1",
             },
             Paragraph {
                 is_newline: false,
+                space_before: false,
                 formatting: None,
                 content: ", і два термоядерних реактори, що оточують їх. Точні реакції всередині невідомі, але цілком можливо що там женуть",
             },
             InlineMath {
+                space_before: true,
                 content: "du + t -> {}^{5}_{6}C",
             },
             Paragraph {
                 is_newline: false,
+                space_before: false,
                 formatting: None,
                 content: "...",
             },
             FootnoteContent {
                 content: Paragraph {
                     is_newline: false,
+                    space_before: false,
                     formatting: None,
                     content: "Для поливу.",
                 },

@@ -931,7 +931,20 @@ fn paragraph_inner<
         .filter(|(_, c)| ['[', '*', '_', '~', '$'].contains(c))
         // Now, try a proper parser for each one
         .map(|(ind, c)| {
-            let cut_cut_input = &input[ind..];
+            // at this point, there's definitely something to be parsed
+            // for respective parsers to work properly, we must preserve ~~the timeline~~ whitespace in front of them
+            // meaning, first index to include into parser input would be last non-whitespace char:
+            let cut_start =
+                input[..ind]
+                    .rfind(|c: char| !c.is_whitespace())
+                    .and_then(|last_non_whitespace| {
+                        input[last_non_whitespace..]
+                            .char_indices()
+                            .nth(1)
+                            .map(|(last_char_length, _)| last_char_length + last_non_whitespace)
+                    });
+            // TODO probably there's a more efficient way to do the thing above
+            let cut_cut_input = &input[cut_start.unwrap_or(0)..];
             let parse_res = match c {
                 '[' => {
                     if cut_input[ind..].starts_with("[@") {
@@ -1676,8 +1689,8 @@ $$
         test_ok! {ok_eq, "[@ eq:parabola]", "eq:parabola", ""} // equation ref example
         test_ok! {ok_fig, "[@ fig:my_best_drawing   ]", "fig:my_best_drawing", ""} // figure ref example
         test_ok! {ok_tab, "[@ tab:boring_stat     ]", "tab:boring_stat", ""} // table ref example
-        test_ok! {ok_space_before, "    \n \t  [@ ref]", "ref", ""}
-        test_ok! {ok_text_after, "    \n \t  [@ ref] кирилиця or th", "ref", " кирилиця or th"}
+                                                                             // test_ok! {ok_space_before, "    \n \t[@ ref]", "ref", ""}
+        test_ok! {ok_text_after, "    \n \t[@ ref] кирилиця or th", "ref", " кирилиця or th"}
     }
 
     // tests for `footnote reference`
@@ -1721,19 +1734,19 @@ $$
 
         test! {err_empty, paragraph, "", p: Err(_)} // paragraph won't be parsed where it's empty
         test! {err_whitespace, paragraph, "   \t   \n\n \t", p: Err(_)} // nor if it's all whitespace
-        test_ok! {ok_char, "  \t\n c\nfff", "c", None, "\nfff", |} // single char is ok as a paragraph
-        test_ok! {ok_sentence, "\t    \n I'm absolutely increative, so here's a bunch of garbage: ]42[t5(2[24tj4-0)jt3_94j03\nand some rest",
+        test_ok! {ok_char, "  \t\nc\nfff", "c", None, "\nfff", |} // single char is ok as a paragraph
+        test_ok! {ok_sentence, "\t    \nI'm absolutely increative, so here's a bunch of garbage: ]42[t5(2[24tj4-0)jt3_94j03\nand some rest",
         "I'm absolutely increative, so here's a bunch of garbage: ]42[t5(2[24tj4-0)jt3_94j03", None, "\nand some rest", |}
-        test_ok! {ok_formatting, "\t    \n You can use *bold*!", "You can use", Some(Token::Paragraph{is_newline: false, formatting: Some(Formatting::Italic), content: "bold".into(), space_before: false}), "!", |}
+        test_ok! {ok_formatting, "\t    \nYou can use *bold*!", "You can use", Some(Token::Paragraph{is_newline: false, formatting: Some(Formatting::Italic), content: "bold".into(), space_before: true}), "!", |}
         // FIXME NOT SUPPORTED
         /* test_ok! {ok_formatting_in_formatting, "\t    \n You can even use ~~__double-formatted__~~ things!", "You can even use",
         Some(Token::Formatted(Formatting::StrikeThrough, Box::new(Token::Formatted(Formatting::Bold, Box::new(Token::text("double-formatted")))))), " things!"} */
-        test_ok! {ok_equation, "    \t Inline math is fine too: $y = x_{\text{поч}} + x_0$.", "Inline math is fine too:",
-        Some(Token::InlineMath{content: "y = x_{\text{поч}} + x_0".into(), space_before: false}), "."}
-        test_ok! {ok_href, "   \t\t\n You can even [залишити посилання на свою сторінку на Гітхабі   ](https://www.github.com/Dzuchun)!", "You can even",
-        Some(Token::Href { url: "https://www.github.com/Dzuchun".parse().expect("That's a valid url"), display: "залишити посилання на свою сторінку на Гітхабі".into(), space_before: false }), "!", |}
-        test_ok! {ok_footnote_ref, "\t Footnote refs[^1] are also ok too!", "Footnote refs", Some(Token::FootnoteReference{ident: "1".into(), space_before: false}), " are also ok too!"}
-        test_ok! {ok_obj_ref, "\n\t Thi[[ngs lik_e tables* ([@tab:results]) can also be referenced", "Thi[[ngs lik_e tables* (",
+        test_ok! {ok_equation, "    \tInline math is fine too: $y = x_{\text{поч}} + x_0$.", "Inline math is fine too:",
+        Some(Token::InlineMath{content: "y = x_{\text{поч}} + x_0".into(), space_before: true}), "."}
+        test_ok! {ok_href, "   \t\t\nYou can even [залишити посилання на свою сторінку на Гітхабі   ](https://www.github.com/Dzuchun)!", "You can even",
+        Some(Token::Href { url: "https://www.github.com/Dzuchun".parse().expect("That's a valid url"), display: "залишити посилання на свою сторінку на Гітхабі".into(), space_before: true }), "!", |}
+        test_ok! {ok_footnote_ref, "\tFootnote refs[^1] are also ok too!", "Footnote refs", Some(Token::FootnoteReference{ident: "1".into(), space_before: false}), " are also ok too!"}
+        test_ok! {ok_obj_ref, "\n\tThi[[ngs lik_e tables* ([@tab:results]) can also be referenced", "Thi[[ngs lik_e tables* (",
         Some(Token::Reference{ident: "tab:results".into(), space_before: false}), ") can also be referenced", |}
     }
 
@@ -1808,10 +1821,22 @@ $$
                 space_before: false,
             }
         };
+        (^@ $ident:literal) => {
+            Token::Reference {
+                ident: Cow::Borrowed($ident),
+                space_before: true,
+            }
+        };
         (^ $ident:literal) => {
             Token::FootnoteReference {
                 ident: Cow::Borrowed($ident),
                 space_before: false,
+            }
+        };
+        (^^ $ident:literal) => {
+            Token::FootnoteReference {
+                ident: Cow::Borrowed($ident),
+                space_before: true,
             }
         };
     }
@@ -1872,7 +1897,7 @@ $$
         test_ok! {ok_formatted_newlined, "\n*виділений текст * і ще щось потім",
         tks![tx!("виділений текст", Some(Formatting::Italic), |), tx!(^"і ще щось потім")]}
         test_ok! {ok_inline_math, "дивіться! ось формула для параболи: $y = x^2$",
-        tks![tx!("дивіться! ось формула для параболи:"), eq!(! "y = x^2")]}
+        tks![tx!("дивіться! ось формула для параболи:"), eq!(^! "y = x^2")]}
         test_err! {err_display_math, "якась страшна штука:\n$$\nf(x) = \\int\\lms_{0}^{x} \\log(x - 2) dx\n$$\n{ref = scary}\n\tКраще не чіпати її"}
         // display math is not allowed in the inner_lex
         test_ok! {ok_href, "посилання на мою [Github сторінку](https://www.example.com) - ха-ха, жартую;\tОсь вам рівняння: $x^4 + 5x^2 - 100 = 0$.",
@@ -1907,30 +1932,30 @@ $$
         test_err! {err_no_rows, "|header|\n"}
         test_ok! {ok_one_row, "\n\t\n|header|\n|:---:|\n|cell|\n", tab!(tx!("header"); tx!("cell");), "\n"}
         test_ok! {ok_more_rows, "   \n|header1 |     header_2 |\n|:---:|:---:|\n|cell 11|cell[^12]|\n|$cell_{21}$|cell[@tab:22]|\n",
-        tab!(tx!("header1"), tx!("header_2");
+        tab!(tx!("header1"), tx!(^"header_2");
             tx!("cell 11"), tks![tx!("cell"), rf!(^ "12")];,
             eq!(!"cell_{21}"), tks![tx!("cell"), rf!(@"tab:22")];), "\n"}
         test_ok! {ok_empty_args, "   \n|header1 |     header_2 |\n|:---:|:---:|\n|cell 11|cell[^12]|\n|$cell_{21}$|cell[@tab:22]|\n{}",
-        tab!(tx!("header1"), tx!("header_2");
+        tab!(tx!("header1"), tx!(^"header_2");
             tx!("cell 11"), tks![tx!("cell"), rf!(^ "12")];,
             eq!(!"cell_{21}"), tks![tx!("cell"), rf!(@"tab:22")];), ""}
         test_ok! {ok_ident, "   \n|header1 |     header_2 |\n|:---:|:---:|\n|cell 11|cell[^12]|\n|$cell_{21}$|cell[@tab:22]|\n{  ref = example}",
-        tab!(tx!("header1"), tx!("header_2");
+        tab!(tx!("header1"), tx!(^"header_2");
             tx!("cell 11"), tks![tx!("cell"), rf!(^ "12")];,
             eq!(!"cell_{21}"), tks![tx!("cell"), rf!(@"tab:22")];;
             {ref = Some("example"), caption = None}), ""}
         test_ok! {ok_caption, "   \n|header1 |     header_2 |\n|:---:|:---:|\n|cell 11|cell[^12]|\n|$cell_{21}$|cell[@tab:22]|\n{caption = \"This table can be seen as an \\\"example\\\"\"}",
-        tab!(tx!("header1"), tx!("header_2");
+        tab!(tx!("header1"), tx!(^"header_2");
             tx!("cell 11"), tks![tx!("cell"), rf!(^ "12")];,
             eq!(!"cell_{21}"), tks![tx!("cell"), rf!(@"tab:22")];;
             {ref = None::<&str>, caption = Some(tx!("This table can be seen as an \\\"example\\\""))}), ""}
         test_ok! {ok_both, "   \n|header1 |     header_2 |\n|:---:|:---:|\n|cell 11|cell[^12]|\n|$cell_{21}$|cell[@tab:22]|\n{ref = example_table, caption = \"This table can be seen as an \\\"example\\\"\"}",
-        tab!(tx!("header1"), tx!("header_2");
+        tab!(tx!("header1"), tx!(^"header_2");
             tx!("cell 11"), tks![tx!("cell"), rf!(^ "12")];,
             eq!(!"cell_{21}"), tks![tx!("cell"), rf!(@"tab:22")];;
             {ref = Some("example_table"), caption = Some(tx!("This table can be seen as an \\\"example\\\""))}), ""}
         test_ok! {ok_both_reversed, "   \n|header1 |     header_2 |\n|:---:|:---:|\n|cell 11|cell[^12]|\n|$cell_{21}$|cell[@tab:22]|\n{caption = \"This table can be seen as an \\\"example\\\"\", ref = example_table    }",
-        tab!(tx!("header1"), tx!("header_2");
+        tab!(tx!("header1"), tx!(^"header_2");
             tx!("cell 11"), tks![tx!("cell"), rf!(^ "12")];,
             eq!(!"cell_{21}"), tks![tx!("cell"), rf!(@"tab:22")];;
             {ref = Some("example_table"), caption = Some(tx!("This table can be seen as an \\\"example\\\""))}), ""}
@@ -1973,13 +1998,13 @@ $$
         test_ok! {ok_explicit_no_params, "\n![[path/to/file.jpg]]\n{}\n", fig!("path/to/file.jpg"), "\n"}
         test_ok! {ok_ident, "\n![[path/to/file.jpg]]\n{ref = figure_of_doom    }\n", fig!("path/to/file.jpg", {ref = Some("figure_of_doom"), caption = None, width = None}), "\n"}
         test_ok! {ok_caption, "\n![[path/to/file.jpg]]\n{caption = \"Ця картинка показує графік рівняння $y = x^2$\"    }\n",
-        fig!("path/to/file.jpg", {ref = None::<&str>, caption = Some(tks![tx!("Ця картинка показує графік рівняння"), eq!(!"y = x^2")]), width = None}), "\n"}
+        fig!("path/to/file.jpg", {ref = None::<&str>, caption = Some(tks![tx!("Ця картинка показує графік рівняння"), eq!(^!"y = x^2")]), width = None}), "\n"}
         test_ok! {ok_both, "\n![[path/to/file.jpg]]\n{   ref = mc_erat, caption = \"This is a mee from our $\\text{Nomifactory}^{2*}$ world.\"    }\n",
-        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a mee from our"), eq!(!"\\text{Nomifactory}^{2*}"), tx!(^ "world."))), width = None}), "\n"}
+        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a mee from our"), eq!(^!"\\text{Nomifactory}^{2*}"), tx!(^ "world."))), width = None}), "\n"}
         test_ok! {ok_both_reversed, "\n![[path/to/file.jpg]]\n{   caption = \"This is a meme from our $\\text{Nomifactory}^{2*}$ world.\" ,    ref = mc_erat    }\n",
-        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a meme from our"), eq!(!"\\text{Nomifactory}^{2*}"), tx!(^ "world."))), width = None}), "\n"}
+        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a meme from our"), eq!(^!"\\text{Nomifactory}^{2*}"), tx!(^ "world."))), width = None}), "\n"}
         test_ok! {ok_both_left_over, "\n![[path/to/file.jpg]]\n{   caption = \"This is a meme from our $\\text{Nomifactory}^{2*}$ world.\" ,    ref = mc_erat    }\nІще трохи тексту",
-        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a meme from our"), eq!(!"\\text{Nomifactory}^{2*}"), tx!(^ "world."))), width = None}), "\nІще трохи тексту"}
+        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a meme from our"), eq!(^!"\\text{Nomifactory}^{2*}"), tx!(^ "world."))), width = None}), "\nІще трохи тексту"}
         test_ok! {ok_width, "\n![[path/to/file.jpg]]\n{    width = 0.5}\nTh else", fig!("path/to/file.jpg", {ref = None::<&str>, caption = None, width = Some(0.5)}), "\nTh else"}
     }
 
@@ -2018,33 +2043,33 @@ $$
         test_ok! {ok_single, "\n1. Item 1\n", ls![1 tx!("Item 1")], "\n"}
         test_ok! {ok_multiple, "\n1. Item 1 \n2. Gamma-function def: $\\Gamma(\\alpha) = \\int\\limits_{0}^{+\\infinity} t^{\\alpha - 1} e^{-t} dt$.\n3. Here's some table ref: ([@tab:function    ])   \n4. Explained in [^source2]\n",
         ls![1 tx!("Item 1"),
-            tks![tx!("Gamma-function def:"), eq!(!"\\Gamma(\\alpha) = \\int\\limits_{0}^{+\\infinity} t^{\\alpha - 1} e^{-t} dt"), tx!(".")],
+            tks![tx!("Gamma-function def:"), eq!(^!"\\Gamma(\\alpha) = \\int\\limits_{0}^{+\\infinity} t^{\\alpha - 1} e^{-t} dt"), tx!(".")],
             tks![tx!("Here's some table ref: ("), rf!(@"tab:function"), tx!(")")],
-            tks![tx!("Explained in"), rf!(^"source2")]
+            tks![tx!("Explained in"), rf!(^^"source2")]
             ], "\n"}
         test_ok! {ok_latin, "\na. Item 1 \nb. Gamma-function def: $\\Gamma(\\alpha) = \\int\\limits_{0}^{+\\infinity} t^{\\alpha - 1} e^{-t} dt$.\nc. Here's some table ref: ([@tab:function    ])   \nd. Explained in [^source2]\n",
         ls![a tx!("Item 1"),
-            tks![tx!("Gamma-function def:"), eq!(!"\\Gamma(\\alpha) = \\int\\limits_{0}^{+\\infinity} t^{\\alpha - 1} e^{-t} dt"), tx!(".")],
+            tks![tx!("Gamma-function def:"), eq!(^!"\\Gamma(\\alpha) = \\int\\limits_{0}^{+\\infinity} t^{\\alpha - 1} e^{-t} dt"), tx!(".")],
             tks![tx!("Here's some table ref: ("), rf!(@"tab:function"), tx!(")")],
-            tks![tx!("Explained in"), rf!(^"source2")]
+            tks![tx!("Explained in"), rf!(^^"source2")]
             ], "\n"}
         test_ok! {ok_cyrillic, "\nа. Item 1 \nб. Gamma-function def: $\\Gamma(\\alpha) = \\int\\limits_{0}^{+\\infinity} t^{\\alpha - 1} e^{-t} dt$.\nв. Here's some table ref: ([@tab:function    ])   \nг. Explained in [^source2]\n",
         ls![а tx!("Item 1"),
-            tks![tx!("Gamma-function def:"), eq!(!"\\Gamma(\\alpha) = \\int\\limits_{0}^{+\\infinity} t^{\\alpha - 1} e^{-t} dt"), tx!(".")],
+            tks![tx!("Gamma-function def:"), eq!(^!"\\Gamma(\\alpha) = \\int\\limits_{0}^{+\\infinity} t^{\\alpha - 1} e^{-t} dt"), tx!(".")],
             tks![tx!("Here's some table ref: ("), rf!(@"tab:function"), tx!(")")],
-            tks![tx!("Explained in"), rf!(^"source2")]
+            tks![tx!("Explained in"), rf!(^^"source2")]
             ], "\n"}
         test_ok! {ok_bullet, "\n- Item 1 \n- Gamma-function def: $\\Gamma(\\alpha) = \\int\\limits_{0}^{+\\infinity} t^{\\alpha - 1} e^{-t} dt$.\n- Here's some table ref: ([@tab:function    ])   \n- Explained in [^source2]\n",
         ls![- tx!("Item 1"),
-            tks![tx!("Gamma-function def:"), eq!(!"\\Gamma(\\alpha) = \\int\\limits_{0}^{+\\infinity} t^{\\alpha - 1} e^{-t} dt"), tx!(".")],
+            tks![tx!("Gamma-function def:"), eq!(^!"\\Gamma(\\alpha) = \\int\\limits_{0}^{+\\infinity} t^{\\alpha - 1} e^{-t} dt"), tx!(".")],
             tks![tx!("Here's some table ref: ("), rf!(@"tab:function"), tx!(")")],
-            tks![tx!("Explained in"), rf!(^"source2")]
+            tks![tx!("Explained in"), rf!(^^"source2")]
             ], "\n"}
         test_ok! {ok_left_over, "\n- Item 1 \n- Gamma-function def: $\\Gamma(\\alpha) = \\int\\limits_{0}^{+\\infinity} t^{\\alpha - 1} e^{-t} dt$.\n- Here's some table ref: ([@tab:function    ])   \n- Explained in [^source2]\nІще трохи тексту після списку",
         ls![- tx!("Item 1"),
-            tks![tx!("Gamma-function def:"), eq!(!"\\Gamma(\\alpha) = \\int\\limits_{0}^{+\\infinity} t^{\\alpha - 1} e^{-t} dt"), tx!(".")],
+            tks![tx!("Gamma-function def:"), eq!(^!"\\Gamma(\\alpha) = \\int\\limits_{0}^{+\\infinity} t^{\\alpha - 1} e^{-t} dt"), tx!(".")],
             tks![tx!("Here's some table ref: ("), rf!(@"tab:function"), tx!(")")],
-            tks![tx!("Explained in"), rf!(^"source2")]
+            tks![tx!("Explained in"), rf!(^^"source2")]
             ], "\nІще трохи тексту після списку"}
     }
 
@@ -2137,9 +2162,9 @@ $$
         tks![head!(# "Header"), head!(## "header2"), tx!("Це початок тексту.", |), ls!(- tx!("А це перший елемент списку"), tx!("І другий елемент списку")), tx!("А оце буде рівняння:", |), eq!("y = x ^ 2")]}
 
         test_ok! {ok_idk1, "На світлині [@ fig:refurb] можна бачити принципову схему влаштування рефурбалідзера. Неважно помитити великі очі[^1], і два термоядерних реактори, що оточують їх. Точні реакції всередині невідомі, але цілком можливо що там женуть $du + t -> {}^{5}_{6}C$.\n\n[^1]: Для поливу.",
-        tks![tx!("На світлині"), rf!(@ "fig:refurb"),
-        tx!("можна бачити принципову схему влаштування рефурбалідзера. Неважно помитити великі очі"), rf!(^"1"),
-        tx!(", і два термоядерних реактори, що оточують їх. Точні реакції всередині невідомі, але цілком можливо що там женуть"), eq!(!"du + t -> {}^{5}_{6}C"),
+        tks![tx!("На світлині"), rf!(^@ "fig:refurb"),
+        tx!(^"можна бачити принципову схему влаштування рефурбалідзера. Неважно помитити великі очі"), rf!(^"1"),
+        tx!(", і два термоядерних реактори, що оточують їх. Точні реакції всередині невідомі, але цілком можливо що там женуть"), eq!(^!"du + t -> {}^{5}_{6}C"),
         tx!("."), foot!(^"1": tx!("Для поливу."))]}
         test_ok! {ok_idk2, "\n\n## Підпункт\n\n", head!(##"Підпункт")}
     }

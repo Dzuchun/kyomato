@@ -3,7 +3,7 @@ This is a test of ayano-generated stuff.
 \begin{figure}[h!]
 \centering
 \includegraphics[width=0.9\textwidth]{circle.png}
-\caption{\capfnt Some caption for a line drawing. This is parsed as a\textit{regular document text}, so you may\ref{eq:line}and$f(x) = A \cdot x^{1} + B \cdot x^{0}$here, for example}
+\caption{\capfnt Some caption for a line drawing. This is parsed as a \textit{regular document text}, so you may \ref{eq:line} and $f(x) = A \cdot x^{1} + B \cdot x^{0}$ here, for example}
 \label{fig:circle}
 \end{figure}
 
@@ -24,7 +24,7 @@ x & y\\ \hline
 -1.0 & -5743234.0\\ \hline
 \end{tabular}
 \stepcounter{tabnum}
-\caption{\capfnt Caption for a table 1,\textit{because}why not}
+\caption{\capfnt Caption for a table 1, \textit{because} why not}
 \label{tab:table1}
 \end{center}
 \end{table}

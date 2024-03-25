@@ -162,7 +162,7 @@ impl AyanoExecutor {
         &self,
         token: &'token AyanoBlock<'source>,
     ) -> AyanoResult<'source, Token<'static>> {
-        self.call_block(token, |res, _| Ok(parse_ayano(res)?))
+        self.call_block(token, |res, _| Ok(parse_ayano(res, token.is_space_before)?))
     }
 
     pub fn display_blocks<'s>(&'s self) -> impl IntoIterator<Item = &'s DisplayInfo> {
@@ -1424,7 +1424,10 @@ impl From<nom::Err<KyomatoLexError>> for ParsingError {
     }
 }
 
-fn parse_ayano(python_output: &PyAny) -> Result<Token<'static>, ParsingError> {
+fn parse_ayano(
+    python_output: &PyAny,
+    is_space_before: bool,
+) -> Result<Token<'static>, ParsingError> {
     // it was quite a journey! but I believe to be close to it's end.
     if let Ok(tuple) = python_output.downcast::<PyTuple>() {
         if let Ok(discriminator) = tuple
@@ -1521,13 +1524,13 @@ fn parse_ayano(python_output: &PyAny) -> Result<Token<'static>, ParsingError> {
                         .ok_or(ParsingError::TableNoHeader)?
                         .downcast::<PyList>())?
                     .into_iter()
-                    .map(|h: &PyAny| parse_ayano(h))
+                    .map(|h: &PyAny| parse_ayano(h, false))
                     .try_collect()?;
                     let cells: Vec<_> = rows
                         .map(|row| {
                             Ok(throw_downcast!(row.downcast::<PyList>())?
                                 .into_iter()
-                                .map(|c: &PyAny| parse_ayano(c)))
+                                .map(|c: &PyAny| parse_ayano(c, false)))
                         })
                         .try_fold(Vec::new(), |acc, next: Result<_, ParsingError>| {
                             // OLD: there might be a better way with iterators directly, but I kinda can't come up with it
@@ -1564,9 +1567,9 @@ fn parse_ayano(python_output: &PyAny) -> Result<Token<'static>, ParsingError> {
     }
     // any sort of parsing had failed - return regular text
     Ok(Token::Paragraph {
-        is_newline: false,
+        is_newline: false, // TODO probably add that to block too
         formatting: None,
-        space_before: todo!(),
+        space_before: is_space_before,
         content: Cow::Owned(python_output.to_string()),
     })
 }
@@ -1606,7 +1609,7 @@ mod parsing_tests {
                     let python_output = $input(py);
 
                     // act
-                    let result = super::parse_ayano(python_output);
+                    let result = super::parse_ayano(python_output, false);
 
                     // assert
                     assert_eq!(result, $output, "Parsing should produce expected tokens");
@@ -1721,7 +1724,7 @@ mod parsing_tests {
                 Token::text("cell_11"), Token::text("0.25"),
                 Token::text("cell_21"), Token::text("-2"),
             ]),
-            caption: Some(Box::new(Token::Multiple{tokens:Tokens::new([Token::text("table caption with some"),Token::InlineMath{content:"formula".into(), space_before: false}])})),
+            caption: Some(Box::new(Token::Multiple{tokens:Tokens::new([Token::text("table caption with some"),Token::InlineMath{content:"formula".into(), space_before: true}])})),
             ident: Some("table1".into())
         })
     }

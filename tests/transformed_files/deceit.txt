@@ -8,11 +8,11 @@ This test is dedicated to attempts of parser deception, i.e. usage of special sy
 
 \tbln Fun fact: there can be a paragraph right after it!
 \clearpage
-Some text, cause why not
-\tbln But this\textbf{DOES}look cursed, don't do it.
+ Some text, cause why not
+\tbln But this \textbf{DOES} look cursed, don't do it.
 \subsection{Headers}
 
-\tbln Headers are most recognizable by '#'-symbol. For it to actually represent a header, it needs to at the beginning of the line and there should be no more than 6 of them.\textbf{ANYTHING}up to the end of line will be included into a header, then.
+\tbln Headers are most recognizable by '#'-symbol. For it to actually represent a header, it needs to at the beginning of the line and there should be no more than 6 of them. \textbf{ANYTHING} up to the end of line will be included into a header, then.
 \tbln Example:
 \textbf{This is a long, yet formally correct header. You can add $equations$ and *formatting* here, but I provide no guarantees as of the way these would display in final document.}
 
@@ -24,7 +24,7 @@ Some text, cause why not
 
 \tbln There are two types of equations in markdown/latex: inline mathmode and display mathmode
 \tbln Both of them are defined by $-symbols. However, they must be paired to actually represent these. Here are examples:
-\tbln Inline:$y = x ^ 2$
+\tbln Inline: $y = x ^ 2$
 \tbln Display:
 \begin{equation}
 y = x ^ 2
@@ -69,7 +69,7 @@ head /dev/random
 \subsubsection{Hyperrefs}
 
 \tbln These are followed by parentheses (). Nothing is allowed between them, thus
-\tbln Here's a correct href:\href{https://youtu.be/rickroll_link_lol}{my gh page}
+\tbln Here's a correct href: \href{https://youtu.be/rickroll_link_lol}{my gh page}
 \tbln Here are incorrect refs:
 \tbln [my gh page] (https://youtu.be/rickroll\textit{link}lol)
 \tbln [my gh page]
@@ -77,7 +77,7 @@ head /dev/random
 \subsubsection{Footnote refs}
 
 \tbln These are started by [^.
-\tbln Here are correct footnote refs:\footnotemark[1],\footnotemark[2]
+\tbln Here are correct footnote refs: \footnotemark[1], \footnotemark[2]
 \tbln Here are incorrect ones: [^1, ^1],
 \tbln [^
 \tbln 1
@@ -87,12 +87,12 @@ head /dev/random
 
 \tbln These refer to objects like figures, tables and equations.
 \tbln Started by [@.
-\tbln Here's a correct ref:\ref{fig:experiment_schema}
+\tbln Here's a correct ref: \ref{fig:experiment_schema}
 \tbln Here's are bad ones: [@ fig:1, @  source3],
 \tbln [@
 \tbln eq2
 \tbln ]
-\tbln \textbf{NOTE}: despite object types being prepended with 'eq', 'fig' or 'tab' in refs, you\textit{can}use regular latex to define your custom refs. In fact, LaTeX doesn't care about all of these at all; I'm doing these transformations just for my own comfort, as I've been doing this manually.
+\tbln \textbf{NOTE}: despite object types being prepended with 'eq', 'fig' or 'tab' in refs, you \textit{can} use regular latex to define your custom refs. In fact, LaTeX doesn't care about all of these at all; I'm doing these transformations just for my own comfort, as I've been doing this manually.
 \subsection{Formatting}
 
 \tbln This object's type is deprecated and will be removed soon.
@@ -102,22 +102,22 @@ head /dev/random
 \item ** or __
 \item ~~
 \end{itemize}
-\tbln \textbf{WARN}: As of now, these\textit{might}cause cause massive problems if encountered at the start of the line.
+\tbln \textbf{WARN}: As of now, these \textit{might} cause cause massive problems if encountered at the start of the line.
 \tbln Basically, parsers for these tokens attempt parse everything up until they find a closing token. But if they are inserted in a middle of the text, then it's ok - they will be limited by current paragraph, and (most likely) will find no match inside it, if their use was unintended.
 \subsection{Footnote content}
 
 \tbln These start with '\footnotemark[3]:' and proceed to the end of line.
 \tbln Example of valid content:
 \tbln Example of invalid content:
-\tbln [^source2: This is invalid content\footnotemark[4]\footnotetext[4]{Explanation of source2.}: This is invalid content\footnotemark[4]: This is invalid content
-\tbln They also must start at the beginning of the line. If fact, this:\footnotemark[4]: Some content
+\tbln [^source2: This is invalid content\footnotemark[4]\footnotetext[4]{Explanation of source2.} : This is invalid content \footnotemark[4]: This is invalid content
+\tbln They also must start at the beginning of the line. If fact, this: \footnotemark[4]: Some content
 \tbln Is expected to be a footnote ref with a colon.
 \subsection{Code blocks}
 
-\tbln There are two fundamental types of code blocks: normal code block and\textbf{Ayano}code block.
+\tbln There are two fundamental types of code blocks: normal code block and \textbf{Ayano} code block.
 \subsubsection{Normal code block}
 
-\tbln These start and end with '```' on a newline. There can be\textbf{practically anything}inside. Example:
+\tbln These start and end with '```' on a newline. There can be \textbf{practically anything} inside. Example:
 \begin{minted}{java}
 int x = 2;
 int y = 4;
@@ -134,7 +134,7 @@ local y = 'y'
 local z = x .. y -- matty!!
 \end{minted}
 
-Here's some text that's ok to be here
+ Here's some text that's ok to be here
 \tbln There can't be any spaces before delimiting ```s:
 \tbln ```python
 \tbln # This here is not really a python block
@@ -144,14 +144,14 @@ Here's some text that's ok to be here
 \subsubsection{Ayano code block}
 
 \tbln \textit{because Ayano loves Kyoko}
-\tbln This object looks and behaves just like normal code block, but is only limited to\textit{python}language, can have spacial arguments in a language line, may leave something behind in the document. For example:
+\tbln This object looks and behaves just like normal code block, but is only limited to \textit{python} language, can have spacial arguments in a language line, may leave something behind in the document. For example:
 \tbln This Ayano block will leave plain "2" behind it:2
 \tbln Akin to normal blocks, it's ok to leave something trailing:
 \begin{minted}{ayano}
 2
 \end{minted}
 
-This text is ok to be here
+ This text is ok to be here
 \tbln And these are invalid Ayano blocks:
 \begin{minted}{ayano}
 2

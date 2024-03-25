@@ -3,6 +3,7 @@ Multiple {
         [
             Paragraph {
                 is_newline: false,
+                space_before: false,
                 formatting: None,
                 content: "Наступний тест. Тут протестуємо таблиці і блоки коду.",
             },
@@ -12,11 +13,13 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Звичайні таблиці; Можуть всередині мати",
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: Some(
                     Bold,
                 ),
@@ -24,11 +27,13 @@ Multiple {
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: None,
                 content: "чи",
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: Some(
                     Italic,
                 ),
@@ -36,6 +41,7 @@ Multiple {
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: None,
                 content: "на інші штуки",
             },
@@ -44,16 +50,19 @@ Multiple {
                     [
                         Paragraph {
                             is_newline: false,
+                            space_before: true,
                             formatting: None,
                             content: "Storage",
                         },
                         Paragraph {
                             is_newline: false,
+                            space_before: true,
                             formatting: None,
                             content: "Space",
                         },
                         Paragraph {
                             is_newline: false,
+                            space_before: true,
                             formatting: None,
                             content: "Number",
                         },
@@ -63,30 +72,36 @@ Multiple {
                     [
                         Paragraph {
                             is_newline: false,
+                            space_before: true,
                             formatting: None,
                             content: "1",
                         },
                         Paragraph {
                             is_newline: false,
+                            space_before: true,
                             formatting: None,
                             content: "2",
                         },
                         InlineMath {
+                            space_before: true,
                             content: "3 + e ^{\\pi}",
                         },
                         Multiple {
                             tokens: Owned(
                                 [
                                     InlineMath {
+                                        space_before: true,
                                         content: "e",
                                     },
                                     FootnoteReference {
+                                        space_before: false,
                                         ident: "euler",
                                     },
                                 ],
                             ),
                         },
                         InlineMath {
+                            space_before: true,
                             content: "\\cdot \\pm 1",
                         },
                         Multiple {
@@ -94,11 +109,13 @@ Multiple {
                                 [
                                     Paragraph {
                                         is_newline: false,
+                                        space_before: true,
                                         formatting: None,
                                         content: "І тут ще",
                                     },
                                     Paragraph {
                                         is_newline: false,
+                                        space_before: true,
                                         formatting: Some(
                                             Italic,
                                         ),
@@ -106,6 +123,7 @@ Multiple {
                                     },
                                     Paragraph {
                                         is_newline: false,
+                                        space_before: true,
                                         formatting: None,
                                         content: "тексту \\|",
                                     },
@@ -120,11 +138,13 @@ Multiple {
                             [
                                 Paragraph {
                                     is_newline: false,
+                                    space_before: false,
                                     formatting: None,
                                     content: "Оце приклад таблиці. Як казав мій вчитель:",
                                 },
                                 Paragraph {
                                     is_newline: false,
+                                    space_before: true,
                                     formatting: Some(
                                         Bold,
                                     ),
@@ -132,6 +152,7 @@ Multiple {
                                 },
                                 Paragraph {
                                     is_newline: false,
+                                    space_before: true,
                                     formatting: None,
                                     content: "(і \\\"лапок\\\")",
                                 },
@@ -145,6 +166,7 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Таблиця цілком собі може не мати ідентифікатора або опису:",
             },
@@ -153,11 +175,13 @@ Multiple {
                     [
                         Paragraph {
                             is_newline: false,
+                            space_before: true,
                             formatting: None,
                             content: "Кількість",
                         },
                         Paragraph {
                             is_newline: false,
+                            space_before: true,
                             formatting: None,
                             content: "Роль",
                         },
@@ -167,21 +191,25 @@ Multiple {
                     [
                         Paragraph {
                             is_newline: false,
+                            space_before: true,
                             formatting: None,
                             content: "3 діоптрії",
                         },
                         Paragraph {
                             is_newline: false,
+                            space_before: true,
                             formatting: None,
                             content: "7 галон",
                         },
                         Paragraph {
                             is_newline: false,
+                            space_before: true,
                             formatting: None,
                             content: "rust",
                         },
                         Paragraph {
                             is_newline: false,
+                            space_before: true,
                             formatting: None,
                             content: "#PANIC!!!",
                         },
@@ -198,11 +226,13 @@ Multiple {
                         [
                             Paragraph {
                                 is_newline: false,
+                                space_before: false,
                                 formatting: None,
                                 content: "Це число Ейлера. Воно дуже корисне,",
                             },
                             Paragraph {
                                 is_newline: false,
+                                space_before: true,
                                 formatting: Some(
                                     StrikeThrough,
                                 ),
@@ -210,11 +240,13 @@ Multiple {
                             },
                             Paragraph {
                                 is_newline: false,
+                                space_before: true,
                                 formatting: None,
                                 content: "у вигляді",
                             },
                             Paragraph {
                                 is_newline: false,
+                                space_before: true,
                                 formatting: Some(
                                     Italic,
                                 ),
@@ -222,6 +254,7 @@ Multiple {
                             },
                             Paragraph {
                                 is_newline: false,
+                                space_before: true,
                                 formatting: None,
                                 content: "дробу.",
                             },
@@ -236,24 +269,29 @@ Multiple {
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "Наразі мають досить обмежену підтримку, адже у",
             },
             InlineMath {
+                space_before: true,
                 content: "\\LaTeX",
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: None,
                 content: "немає нативного поняття блоків коду.",
             },
             Paragraph {
                 is_newline: true,
+                space_before: false,
                 formatting: None,
                 content: "На щастя, у",
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: Some(
                     Bold,
                 ),
@@ -261,14 +299,17 @@ Multiple {
             },
             Paragraph {
                 is_newline: false,
+                space_before: true,
                 formatting: None,
                 content: "таке поняття є",
             },
             FootnoteReference {
+                space_before: false,
                 ident: "code",
             },
             Paragraph {
                 is_newline: false,
+                space_before: false,
                 formatting: None,
                 content: ":",
             },
@@ -284,11 +325,13 @@ Multiple {
                         [
                             Paragraph {
                                 is_newline: false,
+                                space_before: false,
                                 formatting: None,
                                 content: "Принаймні,",
                             },
                             Paragraph {
                                 is_newline: false,
+                                space_before: true,
                                 formatting: Some(
                                     Italic,
                                 ),
@@ -296,6 +339,7 @@ Multiple {
                             },
                             Paragraph {
                                 is_newline: false,
+                                space_before: true,
                                 formatting: None,
                                 content: "таке робить",
                             },
