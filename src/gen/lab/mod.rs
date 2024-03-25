@@ -212,13 +212,31 @@ where
                 output.write_str("\n")?;
                 output.write_str(end)?;
             }
-            Token::InlineMath { content } => {
+            Token::InlineMath {
+                content,
+                space_before,
+            } => {
+                if *space_before {
+                    output.write_char(' ')?;
+                }
                 write!(output, "${content}$")?;
             }
-            Token::Reference { ident } => {
+            Token::Reference {
+                ident,
+                space_before,
+            } => {
+                if *space_before {
+                    output.write_char(' ')?;
+                }
                 write!(output, "\\ref{{{ident}}}")?;
             }
-            Token::FootnoteReference { ident } => {
+            Token::FootnoteReference {
+                ident,
+                space_before,
+            } => {
+                if *space_before {
+                    output.write_char(' ')?;
+                }
                 let (encountered, i) = {
                     // TODO probably should move this to separate function
                     let encountered_map = &mut context.encountered_footnotes;
@@ -255,9 +273,12 @@ where
                 is_newline,
                 formatting,
                 content,
+                space_before,
             } => {
                 if *is_newline {
                     output.write_str("\n\\tbln ")?;
+                } else if *space_before {
+                    output.write_char(' ')?;
                 }
                 let (start, end) = match formatting {
                     None => ("", ""),
@@ -281,7 +302,14 @@ where
                 }
                 output.write_str(end)?;
             }
-            Token::Href { url, display } => {
+            Token::Href {
+                url,
+                display,
+                space_before,
+            } => {
+                if *space_before {
+                    output.write_char(' ')?;
+                }
                 write!(output, "\\href{{{url}}}{{{display}}}")?;
             }
             Token::Multiple { tokens } => self.write_tokens_to(output, meta, context, tokens)?,
@@ -311,6 +339,7 @@ mod tests {
     macro_rules! text {
         ($text:literal) => {
             Token::Paragraph {
+                space_before: false,
                 is_newline: false,
                 formatting: None,
                 content: $text.into(),
@@ -376,17 +405,17 @@ mod tests {
     test! {header5, Token::Header { order: 5, content: "HeaderText".into() }, r"\textbf{HeaderText}"}
 
     // Paragraphs
-    test! {para1, Token::Paragraph{is_newline: false, formatting: None, content: "content, content!!!".into()}, "content, content!!!"}
-    test! {para2, Token::Paragraph{is_newline: true, formatting: None, content: "content, content!!!".into()}, "\n\\tbln content, content!!!"}
+    test! {para1, Token::Paragraph{is_newline: false, formatting: None, content: "content, content!!!".into(), space_before: false}, "content, content!!!"}
+    test! {para2, Token::Paragraph{is_newline: true, formatting: None, content: "content, content!!!".into(), space_before: false}, "\n\\tbln content, content!!!"}
 
     // Formatting
-    test! {formatting1, Token::Paragraph{is_newline: false, formatting: Some(Formatting::Bold), content: "some text, idk".into()}, "\\textbf{some text, idk}"}
-    test! {formatting2, Token::Paragraph{is_newline: false, formatting: Some(Formatting::Italic), content: "some text, idk".into()}, "\\textit{some text, idk}"}
-    test! {formatting3, Token::Paragraph{is_newline: false, formatting: Some(Formatting::StrikeThrough), content: "some text, idk".into()}, "\\st{some text, idk}"}
+    test! {formatting1, Token::Paragraph{is_newline: false, formatting: Some(Formatting::Bold), content: "some text, idk".into(), space_before: false}, "\\textbf{some text, idk}"}
+    test! {formatting2, Token::Paragraph{is_newline: false, formatting: Some(Formatting::Italic), content: "some text, idk".into(), space_before: false}, "\\textit{some text, idk}"}
+    test! {formatting3, Token::Paragraph{is_newline: false, formatting: Some(Formatting::StrikeThrough), content: "some text, idk".into(), space_before: false}, "\\st{some text, idk}"}
 
     // Hrefs
-    test! {href1, Token::Href { url: "https://www.github.com/Dzuchun".parse().unwrap(), display: "My gh page".into() }, r"\href{https://www.github.com/Dzuchun}{My gh page}"}
-    test! {href2, Token::Href { url: "https://github.com/Dzuchun".parse().unwrap(), display: "Моя сторінка на гітхабі".into() }, r"\href{https://github.com/Dzuchun}{Моя сторінка на гітхабі}"}
+    test! {href1, Token::Href { url: "https://www.github.com/Dzuchun".parse().unwrap(), display: "My gh page".into(), space_before: false }, r"\href{https://www.github.com/Dzuchun}{My gh page}"}
+    test! {href2, Token::Href { url: "https://github.com/Dzuchun".parse().unwrap(), display: "Моя сторінка на гітхабі".into(), space_before: false }, r"\href{https://github.com/Dzuchun}{Моя сторінка на гітхабі}"}
 
     // Equations
     test! {equations_1, Token::DisplayMath { content: r"B(\alpha, \beta) = \int \limits_{0}^{1} x^{\alpha - 1} (1-x)^{\beta-1} dx".into(), ident: None },
@@ -405,7 +434,7 @@ mod tests {
     "}
 
     // Inline math
-    test! {inline_mathmode, Token::InlineMath{content:r"\dfrac{\partial x}{\partial t}".into()}, r"$ \dfrac{\partial x}{\partial t} $"}
+    test! {inline_mathmode, Token::InlineMath{content:r"\dfrac{\partial x}{\partial t}".into(), space_before: false}, r"$ \dfrac{\partial x}{\partial t} $"}
 
     // Figures
     test! {fig1, Token::Figure { src_name: Path::new("apple.jpg").into(), caption: Some(Box::new(text!("a very realistic-looking apple"))), ident: None, width: None }, r"
@@ -528,7 +557,7 @@ cell_21 & cell_22 & cell_23 \\ \hline
     "}
 
     // Text
-    test! {text, Token::Multiple{tokens:tokens![Token::PageDiv, Token::Header { order: 0, content: "Header".into() }, text!("Here's a little formula: "), Token::InlineMath{content:r"(a+b)^2 = a^2 + 2 \cdot a \cdot b + b^2".into()}, text!(". It's very useful, more useful than me!")]}, r"
+    test! {text, Token::Multiple{tokens:tokens![Token::PageDiv, Token::Header { order: 0, content: "Header".into() }, text!("Here's a little formula: "), Token::InlineMath{content:r"(a+b)^2 = a^2 + 2 \cdot a \cdot b + b^2".into(), space_before: false}, text!(". It's very useful, more useful than me!")]}, r"
     \clearpage
     \section{Header}
     Here's a little formula: $(a+b)^2 = a^2 + 2 \cdot a \cdot b + b^2$. It's very useful, more useful than me!
@@ -536,7 +565,7 @@ cell_21 & cell_22 & cell_23 \\ \hline
 
     // Footnotes
     test! {footnote_single, Token::Multiple{tokens:tokens![
-        Token::FootnoteReference{ident:"explanation".into()},
+        Token::FootnoteReference{ident:"explanation".into(), space_before: false},
         Token::FootnoteContent { content: Box::new(text!("42")), ident: "explanation".into() }
     ]}, r"
     \footnotemark[1]
@@ -545,16 +574,16 @@ cell_21 & cell_22 & cell_23 \\ \hline
 
     test! {footnote_multiple, Token::Multiple{tokens:tokens![
         text!("Here's a first note"),
-        Token::FootnoteReference{ident:"explanation1".into()},
+        Token::FootnoteReference{ident:"explanation1".into(), space_before: false},
         text!(", there are also second"),
-        Token::FootnoteReference{ident: "explanation2".into()},
+        Token::FootnoteReference{ident: "explanation2".into(), space_before: false},
         text!(", and the third"),
-        Token::FootnoteReference{ident:"explanation3".into()},
+        Token::FootnoteReference{ident:"explanation3".into(), space_before: false},
         Token::FootnoteContent { content: Box::new(text!("There are things in this world that's you're not meant to see")), ident: "explanation1".into() },
         Token::FootnoteContent { content: Box::new(text!("now the voice of a deity permeates")), ident: "explanation2".into() },
         Token::FootnoteContent { content: Box::new(text!("see notes 1 and 2")), ident: "explanation3".into() },
         text!(". But notes will not be duplicated here!"),
-        Token::FootnoteReference{ident:"explanation1".into()}
+        Token::FootnoteReference{ident:"explanation1".into(), space_before: false}
 
     ]}, r"
     Here's a first note
@@ -574,13 +603,15 @@ cell_21 & cell_22 & cell_23 \\ \hline
         is_display: false,
         is_static: false,
         code: "1".into(),
-        insert_path: None
+        insert_path: None,
+        is_space_before: false,
     }}, r"1"}
     test! {ayano_plain2, Token::Ayano{data: AyanoBlock{
         is_display: false,
         is_static: false,
         code: "1 + 2".into(),
-        insert_path: None
+        insert_path: None,
+        is_space_before: false,
     }}, r"3"}
     test! {ayano_plain3, Token::Ayano{data: AyanoBlock{
         is_display: false,
@@ -591,7 +622,8 @@ x = 103
 y = sqrt(x)
 int(y)"
         .into(),
-        insert_path: None
+        insert_path: None,
+        is_space_before: false,
     }}, r"10"}
     test! {ayano_plain4, Token::Ayano{data: AyanoBlock{
         is_display: false,
@@ -602,7 +634,8 @@ for i in range(101):
     res += i
 res"
         .into(),
-        insert_path: None
+        insert_path: None,
+        is_space_before: false,
     }}, r"5050"}
     test! {ayano_err1, Token::Ayano{data: AyanoBlock{
         is_display: false,
@@ -610,7 +643,8 @@ res"
         code: r"
     'err', 1.0, 0.1"
         .into(),
-        insert_path: None
+        insert_path: None,
+        is_space_before: false,
     }}, r"1.00 $\pm$ 0.10"}
     test! {ayano_err2, Token::Ayano{data: AyanoBlock{
         is_display: false,
@@ -618,7 +652,8 @@ res"
         code: r"
     'err', 1.0, 0.4"
         .into(),
-        insert_path: None
+        insert_path: None,
+        is_space_before: false,
     }}, r"1.0 $\pm$ 0.4"}
     test! {ayano_err3, Token::Ayano{data: AyanoBlock{
             is_display: false,
@@ -628,7 +663,8 @@ x = 1.0
 y = 0.4
 @dev: x, y"
             .into(),
-            insert_path: None
+            insert_path: None,
+            is_space_before: false,
         }}, r"1.0 $\pm$ 0.4"
     }
 
@@ -636,7 +672,8 @@ y = 0.4
         is_display: false,
         is_static: false,
         code: r"'fig', 'path/to/image.jpg', None, None, None".into(),
-        insert_path: None
+        insert_path: None,
+        is_space_before: false,
     }}, r"
 \begin{figure}[h!]
 \centering
@@ -648,7 +685,8 @@ y = 0.4
         is_display: false,
         is_static: false,
         code: r"'fig', 'path/to/image.jpg', None, None, 0.625".into(),
-        insert_path: None
+        insert_path: None,
+        is_space_before: false,
     }}, r"
 \begin{figure}[h!]
 \centering
@@ -656,13 +694,15 @@ y = 0.4
 \end{figure}"
     }
 
-    test! {ayano_fig2, Token::Ayano{data: AyanoBlock{is_display: false,is_static: false,code: r"@fig: src = 'path/to/image.jpg'".into(),insert_path: None}},
+    test! {ayano_fig2, Token::Ayano{data: AyanoBlock{is_display: false,is_static: false,code: r"@fig: src = 'path/to/image.jpg'".into(),insert_path: None,
+                    is_space_before: false,}},
 r"
 \begin{figure}[h!]
 \centering
 \includegraphics[width = 0.9 \textwidth]{path/to/image.jpg}
 \end{figure}"}
-    test! {ayano_fig3, Token::Ayano{data: AyanoBlock{ is_display: false,is_static: false,code: r#"@fig: src = 'path/to/image.jpg', ident = "meow""#.into(),insert_path: None
+    test! {ayano_fig3, Token::Ayano{data: AyanoBlock{ is_display: false,is_static: false,code: r#"@fig: src = 'path/to/image.jpg', ident = "meow""#.into(),insert_path: None,
+    is_space_before: false,
         }},
 r#"
 \begin{figure}[h!]
@@ -677,7 +717,8 @@ r#"
 r#"
 data = [[1, 2, 3], [4, 5, 6]]
 @gen_table: lambda r,c: data[r][c]; rows=2, columns=3
-"#.into(), insert_path: None }},
+"#.into(), insert_path: None,
+    is_space_before: false, }},
 r#"
 \begin{table}[h!]
 \begin{center}
@@ -689,7 +730,7 @@ r#"
 \end{center}
 \end{table}
 "#
-    }
+        }
     // TODO add tests with csv-tables
 
     // TODO add minted to preamble

@@ -424,7 +424,7 @@ fn href<
 ) -> IResult<&'source str, Token<'source>, E> {
     context(
         "href",
-        preceded(
+        pair(
             multispace0,
             pair(
                 delimited(char('['), take_until("]"), char(']')),
@@ -438,9 +438,10 @@ fn href<
             ),
         ),
     )
-    .map(|(display, url)| Token::Href {
+    .map(|(before, (display, url))| Token::Href {
         url,
         display: display.trim().into(),
+        space_before: before.ends_with(' '),
     })
     .parse(input)
 }
@@ -507,17 +508,13 @@ fn ayano<
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
     // TODO add tests for escaping backslashes removal (generation-side)
-    let (rest, ((display, insert, _ident, is_static), code)) = context(
+    let (rest, ((before, _), ((display, insert, _ident, is_static), code))) = context(
         "ayano",
-        preceded(
-            tuple((
+        pair(
+            terminated(
                 _multispace_line_break("```"),
-                space0,
-                tag_no_case("python,"),
-                space0,
-                tag("Ayano"),
-                space0,
-            )),
+                tuple((space0, tag_no_case("python,"), space0, tag("Ayano"), space0)),
+            ),
             // This is guaranteed to be Ayano block at this point, so we lock in
             cut(pair(
                 terminated(
@@ -565,6 +562,7 @@ fn ayano<
                 code,
                 is_display: display.is_some(),
                 is_static: is_static.is_some(),
+                is_space_before: before.contains(' '),
             },
         },
     ))
@@ -742,6 +740,7 @@ fn formatting<
     let (input, space_before) = multispace0(input)?;
     // if there are newlines, this paragraph is_newline
     let is_newline = space_before.contains('\n');
+    let is_space_before = space_before.ends_with(' ');
     let (rest, delimiter) = alt((tag("**"), tag("__"), tag("*"), tag("_"), tag("~~")))(input)?;
     // Anything starting from these characters IS a formatting token.
     // Committed to parsing after this point
@@ -770,6 +769,7 @@ fn formatting<
                     &rest[(end_candidate + delimiter.len())..],
                     Token::Paragraph {
                         is_newline,
+                        space_before: is_space_before,
                         formatting: Some(formatting),
                         content,
                     },
@@ -791,13 +791,14 @@ fn inline_math<'source, E: ParseError<&'source str> + ContextError<&'source str>
 ) -> IResult<&'source str, Token<'source>, E> {
     context(
         "inline math",
-        preceded(
+        pair(
             multispace0,
             delimited(char('$'), take_till1(|c| c == '\n' || c == '$'), char('$')),
         ),
     )
-    .map(|content: &str| Token::InlineMath {
+    .map(|(before, content): (&str, &str)| Token::InlineMath {
         content: content.trim().into(),
+        space_before: before.ends_with(' '),
     })
     .parse(input)
 }
@@ -815,11 +816,10 @@ fn inline_math<'source, E: ParseError<&'source str> + ContextError<&'source str>
 fn reference<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
-    let (rest, ident) = context(
+    let (rest, (before, _, _, ident)) = context(
         "reference",
-        delimited(
-            pair(pair(multispace0, tag("[@")), space0),
-            ident_kernel,
+        terminated(
+            tuple((multispace0, tag("[@"), space0, ident_kernel)),
             pair(space0, char(']')),
         ),
     )(input)?;
@@ -827,6 +827,7 @@ fn reference<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
         rest,
         Token::Reference {
             ident: ident.trim().into(),
+            space_before: before.ends_with(' '),
         },
     ))
 }
@@ -838,11 +839,13 @@ fn reference<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
 fn footnote_reference<'source, E: ParseError<&'source str> + ContextError<&'source str>>(
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
-    let (rest, ident) = context(
+    let (rest, (before, ident)) = context(
         "footnote reference",
-        delimited(
-            pair(multispace0, tag("[^")),
-            delimited(space0, ident_kernel, space0),
+        terminated(
+            pair(
+                multispace0,
+                delimited(pair(tag("[^"), space0), ident_kernel, space0),
+            ),
             char(']'),
         ),
     )(input)?;
@@ -850,6 +853,7 @@ fn footnote_reference<'source, E: ParseError<&'source str> + ContextError<&'sour
         rest,
         Token::FootnoteReference {
             ident: ident.trim().into(),
+            space_before: before.ends_with(' '),
         },
     ))
 }
@@ -1008,6 +1012,7 @@ fn paragraph<
         is_newline,
         content,
         formatting: None,
+        space_before: space_before.ends_with(' '),
     };
     Ok((rest, (this_token, follower)))
 }
@@ -1582,10 +1587,13 @@ $$
         use super::*;
 
         macro_rules! href_ok {
-        {$name:ident, $input:expr, $output_url:expr, $output_display:expr, $left_over:literal} => {
-            test! {$name, href, $input, e: Ok(($left_over, Token::Href { url: $output_url.parse().expect("This is a valid url"), display: $output_display.into() }))}
-        };
-    }
+            {$name:ident, $input:expr, $output_url:expr, $output_display:expr, $left_over:literal ^} => {
+                test! {$name, href, $input, e: Ok(($left_over, Token::Href { url: $output_url.parse().expect("This is a valid url"), display: $output_display.into(), space_before: true }))}
+            };
+            {$name:ident, $input:expr, $output_url:expr, $output_display:expr, $left_over:literal} => {
+                test! {$name, href, $input, e: Ok(($left_over, Token::Href { url: $output_url.parse().expect("This is a valid url"), display: $output_display.into(), space_before: false }))}
+            };
+        }
         test! {href1, href, "[link text]()", p: Err(_)} // empty url is not ok
         test! {href2, href, "[](homepage.com)", p: Err(_)} // empty display is not ok too
         test! {href3, href, "[невалідне посилання](http://ref    ?????)", p: Err(_)} // random garbage instead of url is not accepted
@@ -1593,10 +1601,11 @@ $$
         href_ok! {href5, "[текст посилання](ftp://somewebsite/files/01234)", "ftp://somewebsite/files/01234", "текст посилання", ""} // cyrillic test
         href_ok! {href6, "[link text](ftp://somewebsite/files/01234), ще текст після нього", "ftp://somewebsite/files/01234", "link text", ", ще текст після нього"}
         // text after url is alright
-        href_ok! {href7, "       [link text](ftp://somewebsite/files/01234), ще текст після нього", "ftp://somewebsite/files/01234", "link text", ", ще текст після нього"}
+        href_ok! {href7, "       [link text](ftp://somewebsite/files/01234), ще текст після нього", "ftp://somewebsite/files/01234", "link text", ", ще текст після нього" ^}
         // space before url is ignored
         href_ok! {href8, "[    link text](ftp://somewebsite/files/01234).", "ftp://somewebsite/files/01234", "link text", "."}
         // display text will be trimmed
+        href_ok! {href9_space_before, "     [link text](ftp://somewebsite/files/01234).", "ftp://somewebsite/files/01234", "link text", "."^}
     }
 
     // `code_block` tests
@@ -1632,7 +1641,7 @@ $$
 
         macro_rules! test_ok {
             {$name:ident, $input:literal, $formula:literal, $left_over:literal} => {
-                test!{$name, inline_math, $input, e: Ok(($left_over, Token::InlineMath{content:$formula.into()}))}
+                test!{$name, inline_math, $input, e: Ok(($left_over, Token::InlineMath{content:$formula.into(), space_before: false}))}
             };
         }
 
@@ -1645,7 +1654,7 @@ $$
         // unclosed mathmode is obviously disallowed
         test_ok! {ok_cyrillic, "$  текст українською $", "текст українською", ""}
         // you can put there whatever you want, however pay attention to latex's rules
-        test_ok! {ok_spaces, "\t   \n\t  \n    \t $   x $", "x", ""}
+        test_ok! {ok_spaces, "\t   \n\t  \n    \t$   x $", "x", ""}
         // got some spaces before? don't care
         test_ok! {ok_text_after, "$   x$some text after it, українською в тому числі",
         "x", "some text after it, українською в тому числі"}
@@ -1658,7 +1667,7 @@ $$
 
         macro_rules! test_ok {
             {$name:ident, $input:literal, $reference:literal, $left_over:literal} => {
-                test!{$name, reference, $input, e: Ok(($left_over, Token::Reference{ident: $reference.into()}))}
+                test!{$name, reference, $input, e: Ok(($left_over, Token::Reference{ident: $reference.into(), space_before: false}))}
             };
         }
 
@@ -1677,14 +1686,14 @@ $$
 
         macro_rules! test_ok {
             {$name:ident, $input:literal, $reference:literal, $left_over:literal} => {
-                test!{$name, footnote_reference, $input, e: Ok(($left_over, Token::FootnoteReference{ident:$reference.into()}))}
+                test!{$name, footnote_reference, $input, e: Ok(($left_over, Token::FootnoteReference{ident:$reference.into(), space_before: false}))}
             };
         }
 
         test! {err_empty, reference, "[^      ]", p: Err(_)} // empty reference is not ok
         test_ok! {ok_char, "[^s]", "s", ""} // single char as identifier is ok
-        test_ok! {ok_space_before, "    \n \t  [^explanation_of_42]", "explanation_of_42", ""}
-        test_ok! {ok_text_after, "    \n \t  [^y_u_do_dis_2_me] кирилиця or th", "y_u_do_dis_2_me", " кирилиця or th"}
+        test_ok! {ok_space_before, "    \n \t[^explanation_of_42]", "explanation_of_42", ""}
+        test_ok! {ok_text_after, "    \n \t[^y_u_do_dis_2_me] кирилиця or th", "y_u_do_dis_2_me", " кирилиця or th"}
     }
 
     // tests for `paragraph`
@@ -1697,6 +1706,7 @@ $$
                     is_newline: false,
                     formatting: None,
                     content: $paragraph.into(),
+                    space_before: false,
                     }, $follower_token)))}
             };
             {$name:ident, $input:literal, $paragraph:literal, $follower_token:expr, $left_over:literal, |} => {
@@ -1704,6 +1714,7 @@ $$
                     is_newline: true,
                     formatting: None,
                     content: $paragraph.into(),
+                    space_before: false,
                     }, $follower_token)))}
             };
         }
@@ -1713,17 +1724,17 @@ $$
         test_ok! {ok_char, "  \t\n c\nfff", "c", None, "\nfff", |} // single char is ok as a paragraph
         test_ok! {ok_sentence, "\t    \n I'm absolutely increative, so here's a bunch of garbage: ]42[t5(2[24tj4-0)jt3_94j03\nand some rest",
         "I'm absolutely increative, so here's a bunch of garbage: ]42[t5(2[24tj4-0)jt3_94j03", None, "\nand some rest", |}
-        test_ok! {ok_formatting, "\t    \n You can use *bold*!", "You can use", Some(Token::Paragraph{is_newline: false, formatting: Some(Formatting::Italic), content: "bold".into()}), "!", |}
+        test_ok! {ok_formatting, "\t    \n You can use *bold*!", "You can use", Some(Token::Paragraph{is_newline: false, formatting: Some(Formatting::Italic), content: "bold".into(), space_before: false}), "!", |}
         // FIXME NOT SUPPORTED
         /* test_ok! {ok_formatting_in_formatting, "\t    \n You can even use ~~__double-formatted__~~ things!", "You can even use",
         Some(Token::Formatted(Formatting::StrikeThrough, Box::new(Token::Formatted(Formatting::Bold, Box::new(Token::text("double-formatted")))))), " things!"} */
         test_ok! {ok_equation, "    \t Inline math is fine too: $y = x_{\text{поч}} + x_0$.", "Inline math is fine too:",
-        Some(Token::InlineMath{content: "y = x_{\text{поч}} + x_0".into()}), "."}
+        Some(Token::InlineMath{content: "y = x_{\text{поч}} + x_0".into(), space_before: false}), "."}
         test_ok! {ok_href, "   \t\t\n You can even [залишити посилання на свою сторінку на Гітхабі   ](https://www.github.com/Dzuchun)!", "You can even",
-        Some(Token::Href { url: "https://www.github.com/Dzuchun".parse().expect("That's a valid url"), display: "залишити посилання на свою сторінку на Гітхабі".into() }), "!", |}
-        test_ok! {ok_footnote_ref, "\t Footnote refs[^1] are also ok too!", "Footnote refs", Some(Token::FootnoteReference{ident: "1".into()}), " are also ok too!"}
+        Some(Token::Href { url: "https://www.github.com/Dzuchun".parse().expect("That's a valid url"), display: "залишити посилання на свою сторінку на Гітхабі".into(), space_before: false }), "!", |}
+        test_ok! {ok_footnote_ref, "\t Footnote refs[^1] are also ok too!", "Footnote refs", Some(Token::FootnoteReference{ident: "1".into(), space_before: false}), " are also ok too!"}
         test_ok! {ok_obj_ref, "\n\t Thi[[ngs lik_e tables* ([@tab:results]) can also be referenced", "Thi[[ngs lik_e tables* (",
-        Some(Token::Reference{ident: "tab:results".into()}), ") can also be referenced", |}
+        Some(Token::Reference{ident: "tab:results".into(), space_before: false}), ") can also be referenced", |}
     }
 
     // `inner_lex` tests
@@ -1750,14 +1761,29 @@ $$
         (!$eq:literal) => {
             Token::InlineMath {
                 content: Cow::Borrowed($eq),
+                space_before: false,
+            }
+        };
+        (^!$eq:literal) => {
+            Token::InlineMath {
+                content: Cow::Borrowed($eq),
+                space_before: true,
             }
         };
     }
     macro_rules! hr {
+        (^ [$display:literal]($url:literal)) => {
+            Token::Href {
+                url: Url::from_str($url).expect("Should be a valid url"),
+                display: Cow::Borrowed($display),
+                space_before: true,
+            }
+        };
         ([$display:literal]($url:literal)) => {
             Token::Href {
                 url: Url::from_str($url).expect("Should be a valid url"),
                 display: Cow::Borrowed($display),
+                space_before: false,
             }
         };
     }
@@ -1779,11 +1805,13 @@ $$
         (@ $ident:literal) => {
             Token::Reference {
                 ident: Cow::Borrowed($ident),
+                space_before: false,
             }
         };
         (^ $ident:literal) => {
             Token::FootnoteReference {
                 ident: Cow::Borrowed($ident),
+                space_before: false,
             }
         };
     }
@@ -1794,17 +1822,26 @@ $$
         ($text:literal, |) => {
             tx!($text, None, |)
         };
+        (^ $text:literal) => {
+            tx!(^ $text, None)
+        };
         ($text:literal, $formatting:expr) => {
             tx!($text, $formatting, false)
         };
         ($text:literal, $formatting:expr, |) => {
             tx!($text, $formatting, true)
         };
+        (^ $text:literal, $formatting:expr) => {
+            tx!($text, $formatting, false, true)
+        };
         ($text:literal, $formatting:expr, $newline:literal) => {
+            tx!($text, $formatting, $newline, false)
+        };
+        ($text:literal, $formatting:expr, $newline:literal, $space_before:literal) => {
             Token::Paragraph {
                 is_newline: $newline,
                 formatting: $formatting,
-                content: Cow::Borrowed($text),
+                content: Cow::Borrowed($text), space_before: $space_before,
             }
         };
     }
@@ -1831,15 +1868,15 @@ $$
         test_err! {err_empty, ""}
         test_ok! {ok_char_para, "a", tx!("a")}
         test_ok! {ok_formatted, "*виділений текст * і ще щось потім",
-        tks![tx!("виділений текст", Some(Formatting::Italic)), tx!("і ще щось потім")]}
+        tks![tx!("виділений текст", Some(Formatting::Italic)), tx!(^"і ще щось потім")]}
         test_ok! {ok_formatted_newlined, "\n*виділений текст * і ще щось потім",
-        tks![tx!("виділений текст", Some(Formatting::Italic), |), tx!("і ще щось потім")]}
+        tks![tx!("виділений текст", Some(Formatting::Italic), |), tx!(^"і ще щось потім")]}
         test_ok! {ok_inline_math, "дивіться! ось формула для параболи: $y = x^2$",
         tks![tx!("дивіться! ось формула для параболи:"), eq!(! "y = x^2")]}
         test_err! {err_display_math, "якась страшна штука:\n$$\nf(x) = \\int\\lms_{0}^{x} \\log(x - 2) dx\n$$\n{ref = scary}\n\tКраще не чіпати її"}
         // display math is not allowed in the inner_lex
         test_ok! {ok_href, "посилання на мою [Github сторінку](https://www.example.com) - ха-ха, жартую;\tОсь вам рівняння: $x^4 + 5x^2 - 100 = 0$.",
-        tks![tx!("посилання на мою"), hr!(["Github сторінку"]("https://www.example.com")), tx!("- ха-ха, жартую;\tОсь вам рівняння:"), eq!(!"x^4 + 5x^2 - 100 = 0"), tx!(".")]}
+        tks![tx!("посилання на мою"), hr!(^ ["Github сторінку"]("https://www.example.com")), tx!(^ "- ха-ха, жартую;\tОсь вам рівняння:"), eq!(^!"x^4 + 5x^2 - 100 = 0"), tx!(".")]}
         test_ok! {ok_ref, "розрахунки наведено у таблиці ([@tab:calc])[^3].",
         tks![tx!("розрахунки наведено у таблиці ("), rf!(@"tab:calc"), tx!(")"), rf!(^"3"), tx!(".")]}
     }
@@ -1938,11 +1975,11 @@ $$
         test_ok! {ok_caption, "\n![[path/to/file.jpg]]\n{caption = \"Ця картинка показує графік рівняння $y = x^2$\"    }\n",
         fig!("path/to/file.jpg", {ref = None::<&str>, caption = Some(tks![tx!("Ця картинка показує графік рівняння"), eq!(!"y = x^2")]), width = None}), "\n"}
         test_ok! {ok_both, "\n![[path/to/file.jpg]]\n{   ref = mc_erat, caption = \"This is a mee from our $\\text{Nomifactory}^{2*}$ world.\"    }\n",
-        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a mee from our"), eq!(!"\\text{Nomifactory}^{2*}"), tx!("world."))), width = None}), "\n"}
+        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a mee from our"), eq!(!"\\text{Nomifactory}^{2*}"), tx!(^ "world."))), width = None}), "\n"}
         test_ok! {ok_both_reversed, "\n![[path/to/file.jpg]]\n{   caption = \"This is a meme from our $\\text{Nomifactory}^{2*}$ world.\" ,    ref = mc_erat    }\n",
-        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a meme from our"), eq!(!"\\text{Nomifactory}^{2*}"), tx!("world."))), width = None}), "\n"}
+        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a meme from our"), eq!(!"\\text{Nomifactory}^{2*}"), tx!(^ "world."))), width = None}), "\n"}
         test_ok! {ok_both_left_over, "\n![[path/to/file.jpg]]\n{   caption = \"This is a meme from our $\\text{Nomifactory}^{2*}$ world.\" ,    ref = mc_erat    }\nІще трохи тексту",
-        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a meme from our"), eq!(!"\\text{Nomifactory}^{2*}"), tx!("world."))), width = None}), "\nІще трохи тексту"}
+        fig!("path/to/file.jpg", {ref = Some("mc_erat"), caption = Some(tks!(tx!("This is a meme from our"), eq!(!"\\text{Nomifactory}^{2*}"), tx!(^ "world."))), width = None}), "\nІще трохи тексту"}
         test_ok! {ok_width, "\n![[path/to/file.jpg]]\n{    width = 0.5}\nTh else", fig!("path/to/file.jpg", {ref = None::<&str>, caption = None, width = Some(0.5)}), "\nTh else"}
     }
 
@@ -2052,6 +2089,7 @@ $$
                 is_static: $is_static,
                 code: Cow::Borrowed($code),
                 insert_path: $insert_path.map(Path::new).map(Cow::from),
+                is_space_before: false,
         }}
         };
     }

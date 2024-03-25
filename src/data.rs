@@ -66,6 +66,7 @@ impl<'source> Tokens<'source> {
 // #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AyanoBlock<'code> {
     pub is_display: bool,
+    pub is_space_before: bool,
     pub is_static: bool,
     pub code: Tx<'code>,
     pub insert_path: Option<Cow<'code, Path>>,
@@ -132,6 +133,7 @@ pub enum Token<'source> {
         width: Option<f32>,
     },
     Href {
+        space_before: bool,
         // #[cfg_attr(feature = "serde", serde(with = "url_serde"))]
         url: Url,
         display: Tx<'source>,
@@ -150,16 +152,20 @@ pub enum Token<'source> {
     // TODO add a flag to indicate, if this paragraph contains escaped chars (if it was parsed from caption, basically)
     Paragraph {
         is_newline: bool,
+        space_before: bool,
         formatting: Option<Formatting>,
         content: Tx<'source>,
     },
     InlineMath {
+        space_before: bool,
         content: Tx<'source>,
     },
     Reference {
+        space_before: bool,
         ident: Tx<'source>,
     },
     FootnoteReference {
+        space_before: bool,
         ident: Tx<'source>,
     },
     FootnoteContent {
@@ -235,12 +241,14 @@ impl ToStaticExt for AyanoBlock<'_> {
             insert_path,
             is_display,
             is_static,
+            is_space_before,
         } = self;
         AyanoBlock {
             code: code.to_static(),
             insert_path: insert_path.as_ref().map(Cow::to_static),
             is_static: *is_static,
             is_display: *is_display,
+            is_space_before: *is_space_before,
         }
     }
 }
@@ -248,6 +256,7 @@ impl ToStaticExt for AyanoBlock<'_> {
 impl<'source> Token<'source> {
     pub fn text(text: impl Into<Cow<'source, str>>) -> Self {
         Self::Paragraph {
+            space_before: false,
             is_newline: false,
             content: text.into(),
             formatting: None,
@@ -290,9 +299,14 @@ impl<'source> Token<'source> {
                 ident: ident.as_ref().map(|s| Cow::<'r, str>::Borrowed(s)),
                 width: *width,
             },
-            Token::Href { url, display } => Token::Href {
+            Token::Href {
+                url,
+                display,
+                space_before,
+            } => Token::Href {
                 url: url.clone(),
                 display: Cow::Borrowed(&display),
+                space_before: *space_before,
             },
             Token::Ayano { data } => Token::Ayano { data: data.clone() },
             Token::List { list_type, content } => Token::List {
@@ -306,19 +320,33 @@ impl<'source> Token<'source> {
                 is_newline,
                 formatting,
                 content,
+                space_before,
             } => Token::Paragraph {
                 is_newline: *is_newline,
                 formatting: formatting.clone(),
                 content: Cow::Borrowed(content),
+                space_before: *space_before,
             },
-            Token::InlineMath { content } => Token::InlineMath {
+            Token::InlineMath {
+                content,
+                space_before,
+            } => Token::InlineMath {
                 content: Cow::Borrowed(&content),
+                space_before: *space_before,
             },
-            Token::Reference { ident } => Token::Reference {
+            Token::Reference {
+                ident,
+                space_before,
+            } => Token::Reference {
                 ident: Cow::Borrowed(&ident),
+                space_before: *space_before,
             },
-            Token::FootnoteReference { ident } => Token::FootnoteReference {
+            Token::FootnoteReference {
+                ident,
+                space_before,
+            } => Token::FootnoteReference {
                 ident: Cow::Borrowed(ident),
+                space_before: *space_before,
             },
             Token::FootnoteContent { content, ident } => Token::FootnoteContent {
                 content: Box::new(content.borrow_ref()),
@@ -370,9 +398,14 @@ impl<'source> Token<'source> {
                 ident: ident.as_ref().map(Cow::to_static),
                 width: *width,
             },
-            Token::Href { url, display } => Token::Href {
+            Token::Href {
+                url,
+                display,
+                space_before,
+            } => Token::Href {
                 url: url.clone(),
                 display: display.to_static(),
+                space_before: *space_before,
             },
             Token::Ayano { data } => Token::Ayano {
                 data: data.to_static(),
@@ -386,21 +419,35 @@ impl<'source> Token<'source> {
             },
             Token::Paragraph {
                 is_newline,
+                space_before,
                 formatting,
                 content,
             } => Token::Paragraph {
                 is_newline: *is_newline,
                 formatting: formatting.clone(),
                 content: content.to_static(),
+                space_before: *space_before,
             },
-            Token::InlineMath { content } => Token::InlineMath {
+            Token::InlineMath {
+                content,
+                space_before,
+            } => Token::InlineMath {
                 content: content.to_static(),
+                space_before: *space_before,
             },
-            Token::Reference { ident } => Token::Reference {
+            Token::Reference {
+                ident,
+                space_before,
+            } => Token::Reference {
                 ident: ident.to_static(),
+                space_before: *space_before,
             },
-            Token::FootnoteReference { ident } => Token::FootnoteReference {
+            Token::FootnoteReference {
+                ident,
+                space_before,
+            } => Token::FootnoteReference {
                 ident: ident.to_static(),
+                space_before: *space_before,
             },
             Token::FootnoteContent { content, ident } => Token::FootnoteContent {
                 content: content.to_static(),

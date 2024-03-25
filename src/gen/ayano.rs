@@ -185,6 +185,7 @@ mod ayano_tests {
                     is_static: false,
                     code: $code.into(),
                     insert_path: None,
+                    is_space_before: false,
                 };
                 let mut builder = AyanoBuilder::new();
 
@@ -231,12 +232,14 @@ y = x / 100
                     insert_path: None,
                     is_display: false,
                     is_static: true,
+                    is_space_before: false,
                 };
                 let function_block = AyanoBlock {
                     code: $function_code.into(),
                     insert_path: None,
                     is_display: false,
                     is_static: false,
+                    is_space_before: false,
                 };
                 builder.add_block(&static_block).expect("Should be able to add static block");
                 builder.add_block(&function_block).expect("Should be able to add function block");
@@ -273,18 +276,21 @@ y", "2"}
                     insert_path: None,
                     is_display: false,
                     is_static: true,
+                    is_space_before: false,
                 };
                 let function1_block = AyanoBlock {
                     code: $function1_code.into(),
                     insert_path: None,
                     is_display: false,
                     is_static: false,
+                    is_space_before: false,
                 };
                 let function2_block = AyanoBlock {
                     code: $function2_code.into(),
                     insert_path: None,
                     is_display: false,
                     is_static: false,
+                    is_space_before: false,
                 };
                 builder.add_block(&static_block).expect("Should be able to add static block");
                 builder.add_block(&function1_block).expect("Should be able to add function block");
@@ -480,6 +486,7 @@ mod apply_ayano_tests {
                     insert_path: None,
                     is_display: false,
                     is_static: false,
+                    is_space_before: false,
                 };
 
                 // act
@@ -578,6 +585,7 @@ y = x + 2
             code: code.into(),
             insert_path: Some(insert_path.into()),
             is_static: false,
+            is_space_before: false,
         };
 
         // act
@@ -1558,6 +1566,7 @@ fn parse_ayano(python_output: &PyAny) -> Result<Token<'static>, ParsingError> {
     Ok(Token::Paragraph {
         is_newline: false,
         formatting: None,
+        space_before: todo!(),
         content: Cow::Owned(python_output.to_string()),
     })
 }
@@ -1569,6 +1578,7 @@ fn value_error_token(value: f64, error: f64) -> Token<'static> {
             Token::text(value.to_string()),
             Token::InlineMath {
                 content: r"\pm".into(),
+                space_before: false,
             },
             Token::text(error.to_string()),
         ]),
@@ -1619,9 +1629,9 @@ mod parsing_tests {
     test! {err1, |py| PyTuple::new(py, ["err".into_py(py), ["yet another not a number"].into_py(py)]),
     Err(crate::gen::ayano::ParsingError::UnexpectedSyntax("('err', ['yet another not a number'])".to_string(), py_err!(py)))}
     test! {value_error1, |py| PyTuple::new(py, ["err".into_py(py), 1.0.into_py(py), 0.5.into_py(py)]),
-    Ok(Token::Multiple{tokens: Tokens::new([Token::text("1.0"), Token::InlineMath{content:r"\pm".into()}, Token::text("0.5")])})}
+    Ok(Token::Multiple{tokens: Tokens::new([Token::text("1.0"), Token::InlineMath{content:r"\pm".into(), space_before: false}, Token::text("0.5")])})}
     test! {value_error2, |py| PyTuple::new(py, ["err".into_py(py), "1.0".into_py(py), 0.5.into_py(py)]),
-    Ok(Token::Multiple{tokens:Tokens::new([Token::text("1.0"), Token::InlineMath{content:r"\pm".into()}, Token::text("0.5")])})}
+    Ok(Token::Multiple{tokens:Tokens::new([Token::text("1.0"), Token::InlineMath{content:r"\pm".into(), space_before: false}, Token::text("0.5")])})}
     test! {value_error_format1, |py| PyTuple::new(py, ["err".into_py(py), "1.987654321".into_py(py), 0.00000123456.into_py(py)]),
     Ok(value_error_token(1.9876543, 0.0000012))}
     // TODO probably should add some more tests for value-error formatting
@@ -1711,7 +1721,7 @@ mod parsing_tests {
                 Token::text("cell_11"), Token::text("0.25"),
                 Token::text("cell_21"), Token::text("-2"),
             ]),
-            caption: Some(Box::new(Token::Multiple{tokens:Tokens::new([Token::text("table caption with some"),Token::InlineMath{content:"formula".into()}])})),
+            caption: Some(Box::new(Token::Multiple{tokens:Tokens::new([Token::text("table caption with some"),Token::InlineMath{content:"formula".into(), space_before: false}])})),
             ident: Some("table1".into())
         })
     }
@@ -2232,14 +2242,17 @@ pub fn value_error_format<'v, 'e>(
                 is_newline: false,
                 formatting: None,
                 content: value.into(),
+                space_before: false,
             },
             Token::InlineMath {
                 content: r"\pm".into(),
+                space_before: false,
             },
             Token::Paragraph {
                 is_newline: false,
                 formatting: None,
                 content: error.into(),
+                space_before: false,
             },
         ]),
     })
