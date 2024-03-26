@@ -11,6 +11,7 @@ TitleInfo {
     author_line3: None,
     date: None,
     prof: None,
+    code_section_title: None,
 }
 Multiple {
     tokens: Owned(
@@ -29,7 +30,7 @@ Multiple {
             },
             Ayano {
                 data: AyanoBlock {
-                    is_display: false,
+                    display_state: NotDisplayed,
                     is_space_before: false,
                     is_static: false,
                     code: "@fig: src=\"circle.png\", ident=\"circle\", caption=\"Some caption for a line drawing. This is parsed as a *regular document text*, so you may [@eq:line] and $f(x) = A \\cdot x^{1} + B \\cdot x^{0}$ here, for example\"",
@@ -44,7 +45,7 @@ Multiple {
             },
             Ayano {
                 data: AyanoBlock {
-                    is_display: false,
+                    display_state: NotDisplayed,
                     is_space_before: false,
                     is_static: false,
                     code: "width = 0.2\n@fig: src = \"graph.png\", width = width",
@@ -59,7 +60,7 @@ Multiple {
             },
             Ayano {
                 data: AyanoBlock {
-                    is_display: false,
+                    display_state: NotDisplayed,
                     is_space_before: false,
                     is_static: false,
                     code: "data = [\n\t\t[\"x\", \"y\"],\n\t\t[1.0, 3.0],\n\t\t[3.0, 4.0],\n\t\t[-1.0, -5743234.0],\n]\n@gen_table: lambda r,c: data[r][c]; rows=4, columns=2, caption=\"Caption for a table 1, *because* why not\", ident=\"table1\"",

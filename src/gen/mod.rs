@@ -29,8 +29,8 @@ pub trait OutputGenerator<'source, Meta, Context> {
         token: &'token Token<'source>,
     ) -> Res<'source>
     where
-        'source: 'meta + 'context + 'token,
-        'token: 'context;
+    'source: 'meta + 'context + 'token,
+    'token: 'context;
 
     fn write_tokens_to<'meta, 'context, 'token, W: Write + ?Sized>(
         &self,
@@ -40,19 +40,15 @@ pub trait OutputGenerator<'source, Meta, Context> {
         tokens: &'token Tokens<'source>,
     ) -> Res<'source>
     where
-        'source: 'meta + 'context + 'token,
-        'token: 'context,
-    {
+    'source: 'meta + 'context + 'token,
+    'token: 'context,
+        {
         tokens
             .into_iter()
             .map(|t| self.write_to(output, meta, context, t))
             .try_collect()
     }
-    fn write_preamble<'meta, W: Write + ?Sized>(
-        &self,
-        _: &mut W,
-        _: &'meta Meta,
-    ) -> Res<'source> {
+    fn write_preamble<'meta, W: Write + ?Sized>(&self, _: &mut W, _: &'meta Meta) -> Res<'source> {
         Ok(())
     }
     fn write_postamble<'meta, 'context, W: Write + ?Sized>(

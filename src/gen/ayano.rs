@@ -20,10 +20,10 @@ use std::{
 };
 
 use crate::{
-    data::{AyanoBlock, Token, Tokens},
+    data::{AyanoBlock, DisplayState, Token, Tokens},
     lexer::KyomatoLexError,
     util::{
-        Equivalent, GenericRange, GenericRangeParseError, Immutable, InlinedStack,
+        Equivalent, GenericRange, GenericRangeParseError, HashIgnored, Immutable, InlinedStack,
         InlinedStackAccessor,
     },
 };
@@ -35,14 +35,14 @@ mod python;
 #[derive(Debug)]
 pub struct DisplayInfo {
     pub code: String,
-    pub name: String,
+    pub caption: Token<'static>,
 }
 
 #[derive(Debug, PartialEq)]
 struct CodelessBlockInfo {
     ident: u64,
     function_name: Option<String>,
-    display_name: Option<String>,
+    caption: Option<Token<'static>>,
     insert_path: Option<PathBuf>,
 }
 
@@ -89,9 +89,9 @@ impl AyanoBuilder {
             BlockInfo {
                 ident,
                 function_name: info.function_name,
-                display_info: info.display_name.map(|name| DisplayInfo {
+                display_info: info.caption.map(|name| DisplayInfo {
                     code: transformed_code,
-                    name,
+                    caption: name,
                 }),
                 insert_path: info.insert_path,
             },
@@ -181,7 +181,7 @@ mod ayano_tests {
             fn $name() {
                 // arrange
                 let block = AyanoBlock {
-                    is_display: false,
+                    display_state: DisplayState::NotDisplayed,
                     is_static: false,
                     code: $code.into(),
                     insert_path: None,
@@ -230,14 +230,14 @@ y = x / 100
                 let static_block = AyanoBlock {
                     code: $static_code.into(),
                     insert_path: None,
-                    is_display: false,
+                    display_state: DisplayState::NotDisplayed,
                     is_static: true,
                     is_space_before: false,
                 };
                 let function_block = AyanoBlock {
                     code: $function_code.into(),
                     insert_path: None,
-                    is_display: false,
+                    display_state: DisplayState::NotDisplayed,
                     is_static: false,
                     is_space_before: false,
                 };
@@ -274,21 +274,21 @@ y", "2"}
                 let static_block = AyanoBlock {
                     code: $static_code.into(),
                     insert_path: None,
-                    is_display: false,
+                    display_state: DisplayState::NotDisplayed,
                     is_static: true,
                     is_space_before: false,
                 };
                 let function1_block = AyanoBlock {
                     code: $function1_code.into(),
                     insert_path: None,
-                    is_display: false,
+                    display_state: DisplayState::NotDisplayed,
                     is_static: false,
                     is_space_before: false,
                 };
                 let function2_block = AyanoBlock {
                     code: $function2_code.into(),
                     insert_path: None,
-                    is_display: false,
+                    display_state: DisplayState::NotDisplayed,
                     is_static: false,
                     is_space_before: false,
                 };
@@ -400,10 +400,15 @@ fn apply_ayano<'token, 'source: 'token>(
     */
 
     // create display name
-    let display_name = if block.is_display {
-        Some(block_name(ident))
-    } else {
-        None
+    let display_name = match &block.display_state {
+        crate::data::DisplayState::NotDisplayed => None,
+        crate::data::DisplayState::DisplayedNoCaption => Some(Token::Paragraph {
+            is_newline: true,
+            space_before: false,
+            formatting: None,
+            content: block_name(ident).into(),
+        }),
+        crate::data::DisplayState::Caption(tokens) => Some(tokens.to_static_token()),
     };
 
     // return out static block here
@@ -414,7 +419,7 @@ fn apply_ayano<'token, 'source: 'token>(
             CodelessBlockInfo {
                 ident,
                 function_name: None,
-                display_name,
+                caption: display_name,
                 insert_path,
             },
         ));
@@ -432,7 +437,7 @@ fn apply_ayano<'token, 'source: 'token>(
             CodelessBlockInfo {
                 ident,
                 function_name,
-                display_name,
+                caption: display_name,
                 insert_path,
             },
         ));
@@ -458,7 +463,7 @@ fn apply_ayano<'token, 'source: 'token>(
             ident,
             function_name,
             insert_path,
-            display_name,
+            caption: display_name,
         },
     ))
 }
@@ -484,7 +489,7 @@ mod apply_ayano_tests {
                 let block = AyanoBlock {
                     code: $input.into(),
                     insert_path: None,
-                    is_display: false,
+                    display_state: DisplayState::NotDisplayed,
                     is_static: false,
                     is_space_before: false,
                 };
@@ -581,7 +586,7 @@ y = x + 2
 
         let code = "@dev: x,y";
         let block = AyanoBlock {
-            is_display: false,
+            display_state: DisplayState::NotDisplayed,
             code: code.into(),
             insert_path: Some(insert_path.into()),
             is_static: false,
@@ -1502,7 +1507,7 @@ fn parse_ayano(
                         None
                     } else {
                         let width_str = throw_syntax!(width.str().and_then(|s| s.to_str()))?;
-                        Some(width_str.parse()?)
+                        Some(HashIgnored(width_str.parse()?))
                     };
                     return Ok(Token::Figure {
                         src_name: Cow::Owned(PathBuf::from(src)),
@@ -1658,7 +1663,7 @@ mod parsing_tests {
         src_name: Cow::Owned(PathBuf::from("path/to/file.png")),
         caption: Some(Box::new(Token::text("figure caption"))),
         ident: Some("circle".into()),
-        width: Some(0.625),
+        width: Some(HashIgnored(0.625)),
     })}
 
     test! {table_nocaption, |py| {

@@ -11,6 +11,7 @@ TitleInfo {
     author_line3: None,
     date: None,
     prof: None,
+    code_section_title: None,
 }
 Multiple {
     tokens: Owned(
@@ -100,7 +101,9 @@ Multiple {
                     "refurb",
                 ),
                 width: Some(
-                    0.4,
+                    HashIgnored(
+                        0.4,
+                    ),
                 ),
             },
             Paragraph {

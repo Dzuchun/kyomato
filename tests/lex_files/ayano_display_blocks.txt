@@ -1,0 +1,70 @@
+TitleInfo {
+    header_line1: None,
+    header_line2: None,
+    document_type: None,
+    title_line1: None,
+    title_line2: None,
+    title_line3: None,
+    title_line4: None,
+    author_line1: None,
+    author_line2: None,
+    author_line3: None,
+    date: None,
+    prof: None,
+    code_section_title: Some(
+        "Код",
+    ),
+}
+Multiple {
+    tokens: Owned(
+        [
+            Header {
+                order: 1,
+                content: "Display blocks",
+            },
+            Paragraph {
+                is_newline: true,
+                space_before: false,
+                formatting: None,
+                content: "This feature allows you to insert certain `Ayano` blocks to the end of the output document, to document your exact actions for displayed results.",
+            },
+            Paragraph {
+                is_newline: true,
+                space_before: false,
+                formatting: None,
+                content: "Here's an example:",
+            },
+            Ayano {
+                data: AyanoBlock {
+                    display_state: DisplayedNoCaption,
+                    is_space_before: false,
+                    is_static: false,
+                    code: "# You should be able to see this comment in the output doc\n42",
+                    insert_path: None,
+                },
+            },
+            Paragraph {
+                is_newline: true,
+                space_before: false,
+                formatting: None,
+                content: "Display blocks can have descriptions too! Here's one:",
+            },
+            Ayano {
+                data: AyanoBlock {
+                    display_state: Caption(
+                        Paragraph {
+                            is_newline: false,
+                            space_before: false,
+                            formatting: None,
+                            content: "me, fooling around",
+                        },
+                    ),
+                    is_space_before: false,
+                    is_static: false,
+                    code: "# This code block has description\n# Might as well add some python syntax to check out minted's syntax highlighting:\nfor i in range(100):\n    s = str(i)\n    s = s[::-1]\n@dev: -2.034e4, 145.64",
+                    insert_path: None,
+                },
+            },
+        ],
+    ),
+}

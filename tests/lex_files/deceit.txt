@@ -11,6 +11,7 @@ TitleInfo {
     author_line3: None,
     date: None,
     prof: None,
+    code_section_title: None,
 }
 Multiple {
     tokens: Owned(
@@ -804,7 +805,7 @@ Multiple {
             },
             Ayano {
                 data: AyanoBlock {
-                    is_display: false,
+                    display_state: NotDisplayed,
                     is_space_before: false,
                     is_static: false,
                     code: "2",

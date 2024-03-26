@@ -5,11 +5,16 @@ pub use context::Context;
 pub use meta::SourceMeta;
 
 use crate::{
-    data::{Formatting, TitleInfo, Token},
+    data::{AyanoBlock, Formatting, TitleInfo, Token},
+    gen::ayano::DisplayInfo,
     path_engine::PathEngine,
 };
 use itertools::Itertools;
-use std::{borrow::Borrow, fmt::Write, marker::PhantomData};
+use std::{
+    borrow::{Borrow, Cow},
+    fmt::Write,
+    marker::PhantomData,
+};
 
 use super::{ayano::AyanoExecutor, GenerationError, OutputGenerator, Res};
 
@@ -359,6 +364,7 @@ where
             author_line3,
             date,
             prof,
+            code_section_title: _code_section_title,
         } = &meta.title_info;
         let replacements = [
             header_line1,
@@ -390,9 +396,51 @@ where
     fn write_postamble<'meta, 'context, W: Write + ?Sized>(
         &self,
         output: &mut W,
-        _: &'meta SourceMeta<'source, AyanoExecutor>,
-        _: &'context mut Context,
+        meta: &'meta SourceMeta<'source, AyanoExecutor>,
+        context: &'context mut Context,
     ) -> Res<'source> {
+        let mut display_ayano_blocks = meta.ayano.display_blocks().into_iter();
+        if let Some(first) = display_ayano_blocks.next() {
+            fn write_display_block<
+                'source,
+                'meta,
+                'context,
+                C,
+                G: OutputGenerator<'source, SourceMeta<'source, AyanoExecutor>, C>,
+                W: Write + ?Sized,
+            >(
+                generator: &G,
+                output: &mut W,
+                meta: &'meta SourceMeta<'source, AyanoExecutor>,
+                context: &'context mut C,
+                block: &'meta DisplayInfo,
+            ) -> Res<'source>
+            where
+                'source: 'meta + 'context,
+            {
+                let block_code_block = Token::CodeBlock {
+                    code: Cow::Owned(block.code.clone()),
+                    language: Some("python".into()),
+                };
+                generator.write_to(output, meta, context, &block_code_block)?;
+                generator.write_to(output, meta, context, &block.caption)?;
+                Ok(())
+            }
+            let blocks_section_header = Token::Header {
+                order: 1,
+                content: meta
+                    .title_info
+                    .code_section_title
+                    .as_ref()
+                    .unwrap_or(&"".into())
+                    .clone(),
+            };
+            self.write_to(output, meta, context, &blocks_section_header)?;
+            write_display_block(self, output, meta, context, first)?;
+            for block in display_ayano_blocks {
+                write_display_block(self, output, meta, context, block)?;
+            }
+        }
         output.write_str("\n\n\\end{document}")?;
         Ok(())
     }
@@ -402,7 +450,10 @@ where
 mod tests {
     use std::path::Path;
 
-    use crate::data::{AyanoBlock, Formatting, ListType};
+    use crate::{
+        data::{AyanoBlock, DisplayState, Formatting, ListType},
+        util::HashIgnored,
+    };
 
     use super::*;
 
@@ -522,7 +573,7 @@ mod tests {
     \label{fig:schema-1}
     \end{figure}
     "}
-    test! {fig3_width, Token::Figure { src_name: Path::new("schema1.jpg").into(), caption: Some(Box::new(text!("A schema providing a bunch of very important info on quantum refurbalidzer function"))), ident: Some("schema-1".into()), width: Some(0.25) }, r"
+    test! {fig3_width, Token::Figure { src_name: Path::new("schema1.jpg").into(), caption: Some(Box::new(text!("A schema providing a bunch of very important info on quantum refurbalidzer function"))), ident: Some("schema-1".into()), width: Some(HashIgnored(0.25)) }, r"
     \begin{figure}[h!]
     \centering
     \includegraphics[width = 0.25 \textwidth]{schema1.jpg}
@@ -670,21 +721,21 @@ cell_21 & cell_22 & cell_23 \\ \hline
     "}
 
     test! {ayano_plain1, Token::Ayano{data: AyanoBlock{
-        is_display: false,
+        display_state: DisplayState::NotDisplayed,
         is_static: false,
         code: "1".into(),
         insert_path: None,
         is_space_before: false,
     }}, r"1"}
     test! {ayano_plain2, Token::Ayano{data: AyanoBlock{
-        is_display: false,
+        display_state: DisplayState::NotDisplayed,
         is_static: false,
         code: "1 + 2".into(),
         insert_path: None,
         is_space_before: false,
     }}, r"3"}
     test! {ayano_plain3, Token::Ayano{data: AyanoBlock{
-        is_display: false,
+        display_state: DisplayState::NotDisplayed,
         is_static: false,
         code: r"
 from math import sqrt
@@ -696,7 +747,7 @@ int(y)"
         is_space_before: false,
     }}, r"10"}
     test! {ayano_plain4, Token::Ayano{data: AyanoBlock{
-        is_display: false,
+        display_state: DisplayState::NotDisplayed,
         is_static: false,
         code: r"
 res = 0
@@ -708,7 +759,7 @@ res"
         is_space_before: false,
     }}, r"5050"}
     test! {ayano_err1, Token::Ayano{data: AyanoBlock{
-        is_display: false,
+        display_state: DisplayState::NotDisplayed,
         is_static: false,
         code: r"
     'err', 1.0, 0.1"
@@ -717,7 +768,7 @@ res"
         is_space_before: false,
     }}, r"1.00 $\pm$ 0.10"}
     test! {ayano_err2, Token::Ayano{data: AyanoBlock{
-        is_display: false,
+        display_state: DisplayState::NotDisplayed,
         is_static: false,
         code: r"
     'err', 1.0, 0.4"
@@ -726,7 +777,7 @@ res"
         is_space_before: false,
     }}, r"1.0 $\pm$ 0.4"}
     test! {ayano_err3, Token::Ayano{data: AyanoBlock{
-            is_display: false,
+        display_state: DisplayState::NotDisplayed,
             is_static: false,
             code: r"
 x = 1.0
@@ -739,7 +790,7 @@ y = 0.4
     }
 
     test! {ayano_fig1, Token::Ayano{data: AyanoBlock{
-        is_display: false,
+        display_state: DisplayState::NotDisplayed,
         is_static: false,
         code: r"'fig', 'path/to/image.jpg', None, None, None".into(),
         insert_path: None,
@@ -752,7 +803,7 @@ y = 0.4
     }
 
     test! {ayano_fig2_width, Token::Ayano{data: AyanoBlock{
-        is_display: false,
+        display_state: DisplayState::NotDisplayed,
         is_static: false,
         code: r"'fig', 'path/to/image.jpg', None, None, 0.625".into(),
         insert_path: None,
@@ -764,14 +815,13 @@ y = 0.4
 \end{figure}"
     }
 
-    test! {ayano_fig2, Token::Ayano{data: AyanoBlock{is_display: false,is_static: false,code: r"@fig: src = 'path/to/image.jpg'".into(),insert_path: None,
-                                                                            is_space_before: false,}},
+    test! {ayano_fig2, Token::Ayano{data: AyanoBlock{display_state: DisplayState::NotDisplayed,is_static: false,code: r"@fig: src = 'path/to/image.jpg'".into(),insert_path: None,is_space_before: false,}},
 r"
 \begin{figure}[h!]
 \centering
 \includegraphics[width = 0.9 \textwidth]{path/to/image.jpg}
 \end{figure}"}
-    test! {ayano_fig3, Token::Ayano{data: AyanoBlock{ is_display: false,is_static: false,code: r#"@fig: src = 'path/to/image.jpg', ident = "meow""#.into(),insert_path: None,
+    test! {ayano_fig3, Token::Ayano{data: AyanoBlock{ display_state: DisplayState::NotDisplayed,is_static: false,code: r#"@fig: src = 'path/to/image.jpg', ident = "meow""#.into(),insert_path: None,
     is_space_before: false,
         }},
 r#"
@@ -783,7 +833,7 @@ r#"
     }
     // TODO add tests with captions
 
-    test! {ayano_gen_tab1, Token::Ayano{data: AyanoBlock { is_display: false, is_static: false, code:
+    test! {ayano_gen_tab1, Token::Ayano{data: AyanoBlock { display_state: DisplayState::NotDisplayed, is_static: false, code:
 r#"
 data = [[1, 2, 3], [4, 5, 6]]
 @gen_table: lambda r,c: data[r][c]; rows=2, columns=3

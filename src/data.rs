@@ -6,6 +6,8 @@ use std::{
 
 use url::Url;
 
+use crate::util::HashIgnored;
+
 #[derive(Debug, Default, PartialEq)]
 pub struct TitleInfo<'source> {
     pub header_line1: Option<Tx<'source>>,
@@ -20,6 +22,7 @@ pub struct TitleInfo<'source> {
     pub author_line3: Option<Tx<'source>>,
     pub date: Option<Tx<'source>>,
     pub prof: Option<Tx<'source>>,
+    pub code_section_title: Option<Tx<'source>>,
 }
 
 // For whatever reason, std library Cow requires ToOwned for it's contained value to be cloned
@@ -30,7 +33,7 @@ pub struct TitleInfo<'source> {
 // Also, vectors of parsed tokens are obviously not intended to live longer than the source.
 // In fact, for any possible appliance they can be assumed to life for as long as source does.
 // Hope is for lifetime variance to help with lifetime casting, or th
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Hash)]
 // #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Tokens<'source> {
     Owned(Box<[Token<'source>]>),
@@ -44,6 +47,14 @@ impl<'source> Deref for Tokens<'source> {
         match &self {
             Tokens::Owned(b) => &b[..],
             Tokens::Borrowed(s) => s,
+        }
+    }
+}
+impl<'source> Clone for Tokens<'source> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Owned(arg0) => Self::Owned(arg0.clone()),
+            Self::Borrowed(arg0) => Self::Borrowed(arg0),
         }
     }
 }
@@ -79,9 +90,28 @@ impl<'source> Tokens<'source> {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq)]
+pub enum DisplayState<'code> {
+    NotDisplayed,
+    DisplayedNoCaption,
+    Caption(Box<Token<'code>>),
+}
+
+impl<'code> DisplayState<'code> {
+    fn to_static(&self) -> DisplayState<'static> {
+        match self {
+            DisplayState::NotDisplayed => DisplayState::NotDisplayed,
+            DisplayState::DisplayedNoCaption => DisplayState::DisplayedNoCaption,
+            DisplayState::Caption(caption) => {
+                DisplayState::Caption(Box::new(caption.to_static_token()))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq)]
 // #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AyanoBlock<'code> {
-    pub is_display: bool,
+    pub display_state: DisplayState<'code>,
     pub is_space_before: bool,
     pub is_static: bool,
     pub code: Tx<'code>,
@@ -102,7 +132,7 @@ impl PartialEq for AyanoBlock<'_> {
 }
 */
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 // #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ListType {
     Bullet,
@@ -112,7 +142,7 @@ pub enum ListType {
     Roman,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 // #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Formatting {
     Bold,
@@ -123,7 +153,7 @@ pub enum Formatting {
 type Tx<'source> = Cow<'source, str>;
 type Pth<'source> = Cow<'source, Path>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Hash)]
 // #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Token<'source> {
     PageDiv,
@@ -146,7 +176,7 @@ pub enum Token<'source> {
         src_name: Pth<'source>,
         caption: Option<Box<Token<'source>>>,
         ident: Option<Tx<'source>>,
-        width: Option<f32>,
+        width: Option<HashIgnored<f32>>,
     },
     Href {
         space_before: bool,
@@ -255,7 +285,7 @@ impl ToStaticExt for AyanoBlock<'_> {
         let AyanoBlock {
             code,
             insert_path,
-            is_display,
+            display_state,
             is_static,
             is_space_before,
         } = self;
@@ -263,7 +293,7 @@ impl ToStaticExt for AyanoBlock<'_> {
             code: code.to_static(),
             insert_path: insert_path.as_ref().map(Cow::to_static),
             is_static: *is_static,
-            is_display: *is_display,
+            display_state: display_state.to_static(),
             is_space_before: *is_space_before,
         }
     }
@@ -313,7 +343,7 @@ impl<'source> Token<'source> {
                 src_name: Cow::Borrowed(src_name),
                 caption: caption.as_ref().map(|t| Box::new(Token::borrow_ref(t))),
                 ident: ident.as_ref().map(|s| Cow::<'r, str>::Borrowed(s)),
-                width: *width,
+                width: width.clone(),
             },
             Token::Href {
                 url,
@@ -412,7 +442,7 @@ impl<'source> Token<'source> {
                 src_name: src_name.to_static(),
                 caption: caption.as_ref().map(Box::to_static),
                 ident: ident.as_ref().map(Cow::to_static),
-                width: *width,
+                width: width.clone(),
             },
             Token::Href {
                 url,

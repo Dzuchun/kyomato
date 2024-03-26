@@ -35,6 +35,7 @@ TitleInfo {
     prof: Some(
         "me :idk:",
     ),
+    code_section_title: None,
 }
 Multiple {
     tokens: Owned(

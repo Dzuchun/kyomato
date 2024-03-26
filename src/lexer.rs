@@ -21,8 +21,10 @@ use nom::{
 use url::Url;
 
 use crate::{
-    data::{AyanoBlock, Formatting, ListType, TitleInfo, Token, Tokens},
-    util::{optional_permutation, Equivalent, IteratorArrayCollectExt, VecTryExtendExt},
+    data::{AyanoBlock, DisplayState, Formatting, ListType, TitleInfo, Token, Tokens},
+    util::{
+        optional_permutation, Equivalent, HashIgnored, IteratorArrayCollectExt, VecTryExtendExt,
+    },
 };
 
 /// Matches any sort of whitespace characters, *newline*, and a provided tag at the end
@@ -406,7 +408,7 @@ fn figure<
         src_name: Path::new(path).into(),
         caption: caption.map(Box::new),
         ident: ident.map(Cow::from),
-        width,
+        width: width.map(HashIgnored),
     };
     Ok((rest, token))
 }
@@ -551,6 +553,11 @@ fn ayano<
     // - inner None means this block has no display caption
     // - inner Some means this block has display caption
     // TODO add code captions support
+    let display_state = match display {
+        None => DisplayState::NotDisplayed,
+        Some(None) => DisplayState::DisplayedNoCaption,
+        Some(Some(caption)) => DisplayState::Caption(Box::new(caption)),
+    };
     let insert: Option<&'source Path> = insert.map(Path::new);
     // XXX add support for codeblock identifiers
     let code: Cow<'_, str> = Cow::from(code);
@@ -560,7 +567,7 @@ fn ayano<
             data: AyanoBlock {
                 insert_path: insert.map(Cow::from),
                 code,
-                is_display: display.is_some(),
+                display_state,
                 is_static: is_static.is_some(),
                 is_space_before: before.contains(' '),
             },
@@ -1970,7 +1977,7 @@ $$
                 src_name: Cow::Borrowed(Path::new($path)),
                 ident: $ident.map(Cow::from),
                 caption: $caption.map(Box::new),
-                width: $width,
+                width: $width.map(HashIgnored),
             }
         };
     }
@@ -2110,7 +2117,7 @@ $$
     macro_rules! ayano {
         {!$is_static:literal, *$description:expr, ~$insert_path:expr, #$_id:expr, $code:literal} => {
             Token::Ayano{data: AyanoBlock{
-                is_display: $description.is_some(),
+                display_state: $description,
                 is_static: $is_static,
                 code: Cow::Borrowed($code),
                 insert_path: $insert_path.map(Path::new).map(Cow::from),
@@ -2119,6 +2126,8 @@ $$
         };
     }
     mod ayano {
+        use crate::data::DisplayState;
+
         use super::*;
 
         macro_rules! test_ok {
@@ -2135,11 +2144,13 @@ $$
 
         test_err! {err_empty, ""}
         test_ok! {ok_simple, "\n```python, Ayano * \"Code description\" ~ path/to/file # 1\nx = 1\ny = 2\nprint(x + y)\n```\n",
-        ayano!(!false, *Some(tx!("Code description")), ~Some("path/to/file"), #Some(1), "x = 1\ny = 2\nprint(x + y)"), "\n"}
+        ayano!(!false, *DisplayState::Caption(tx!("Code description").into()), ~Some("path/to/file"), #Some(1), "x = 1\ny = 2\nprint(x + y)"), "\n"}
         test_ok! {ok_some, "\n```python, Ayano ! ~ path/to/file # 1\nx = 1\ny = 2\nprint(x + y)\n```\n",
-        ayano!(!true, *None::<&str>, ~Some("path/to/file"), #Some(1), "x = 1\ny = 2\nprint(x + y)"), "\n"}
+        ayano!(!true, *DisplayState::NotDisplayed, ~Some("path/to/file"), #Some(1), "x = 1\ny = 2\nprint(x + y)"), "\n"}
         test_ok! {ok_no_args, "\n```python, Ayano  \nx = 1\ny = 2\nprint(x + y)\n```\n",
-        ayano!(!false, *None::<&str>, ~None::<&str>, #None, "x = 1\ny = 2\nprint(x + y)"), "\n"}
+        ayano!(!false, *DisplayState::NotDisplayed, ~None::<&str>, #None, "x = 1\ny = 2\nprint(x + y)"), "\n"}
+        test_ok! {ok_displayed_no_name, "\n```python, Ayano * \nx = 1\ny = 2\nprint(x + y)\n```\n",
+        ayano!(!false, *DisplayState::DisplayedNoCaption, ~None::<&str>, #None, "x = 1\ny = 2\nprint(x + y)"), "\n"}
     }
     mod lex {
         use super::*;
@@ -2201,6 +2212,7 @@ pub fn title_info<'source, Err: nom::error::ParseError<&'source str>>(
                 author_line3,
                 date,
                 prof,
+                code_section_title,
             ),
         ) = optional_permutation((
             match_field!("header-line1"),
@@ -2215,6 +2227,7 @@ pub fn title_info<'source, Err: nom::error::ParseError<&'source str>>(
             match_field!("author-line3"),
             match_field!("date"),
             match_field!("prof"),
+            match_field!("code-section-title"),
         ))
         .parse(input)?;
         let res = TitleInfo {
@@ -2230,6 +2243,7 @@ pub fn title_info<'source, Err: nom::error::ParseError<&'source str>>(
             author_line3,
             date,
             prof,
+            code_section_title,
         };
         let (input, _) = tag("\n---")(input)?;
         Ok((input, res))
@@ -2285,19 +2299,19 @@ date: вербень 2077
 prof: me :idk:
 ---
 ", [
-                header_line1: "Навч. заклад",
-                header_line2: "Факультет",
-                document_type: "ПРОТОКОЛ",
-                title_line1: "Виконання марної роботи",
-                title_line2: "з історії стародавнього Єгипту",
-                title_line3: "(пинальна частина)",
-                title_line4: "НАЗВА РОБОТИ",
-                author_line1: "виконувало:",
-                author_line2: "дяч дзучунович",
-                author_line3: "(perfectly still)",
-                date: "вербень 2077",
-                prof: "me :idk:"
-                ], "\n"}
+                                                                        header_line1: "Навч. заклад",
+                                                                        header_line2: "Факультет",
+                                                                        document_type: "ПРОТОКОЛ",
+                                                                        title_line1: "Виконання марної роботи",
+                                                                        title_line2: "з історії стародавнього Єгипту",
+                                                                        title_line3: "(пинальна частина)",
+                                                                        title_line4: "НАЗВА РОБОТИ",
+                                                                        author_line1: "виконувало:",
+                                                                        author_line2: "дяч дзучунович",
+                                                                        author_line3: "(perfectly still)",
+                                                                        date: "вербень 2077",
+                                                                        prof: "me :idk:"
+                                                                        ], "\n"}
     test_ok! {ok_all_fields_permutated, r"---
 author-line2: дяч дзучунович
 header-line1: Навч. заклад
@@ -2313,17 +2327,17 @@ prof: me :idk:
 title-line3: (пинальна частина)
 ---
 ", [
-        header_line1: "Навч. заклад",
-        header_line2: "Факультет",
-        document_type: "ПРОТОКОЛ",
-        title_line1: "Виконання марної роботи",
-        title_line2: "з історії стародавнього Єгипту",
-        title_line3: "(пинальна частина)",
-        title_line4: "НАЗВА РОБОТИ",
-        author_line1: "виконувало:",
-        author_line2: "дяч дзучунович",
-        author_line3: "(perfectly still)",
-        date: "вербень 2077",
-        prof: "me :idk:"
-        ], "\n"}
+                                                                header_line1: "Навч. заклад",
+                                                                header_line2: "Факультет",
+                                                                document_type: "ПРОТОКОЛ",
+                                                                title_line1: "Виконання марної роботи",
+                                                                title_line2: "з історії стародавнього Єгипту",
+                                                                title_line3: "(пинальна частина)",
+                                                                title_line4: "НАЗВА РОБОТИ",
+                                                                author_line1: "виконувало:",
+                                                                author_line2: "дяч дзучунович",
+                                                                author_line3: "(perfectly still)",
+                                                                date: "вербень 2077",
+                                                                prof: "me :idk:"
+                                                                ], "\n"}
 }
