@@ -186,7 +186,7 @@ where
                     crate::data::ListType::Bullet => "\\begin{itemize}",
                     crate::data::ListType::Num => "\\begin{enumerate}",
                     crate::data::ListType::Latin => {
-                        unimplemented!("Latin lists are not supported for now")
+                        "\\begin{enumerate}[label=\\alph*), ref=\\alph*]"
                     }
                     crate::data::ListType::Cyrillic => {
                         "\\begin{enumerate}[label=\\asbuk*), ref=\\asbuk*]"
@@ -197,12 +197,9 @@ where
                 };
                 let end: &str = match list_type {
                     crate::data::ListType::Bullet => "\\end{itemize}",
-                    crate::data::ListType::Num | crate::data::ListType::Cyrillic => {
-                        "\\end{enumerate}"
-                    }
-                    crate::data::ListType::Latin => {
-                        unimplemented!("Latin lists are not supported for now")
-                    }
+                    crate::data::ListType::Num
+                    | crate::data::ListType::Cyrillic
+                    | crate::data::ListType::Latin => "\\end{enumerate}",
                     crate::data::ListType::Roman => {
                         unimplemented!("Roman numeral lists are not supported for now")
                     }
