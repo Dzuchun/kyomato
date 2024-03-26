@@ -157,7 +157,7 @@
 \fnt
    
 Наступний тест. Тут протестуємо таблиці і блоки коду.
-\subsubsection{Таблиці}
+\subsection{Таблиці}
 
 \tbln Звичайні таблиці; Можуть всередині мати \textbf{формули} чи \textit{посилання} на інші штуки
 \begin{table}[h!]
@@ -187,7 +187,7 @@
 \end{center}
 \end{table}
 
-\subsubsection{Блоки коду}
+\subsection{Блоки коду}
 
 \tbln Наразі мають досить обмежену підтримку, адже у $\LaTeX$ немає нативного поняття блоків коду.
 \tbln На щастя, у \textbf{markdown} таке поняття є\footnotemark[2]\footnotetext[2]{Принаймні, \textit{Obsidian} таке робить}:

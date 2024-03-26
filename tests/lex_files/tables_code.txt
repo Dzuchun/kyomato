@@ -14,7 +14,7 @@ TitleInfo {
     code_section_title: None,
 }
 Multiple {
-    tokens: Owned(
+    tokens: Tokens(
         [
             Paragraph {
                 is_newline: false,
@@ -23,7 +23,7 @@ Multiple {
                 content: "Наступний тест. Тут протестуємо таблиці і блоки коду.",
             },
             Header {
-                order: 2,
+                order: 1,
                 content: "Таблиці",
             },
             Paragraph {
@@ -61,7 +61,7 @@ Multiple {
                 content: "на інші штуки",
             },
             Table {
-                header: Owned(
+                header: Tokens(
                     [
                         Paragraph {
                             is_newline: false,
@@ -83,7 +83,7 @@ Multiple {
                         },
                     ],
                 ),
-                cells: Owned(
+                cells: Tokens(
                     [
                         Paragraph {
                             is_newline: false,
@@ -102,7 +102,7 @@ Multiple {
                             content: "3 + e ^{\\pi}",
                         },
                         Multiple {
-                            tokens: Owned(
+                            tokens: Tokens(
                                 [
                                     InlineMath {
                                         space_before: true,
@@ -120,7 +120,7 @@ Multiple {
                             content: "\\cdot \\pm 1",
                         },
                         Multiple {
-                            tokens: Owned(
+                            tokens: Tokens(
                                 [
                                     Paragraph {
                                         is_newline: false,
@@ -149,7 +149,7 @@ Multiple {
                 ),
                 caption: Some(
                     Multiple {
-                        tokens: Owned(
+                        tokens: Tokens(
                             [
                                 Paragraph {
                                     is_newline: false,
@@ -186,7 +186,7 @@ Multiple {
                 content: "Таблиця цілком собі може не мати ідентифікатора або опису:",
             },
             Table {
-                header: Owned(
+                header: Tokens(
                     [
                         Paragraph {
                             is_newline: false,
@@ -202,7 +202,7 @@ Multiple {
                         },
                     ],
                 ),
-                cells: Owned(
+                cells: Tokens(
                     [
                         Paragraph {
                             is_newline: false,
@@ -237,7 +237,7 @@ Multiple {
             },
             FootnoteContent {
                 content: Multiple {
-                    tokens: Owned(
+                    tokens: Tokens(
                         [
                             Paragraph {
                                 is_newline: false,
@@ -279,7 +279,7 @@ Multiple {
                 ident: "euler",
             },
             Header {
-                order: 2,
+                order: 1,
                 content: "Блоки коду",
             },
             Paragraph {
@@ -336,7 +336,7 @@ Multiple {
             },
             FootnoteContent {
                 content: Multiple {
-                    tokens: Owned(
+                    tokens: Tokens(
                         [
                             Paragraph {
                                 is_newline: false,

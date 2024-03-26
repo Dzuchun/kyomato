@@ -27,15 +27,16 @@
 //! Well, unless there's a way to efficiently write to a single output from multiple threads, while preserving output order.
 //! Any sort of "collect" function would've destroyed the purpose anyway.
 
-use data::TitleInfo;
+use data::{TitleInfo, Token};
 use gen::OutputGenerator;
 use lexer::KyomatoLexError;
 
 /// This module defines types that are used to represent parsed data
 mod data;
 mod gen;
+pub use gen::lab::LabaLatex;
 mod lexer;
-mod path_engine;
+pub mod path_engine;
 
 /// Reexports
 pub fn lex<'source>(
@@ -79,7 +80,38 @@ pub fn gen_to_string<'token, 'source: 'token>(
     Ok(buf)
 }
 
+pub fn parse_title_info<'source>(
+    input: &mut &'source str,
+) -> Result<TitleInfo<'source>, KyomatoLexError> {
+    let (rest, title_info) =
+        lexer::title_info::<'source, KyomatoLexError>(input).map_err(|err| match err {
+            nom::Err::Error(err) | nom::Err::Failure(err) => err,
+            nom::Err::Incomplete(_) => unreachable!("This input is complete"),
+        })?;
+    *input = rest;
+    Ok(title_info)
+}
+
+pub fn parse_tokens<'source>(input: &mut &'source str) -> Result<Token<'source>, KyomatoLexError> {
+    let (rest, tokens) =
+        lexer::lex::<'source, KyomatoLexError>(input).map_err(|err| match err {
+            nom::Err::Error(err) | nom::Err::Failure(err) => err,
+            nom::Err::Incomplete(_) => unreachable!("This input is complete"),
+        })?;
+    *input = rest;
+    Ok(tokens)
+}
+
+pub fn parse_all<'source>(
+    mut input: &'source str,
+) -> Result<(TitleInfo<'source>, Token<'source>), KyomatoLexError> {
+    let title_info = parse_title_info(&mut input)?;
+    let tokens = parse_tokens(&mut input)?;
+    Ok((title_info, tokens))
+}
+
 /// This module houses "utility-like" structs and functions.
 ///
 /// Since this is generally a bad practice, I'd like to know suggestions on std library/other crates items I could use instead
 mod util;
+pub use util::FmtToIo;

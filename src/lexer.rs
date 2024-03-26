@@ -1519,22 +1519,22 @@ mod token_tests {
 
     macro_rules! head {
         [# $header:literal] => {
-            head![1, $header]
+            head![0, $header]
         };
         [## $header:literal] => {
-            head![2, $header]
+            head![1, $header]
         };
         [### $header:literal] => {
-            head![3, $header]
+            head![2, $header]
         };
         [#### $header:literal] => {
-            head![4, $header]
+            head![3, $header]
         };
         [##### $header:literal] => {
-            head![5, $header]
+            head![4, $header]
         };
         [###### $header:literal] => {
-            head![6, $header]
+            head![5, $header]
         };
         [$order:literal, $header:literal] => {
             Token::Header {order: $order, content: Cow::Borrowed($header)}
@@ -2328,19 +2328,19 @@ date: вербень 2077
 prof: me :idk:
 ---
 ", [
-                                                                        header_line1: "Навч. заклад",
-                                                                        header_line2: "Факультет",
-                                                                        document_type: "ПРОТОКОЛ",
-                                                                        title_line1: "Виконання марної роботи",
-                                                                        title_line2: "з історії стародавнього Єгипту",
-                                                                        title_line3: "(пинальна частина)",
-                                                                        title_line4: "НАЗВА РОБОТИ",
-                                                                        author_line1: "виконувало:",
-                                                                        author_line2: "дяч дзучунович",
-                                                                        author_line3: "(perfectly still)",
-                                                                        date: "вербень 2077",
-                                                                        prof: "me :idk:"
-                                                                        ], "\n"}
+                                                                                                                                        header_line1: "Навч. заклад",
+                                                                                                                                        header_line2: "Факультет",
+                                                                                                                                        document_type: "ПРОТОКОЛ",
+                                                                                                                                        title_line1: "Виконання марної роботи",
+                                                                                                                                        title_line2: "з історії стародавнього Єгипту",
+                                                                                                                                        title_line3: "(пинальна частина)",
+                                                                                                                                        title_line4: "НАЗВА РОБОТИ",
+                                                                                                                                        author_line1: "виконувало:",
+                                                                                                                                        author_line2: "дяч дзучунович",
+                                                                                                                                        author_line3: "(perfectly still)",
+                                                                                                                                        date: "вербень 2077",
+                                                                                                                                        prof: "me :idk:"
+                                                                                                                                        ], "\n"}
     test_ok! {ok_all_fields_permutated, r"---
 author-line2: дяч дзучунович
 header-line1: Навч. заклад
@@ -2356,17 +2356,17 @@ prof: me :idk:
 title-line3: (пинальна частина)
 ---
 ", [
-                                                                header_line1: "Навч. заклад",
-                                                                header_line2: "Факультет",
-                                                                document_type: "ПРОТОКОЛ",
-                                                                title_line1: "Виконання марної роботи",
-                                                                title_line2: "з історії стародавнього Єгипту",
-                                                                title_line3: "(пинальна частина)",
-                                                                title_line4: "НАЗВА РОБОТИ",
-                                                                author_line1: "виконувало:",
-                                                                author_line2: "дяч дзучунович",
-                                                                author_line3: "(perfectly still)",
-                                                                date: "вербень 2077",
-                                                                prof: "me :idk:"
-                                                                ], "\n"}
+                                                                                                                                header_line1: "Навч. заклад",
+                                                                                                                                header_line2: "Факультет",
+                                                                                                                                document_type: "ПРОТОКОЛ",
+                                                                                                                                title_line1: "Виконання марної роботи",
+                                                                                                                                title_line2: "з історії стародавнього Єгипту",
+                                                                                                                                title_line3: "(пинальна частина)",
+                                                                                                                                title_line4: "НАЗВА РОБОТИ",
+                                                                                                                                author_line1: "виконувало:",
+                                                                                                                                author_line2: "дяч дзучунович",
+                                                                                                                                author_line3: "(perfectly still)",
+                                                                                                                                date: "вербень 2077",
+                                                                                                                                prof: "me :idk:"
+                                                                                                                                ], "\n"}
 }

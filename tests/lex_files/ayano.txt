@@ -14,7 +14,7 @@ TitleInfo {
     code_section_title: None,
 }
 Multiple {
-    tokens: Owned(
+    tokens: Tokens(
         [
             Paragraph {
                 is_newline: false,

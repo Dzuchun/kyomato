@@ -14,7 +14,7 @@ TitleInfo {
     code_section_title: None,
 }
 Multiple {
-    tokens: Owned(
+    tokens: Tokens(
         [
             Paragraph {
                 is_newline: false,
@@ -23,7 +23,7 @@ Multiple {
                 content: "This test is dedicated to attempts of parser deception, i.e. usage of special symbols in wrong places to see if parser recognizes them as control symbols. There we go:",
             },
             Header {
-                order: 1,
+                order: 0,
                 content: "Page dividers",
             },
             Paragraph {
@@ -79,7 +79,7 @@ Multiple {
                 content: "look cursed, don't do it.",
             },
             Header {
-                order: 1,
+                order: 0,
                 content: "Headers",
             },
             Paragraph {
@@ -109,7 +109,7 @@ Multiple {
                 content: "Example:",
             },
             Header {
-                order: 6,
+                order: 5,
                 content: "This is a long, yet formally correct header. You can add $equations$ and *formatting* here, but I provide no guarantees as of the way these would display in final document.",
             },
             Paragraph {
@@ -137,7 +137,7 @@ Multiple {
                 content: "####### This will be parsed as a regular paragraph",
             },
             Header {
-                order: 1,
+                order: 0,
                 content: "Equations",
             },
             Paragraph {
@@ -203,7 +203,7 @@ Multiple {
                 content: "(the above should not be mathmode), and that's it, basically :sad:",
             },
             Header {
-                order: 1,
+                order: 0,
                 content: "Table",
             },
             Paragraph {
@@ -241,7 +241,7 @@ Multiple {
                 ),
             },
             Header {
-                order: 1,
+                order: 0,
                 content: "Figure",
             },
             Paragraph {
@@ -259,7 +259,7 @@ Multiple {
                 language: None,
             },
             Header {
-                order: 1,
+                order: 0,
                 content: "References",
             },
             Paragraph {
@@ -269,7 +269,7 @@ Multiple {
                 content: "These start with []",
             },
             Header {
-                order: 2,
+                order: 1,
                 content: "Hyperrefs",
             },
             Paragraph {
@@ -356,7 +356,7 @@ Multiple {
                 content: "lol)",
             },
             Header {
-                order: 2,
+                order: 1,
                 content: "Footnote refs",
             },
             Paragraph {
@@ -416,7 +416,7 @@ Multiple {
                 content: "So on",
             },
             Header {
-                order: 2,
+                order: 1,
                 content: "Object refs",
             },
             Paragraph {
@@ -494,7 +494,7 @@ Multiple {
                 content: "use regular latex to define your custom refs. In fact, LaTeX doesn't care about all of these at all; I'm doing these transformations just for my own comfort, as I've been doing this manually.",
             },
             Header {
-                order: 1,
+                order: 0,
                 content: "Formatting",
             },
             Paragraph {
@@ -511,7 +511,7 @@ Multiple {
             },
             List {
                 list_type: Bullet,
-                content: Owned(
+                content: Tokens(
                     [
                         Paragraph {
                             is_newline: false,
@@ -569,7 +569,7 @@ Multiple {
                 content: "Basically, parsers for these tokens attempt parse everything up until they find a closing token. But if they are inserted in a middle of the text, then it's ok - they will be limited by current paragraph, and (most likely) will find no match inside it, if their use was unintended.",
             },
             Header {
-                order: 1,
+                order: 0,
                 content: "Footnote content",
             },
             Paragraph {
@@ -658,7 +658,7 @@ Multiple {
                 content: "Is expected to be a footnote ref with a colon.",
             },
             Header {
-                order: 1,
+                order: 0,
                 content: "Code blocks",
             },
             Paragraph {
@@ -682,7 +682,7 @@ Multiple {
                 content: "code block.",
             },
             Header {
-                order: 2,
+                order: 1,
                 content: "Normal code block",
             },
             Paragraph {
@@ -766,7 +766,7 @@ Multiple {
                 content: "```",
             },
             Header {
-                order: 2,
+                order: 1,
                 content: "Ayano code block",
             },
             Paragraph {

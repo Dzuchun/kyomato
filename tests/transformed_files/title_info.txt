@@ -157,7 +157,7 @@
 \fnt
    
 
-\subsection{First para}
+\section{First para}
 
 \tbln This text is \textit{just} a dummy, so that document won't feel \st{too} \textbf{empty}
 \tbln Have a some oily maccaroni:

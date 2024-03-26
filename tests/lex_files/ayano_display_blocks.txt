@@ -16,10 +16,10 @@ TitleInfo {
     ),
 }
 Multiple {
-    tokens: Owned(
+    tokens: Tokens(
         [
             Header {
-                order: 1,
+                order: 0,
                 content: "Display blocks",
             },
             Paragraph {

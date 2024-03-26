@@ -5,9 +5,9 @@ pub use context::Context;
 pub use meta::SourceMeta;
 
 use crate::{
-    data::{AyanoBlock, Formatting, TitleInfo, Token},
+    data::{self, AyanoBlock, Formatting, TitleInfo, Token},
     gen::ayano::DisplayInfo,
-    path_engine::PathEngine,
+    path_engine::{self, PathEngine},
 };
 use itertools::Itertools;
 use std::{
@@ -57,6 +57,28 @@ impl<'source, PE: PathEngine<PEErr>, PEErr> LabaLatex<'source, PE, PEErr> {
         output.write_str("\\\\ \\hline\n")?;
         Ok(())
     }
+
+    pub fn parse_and_write<W: Write + ?Sized>(
+        path_engine: PE,
+        input: &'source str,
+        output: &mut W,
+    ) -> Result<(), Box<dyn std::error::Error + 'source>>
+    where
+        PE: PathEngine<PEErr>,
+        PEErr: std::error::Error + 'source,
+    {
+        let (title_info, tokens) = crate::parse_all(input)?;
+        let generator: LabaLatex<'source, PE, PEErr> = Self::new(path_engine);
+        let mut meta: SourceMeta<'source, AyanoExecutor> = SourceMeta::collect(&tokens)
+            .map_err(|err| GenerationError::Meta(Box::new(err)))?
+            .init_ayano()?;
+        meta.title_info = title_info;
+        generator.write_preamble(output, &meta)?;
+        let mut context = Context::default();
+        generator.write_to(output, &meta, &mut context, &tokens)?;
+        generator.write_postamble(output, &meta, &mut context)?;
+        Ok(())
+    }
 }
 
 impl<'source, PE, PEErr> OutputGenerator<'source, SourceMeta<'source, AyanoExecutor>, Context>
@@ -95,7 +117,7 @@ where
             Token::DisplayMath { content, ident } => {
                 let label = ident
                     .as_ref()
-                    .map(|ident| format!("\\label{{eq:{}}}", ident))
+                    .map(|ident| format!("\\label{{eq:{}}}\n", ident))
                     .unwrap_or_else(String::new);
                 write!(
                     output,
@@ -257,7 +279,7 @@ where
                 write!(output, "\\footnotemark[{}]", i + 1)?;
                 if !encountered {
                     // write out content (done only on first occurrence)
-                    if let Some(content) = meta.footnotes.get(&ident.borrow()) {
+                    if let Some(content) = meta.footnotes.get(ident) {
                         write!(output, "\\footnotetext[{}]{{", i + 1)?;
                         self.write_to(output, meta, context, content)?;
                         output.write_str("}")?;

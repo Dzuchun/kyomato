@@ -1,4 +1,5 @@
 use std::{
+    collections::VecDeque,
     mem::{forget, MaybeUninit},
     num::ParseIntError,
     ops::{Range, RangeFrom, RangeInclusive, RangeTo, RangeToInclusive},
@@ -139,9 +140,8 @@ mod generic_rage_tests {
     test! {idk1, "5..=100", GenericRange::DoubleBoundedInclusive(5..=100)}
 }
 
-#[derive(derive_more::From)]
 #[repr(transparent)]
-#[derive(Debug, derive_more::Deref, derive_more::DerefMut)]
+#[derive(Debug, derive_more::From, derive_more::Deref, derive_more::DerefMut)]
 pub struct Equivalent<T>(pub T);
 
 impl<T> PartialEq for Equivalent<T> {
@@ -453,14 +453,36 @@ pub fn optional_permutation<'parsers, 'source: 'parsers, In, Out, E: ParseError<
 }
 
 // FIXME this is SURELY not idiomatic. I should move to ident system
-#[derive(
-    Debug,
-    derive_more::Deref,
-    derive_more::DerefMut,
-    PartialEq,
-    Clone,
-)]
+#[derive(Debug, derive_more::Deref, derive_more::DerefMut, PartialEq, Clone)]
 pub struct HashIgnored<T>(pub T);
 impl<T> std::hash::Hash for HashIgnored<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {}
+    fn hash<H: std::hash::Hasher>(&self, _state: &mut H) {}
+}
+
+#[derive(Debug)]
+pub struct FmtToIo<W>(W, VecDeque<std::io::Error>);
+impl<W> FmtToIo<W> {
+    pub fn new(io: W) -> Self
+    where
+        W: std::io::Write,
+    {
+        Self(io, VecDeque::new())
+    }
+
+    pub fn get_error(&mut self) -> Option<std::io::Error> {
+        self.1.pop_front()
+    }
+
+    pub fn get_all_errors(&mut self) -> impl Iterator<Item = std::io::Error> + '_ {
+        self.1.drain(..)
+    }
+}
+impl<W: std::io::Write> std::fmt::Write for FmtToIo<W> {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        if let Err(err) = self.0.write_all(s.as_bytes()) {
+            self.1.push_back(err);
+            return Err(std::fmt::Error);
+        }
+        Ok(())
+    }
 }

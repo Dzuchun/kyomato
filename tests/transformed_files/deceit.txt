@@ -157,7 +157,7 @@
 \fnt
    
 This test is dedicated to attempts of parser deception, i.e. usage of special symbols in wrong places to see if parser recognizes them as control symbols. There we go:
-\subsection{Page dividers}
+\section{Page dividers}
 
 \tbln Page dividers are represented by ------
 \tbln If the line above has dashes     ^^^^^^ here, it probably works alright.
@@ -168,7 +168,7 @@ This test is dedicated to attempts of parser deception, i.e. usage of special sy
 \clearpage
  Some text, cause why not
 \tbln But this \textbf{DOES} look cursed, don't do it.
-\subsection{Headers}
+\section{Headers}
 
 \tbln Headers are most recognizable by '#'-symbol. For it to actually represent a header, it needs to at the beginning of the line and there should be no more than 6 of them. \textbf{ANYTHING} up to the end of line will be included into a header, then.
 \tbln Example:
@@ -178,7 +178,7 @@ This test is dedicated to attempts of parser deception, i.e. usage of special sy
 \tbln ###### This header is considered incorrect for this application, and will be parsed as regular paragraph instead
 \tbln Another example of incorrect header, featuring 7 hash-symbols:
 \tbln ####### This will be parsed as a regular paragraph
-\subsection{Equations}
+\section{Equations}
 
 \tbln There are two types of equations in markdown/latex: inline mathmode and display mathmode
 \tbln Both of them are defined by $-symbols. However, they must be paired to actually represent these. Here are examples:
@@ -193,7 +193,7 @@ y = x ^ 2
 \tbln $
 \tbln $
 \tbln (the above should not be mathmode), and that's it, basically :sad:
-\subsection{Table}
+\section{Table}
 
 \tbln Tables are defined by |-symbol. But the actual table will happen only if they are the first thing on the line.
 \tbln Due to current implementation, there's no cure apart from display mathmode and code:
@@ -209,7 +209,7 @@ head /dev/random
 \end{minted}
 
 
-\subsection{Figure}
+\section{Figure}
 
 \tbln Figure is defined by a ![[ sequence at a start of the line. Same points should be uphold here:
 \begin{equation}
@@ -221,10 +221,10 @@ head /dev/random
 \end{minted}
 
 
-\subsection{References}
+\section{References}
 
 \tbln These start with []
-\subsubsection{Hyperrefs}
+\subsection{Hyperrefs}
 
 \tbln These are followed by parentheses (). Nothing is allowed between them, thus
 \tbln Here's a correct href: \href{https://youtu.be/rickroll_link_lol}{my gh page}
@@ -232,7 +232,7 @@ head /dev/random
 \tbln [my gh page] (https://youtu.be/rickroll\textit{link}lol)
 \tbln [my gh page]
 \tbln (https://youtu.be/rickroll\textit{link}lol)
-\subsubsection{Footnote refs}
+\subsection{Footnote refs}
 
 \tbln These are started by [^.
 \tbln Here are correct footnote refs: \footnotemark[1], \footnotemark[2]
@@ -241,7 +241,7 @@ head /dev/random
 \tbln 1
 \tbln ]
 \tbln So on
-\subsubsection{Object refs}
+\subsection{Object refs}
 
 \tbln These refer to objects like figures, tables and equations.
 \tbln Started by [@.
@@ -251,7 +251,7 @@ head /dev/random
 \tbln eq2
 \tbln ]
 \tbln \textbf{NOTE}: despite object types being prepended with 'eq', 'fig' or 'tab' in refs, you \textit{can} use regular latex to define your custom refs. In fact, LaTeX doesn't care about all of these at all; I'm doing these transformations just for my own comfort, as I've been doing this manually.
-\subsection{Formatting}
+\section{Formatting}
 
 \tbln This object's type is deprecated and will be removed soon.
 \tbln It starts and ends with
@@ -262,7 +262,7 @@ head /dev/random
 \end{itemize}
 \tbln \textbf{WARN}: As of now, these \textit{might} cause cause massive problems if encountered at the start of the line.
 \tbln Basically, parsers for these tokens attempt parse everything up until they find a closing token. But if they are inserted in a middle of the text, then it's ok - they will be limited by current paragraph, and (most likely) will find no match inside it, if their use was unintended.
-\subsection{Footnote content}
+\section{Footnote content}
 
 \tbln These start with '\footnotemark[3]:' and proceed to the end of line.
 \tbln Example of valid content:
@@ -270,10 +270,10 @@ head /dev/random
 \tbln [^source2: This is invalid content\footnotemark[4]\footnotetext[4]{Explanation of source2.} : This is invalid content \footnotemark[4]: This is invalid content
 \tbln They also must start at the beginning of the line. If fact, this: \footnotemark[4]: Some content
 \tbln Is expected to be a footnote ref with a colon.
-\subsection{Code blocks}
+\section{Code blocks}
 
 \tbln There are two fundamental types of code blocks: normal code block and \textbf{Ayano} code block.
-\subsubsection{Normal code block}
+\subsection{Normal code block}
 
 \tbln These start and end with '```' on a newline. There can be \textbf{practically anything} inside. Example:
 \begin{minted}{java}
@@ -299,7 +299,7 @@ local z = x .. y -- matty!!
 \tbln x = 2
 \tbln print(x)
 \tbln ```
-\subsubsection{Ayano code block}
+\subsection{Ayano code block}
 
 \tbln \textit{because Ayano loves Kyoko}
 \tbln This object looks and behaves just like normal code block, but is only limited to \textit{python} language, can have spacial arguments in a language line, may leave something behind in the document. For example:

@@ -14,10 +14,10 @@ TitleInfo {
     code_section_title: None,
 }
 Multiple {
-    tokens: Owned(
+    tokens: Tokens(
         [
             Header {
-                order: 1,
+                order: 0,
                 content: "Перша тема",
             },
             Paragraph {
@@ -33,7 +33,7 @@ Multiple {
                 ),
             },
             Header {
-                order: 2,
+                order: 1,
                 content: "Підпункт",
             },
             Paragraph {
@@ -44,10 +44,10 @@ Multiple {
             },
             List {
                 list_type: Bullet,
-                content: Owned(
+                content: Tokens(
                     [
                         Multiple {
-                            tokens: Owned(
+                            tokens: Tokens(
                                 [
                                     Paragraph {
                                         is_newline: false,
@@ -63,7 +63,7 @@ Multiple {
                             ),
                         },
                         Multiple {
-                            tokens: Owned(
+                            tokens: Tokens(
                                 [
                                     Paragraph {
                                         is_newline: false,

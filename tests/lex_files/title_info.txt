@@ -38,10 +38,10 @@ TitleInfo {
     code_section_title: None,
 }
 Multiple {
-    tokens: Owned(
+    tokens: Tokens(
         [
             Header {
-                order: 1,
+                order: 0,
                 content: "First para",
             },
             Paragraph {

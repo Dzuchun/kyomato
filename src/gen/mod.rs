@@ -7,14 +7,36 @@ use itertools::Itertools;
 
 use crate::data::{Token, Tokens};
 
-#[derive(Debug, derive_more::From, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum GenerationError<'source> {
-    #[error("{}", .0)]
-    IOs(std::fmt::Error),
-    #[error("{}", .0)]
+    #[error(transparent)]
+    Write(std::fmt::Error),
+    #[error(transparent)]
     Ayano(ayano::AyanoError<'source>),
-    #[error("{}", .0)]
+    #[error(transparent)]
     Path(Box<dyn std::error::Error + 'source>),
+    #[error(transparent)]
+    Meta(Box<dyn std::error::Error + 'source>),
+    #[error(transparent)]
+    Python(pyo3::PyErr),
+}
+
+impl From<std::fmt::Error> for GenerationError<'_> {
+    fn from(value: std::fmt::Error) -> Self {
+        Self::Write(value)
+    }
+}
+
+impl<'source> From<ayano::AyanoError<'source>> for GenerationError<'source> {
+    fn from(value: ayano::AyanoError<'source>) -> Self {
+        Self::Ayano(value)
+    }
+}
+
+impl From<pyo3::PyErr> for GenerationError<'_> {
+    fn from(value: pyo3::PyErr) -> Self {
+        Self::Python(value)
+    }
 }
 
 pub type Res<'source> = Result<(), GenerationError<'source>>;
@@ -29,8 +51,8 @@ pub trait OutputGenerator<'source, Meta, Context> {
         token: &'token Token<'source>,
     ) -> Res<'source>
     where
-    'source: 'meta + 'context + 'token,
-    'token: 'context;
+        'source: 'meta + 'context + 'token,
+        'token: 'context;
 
     fn write_tokens_to<'meta, 'context, 'token, W: Write + ?Sized>(
         &self,
@@ -40,9 +62,9 @@ pub trait OutputGenerator<'source, Meta, Context> {
         tokens: &'token Tokens<'source>,
     ) -> Res<'source>
     where
-    'source: 'meta + 'context + 'token,
-    'token: 'context,
-        {
+        'source: 'meta + 'context + 'token,
+        'token: 'context,
+    {
         tokens
             .into_iter()
             .map(|t| self.write_to(output, meta, context, t))

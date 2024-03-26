@@ -171,12 +171,12 @@ pub enum VariantError {
 }
 
 /// A path-checking function always positive about path being correct
-fn no_check(path: &Path) -> Result<(), Box<dyn Error>> {
+pub fn no_check(path: &Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
 /// A path-checking function actually checking if file exists via normal means
-fn fs_check(path: &Path) -> Result<(), Box<dyn Error>> {
+pub fn fs_check(path: &Path) -> Result<(), Box<dyn Error>> {
     match path.try_exists() {
         Ok(true) => {
             if path.is_file() {
