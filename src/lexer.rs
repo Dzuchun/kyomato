@@ -193,21 +193,21 @@ fn header<
         "header",
         tuple((
             _multispace_line_break("#"),
-            map_res(many0_count(char('#')), |mut count| {
+            map_res(many0_count(char('#')), |mut hashes_count| {
                 // one of the hashes was parsed already
-                count += 1;
-                if count <= 6 {
-                    Ok(count)
+                hashes_count += 1;
+                if hashes_count <= 6 {
+                    Ok(hashes_count)
                 } else {
-                    Err(KyomatoLexError::too_deep_header(input, count))
+                    Err(KyomatoLexError::too_deep_header(input, hashes_count))
                 }
             }),
             space0,
             take_until1("\n"),
         )),
     )
-    .map(|(_, order, _, content)| Token::Header {
-        order,
+    .map(|(_, hashes, _, content)| Token::Header {
+        order: hashes - 1,
         content: content.trim_end().into(), // kinda sad I'm forced to do this here, but whatever
     })
     .parse(input)
