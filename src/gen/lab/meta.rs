@@ -1,5 +1,5 @@
 use std::{
-    borrow::BorrowMut,
+    borrow::{BorrowMut, Cow},
     collections::{HashMap, HashSet},
 };
 
@@ -18,27 +18,27 @@ pub enum MetaError {
 
 #[derive(Debug, Default)]
 pub struct SourceMeta<'source, Ayano> {
-    pub footnotes: HashMap<&'source str, Token<'source>>,
-    pub refs: HashSet<&'source str>,
+    pub footnotes: HashMap<Cow<'source, str>, Token<'source>>,
+    pub refs: HashSet<Cow<'source, str>>,
     pub ayano: Ayano,
     pub title_info: TitleInfo<'source>,
 }
 
-impl<'meta> SourceMeta<'meta, AyanoBuilder> {
+impl<'source> SourceMeta<'source, AyanoBuilder> {
     fn empty() -> Self {
         Self::default()
     }
 
-    pub fn collect<'source>(token: &'meta Token<'source>) -> Result<Self, MetaError>
+    pub fn collect<'meta>(token: &'meta Token<'source>) -> Result<Self, MetaError>
     where
         'source: 'meta,
     {
-        let mut res: SourceMeta<'meta, _> = SourceMeta::empty();
+        let mut res = SourceMeta::empty();
         collect_single(token, &mut res)?;
         Ok(res)
     }
 
-    pub fn init_ayano(self) -> Result<SourceMeta<'meta, AyanoExecutor>, PyErr> {
+    pub fn init_ayano(self) -> Result<SourceMeta<'source, AyanoExecutor>, PyErr> {
         Ok(SourceMeta {
             ayano: self.ayano.initialize()?,
             footnotes: self.footnotes,
@@ -50,7 +50,7 @@ impl<'meta> SourceMeta<'meta, AyanoBuilder> {
 
 fn collect_single<'meta, 'r, 'source>(
     token: &'meta Token<'source>,
-    dest: &'r mut SourceMeta<'meta, AyanoBuilder>,
+    dest: &'r mut SourceMeta<'source, AyanoBuilder>,
 ) -> Result<(), MetaError>
 where
     'source: 'meta,
@@ -60,7 +60,7 @@ where
         Token::DisplayMath {
             ident: Some(ident), ..
         } => {
-            dest.refs.borrow_mut().insert(ident);
+            dest.refs.borrow_mut().insert(ident.clone());
         }
         Token::Table {
             header,
@@ -69,7 +69,7 @@ where
             caption,
         } => {
             if let Some(ident) = ident {
-                dest.refs.borrow_mut().insert(ident);
+                dest.refs.borrow_mut().insert(ident.clone());
             }
             collect_iterable(header, dest)?;
             collect_iterable(cells, dest)?;
@@ -83,7 +83,7 @@ where
             src_name: _src_name,
             width: _width,
         } => {
-            dest.refs.insert(ident);
+            dest.refs.insert(ident.clone());
             if let Some(caption) = caption {
                 collect_single(caption, dest)?;
             }
@@ -93,7 +93,7 @@ where
         }
         Token::FootnoteContent { content, ident } => {
             collect_single(content, dest)?;
-            dest.footnotes.insert(ident, content.borrow_ref());
+            dest.footnotes.insert(ident.clone(), content.borrow_ref());
         }
         Token::Ayano { data } => {
             dest.ayano.add_block(data).map_err(MetaError::AyanoSyntax)?;
@@ -116,7 +116,7 @@ where
 
 fn collect_iterable<'r, 'source: 'meta, 'meta: 'r, I>(
     tokens: I,
-    dest: &'r mut SourceMeta<'meta, AyanoBuilder>,
+    dest: &'r mut SourceMeta<'source, AyanoBuilder>,
 ) -> Result<(), MetaError>
 where
     I: IntoIterator<Item = &'meta Token<'source>>,

@@ -2,13 +2,14 @@ use std::{
     borrow::{Borrow, Cow},
     ops::Deref,
     path::Path,
+    rc::Rc,
 };
 
 use url::Url;
 
 use crate::util::HashIgnored;
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct TitleInfo<'source> {
     pub header_line1: Option<Tx<'source>>,
     pub header_line2: Option<Tx<'source>>,
@@ -33,29 +34,15 @@ pub struct TitleInfo<'source> {
 // Also, vectors of parsed tokens are obviously not intended to live longer than the source.
 // In fact, for any possible appliance they can be assumed to life for as long as source does.
 // Hope is for lifetime variance to help with lifetime casting, or th
-#[derive(Debug, PartialEq, Hash)]
+#[derive(Debug, PartialEq, Hash, Clone)]
 // #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum Tokens<'source> {
-    Owned(Box<[Token<'source>]>),
-    Borrowed(&'source [Token<'source>]),
-}
+pub struct Tokens<'source>(Rc<[Token<'source>]>);
 
 impl<'source> Deref for Tokens<'source> {
     type Target = [Token<'source>];
 
     fn deref(&self) -> &Self::Target {
-        match &self {
-            Tokens::Owned(b) => &b[..],
-            Tokens::Borrowed(s) => s,
-        }
-    }
-}
-impl<'source> Clone for Tokens<'source> {
-    fn clone(&self) -> Self {
-        match self {
-            Self::Owned(arg0) => Self::Owned(arg0.clone()),
-            Self::Borrowed(arg0) => Self::Borrowed(arg0),
-        }
+        &*self.0
     }
 }
 
@@ -71,21 +58,14 @@ impl<'r, 'source: 'r> IntoIterator for &'r Tokens<'source> {
 
 impl<'source> Tokens<'source> {
     pub fn new(value: impl Into<Box<[Token<'source>]>>) -> Self {
-        Self::Owned(value.into())
+        Self(Rc::from(value.into()))
     }
 
     pub fn get_slice<'r>(&'r self) -> &'r [Token<'source>]
     where
         'source: 'r,
     {
-        match &self {
-            Tokens::Owned(b) => &b[..],
-            Tokens::Borrowed(s) => s,
-        }
-    }
-
-    pub fn borrowed(&self) -> Tokens<'_> {
-        Tokens::Borrowed(self.get_slice())
+        self
     }
 }
 
@@ -309,19 +289,16 @@ impl<'source> Token<'source> {
         }
     }
 
-    pub fn borrow_ref<'r>(&'r self) -> Token<'r>
-    where
-        'source: 'r,
-    {
+    pub fn borrow_ref(&self) -> Token<'source> {
         match self {
             Token::PageDiv => Token::PageDiv,
             Token::Header { order, content } => Token::Header {
                 order: *order,
-                content: Cow::Borrowed(content),
+                content: content.clone(),
             },
             Token::DisplayMath { content, ident } => Token::DisplayMath {
-                content: Cow::Borrowed(&content),
-                ident: ident.as_ref().map(|s| Cow::<'r, str>::Borrowed(s)),
+                content: content.clone(),
+                ident: ident.clone(),
             },
             Token::Table {
                 header,
@@ -329,10 +306,10 @@ impl<'source> Token<'source> {
                 caption,
                 ident,
             } => Token::Table {
-                header: header.borrowed(),
-                cells: cells.borrowed(),
+                header: header.clone(),
+                cells: cells.clone(),
                 caption: caption.as_ref().map(|t| Box::new(Token::borrow_ref(t))),
-                ident: ident.as_ref().map(|s| Cow::<'r, str>::Borrowed(s)),
+                ident: ident.clone(),
             },
             Token::Figure {
                 src_name,
@@ -340,9 +317,9 @@ impl<'source> Token<'source> {
                 ident,
                 width,
             } => Token::Figure {
-                src_name: Cow::Borrowed(src_name),
-                caption: caption.as_ref().map(|t| Box::new(Token::borrow_ref(t))),
-                ident: ident.as_ref().map(|s| Cow::<'r, str>::Borrowed(s)),
+                src_name: src_name.clone(),
+                caption: caption.clone(),
+                ident: ident.clone(),
                 width: width.clone(),
             },
             Token::Href {
@@ -351,16 +328,16 @@ impl<'source> Token<'source> {
                 space_before,
             } => Token::Href {
                 url: url.clone(),
-                display: Cow::Borrowed(&display),
+                display: display.clone(),
                 space_before: *space_before,
             },
             Token::Ayano { data } => Token::Ayano { data: data.clone() },
             Token::List { list_type, content } => Token::List {
                 list_type: list_type.clone(),
-                content: Tokens::Borrowed(&content),
+                content: content.clone(),
             },
             Token::Multiple { tokens } => Token::Multiple {
-                tokens: Tokens::Borrowed(tokens),
+                tokens: tokens.clone(),
             },
             Token::Paragraph {
                 is_newline,
@@ -370,37 +347,37 @@ impl<'source> Token<'source> {
             } => Token::Paragraph {
                 is_newline: *is_newline,
                 formatting: formatting.clone(),
-                content: Cow::Borrowed(content),
+                content: content.clone(),
                 space_before: *space_before,
             },
             Token::InlineMath {
                 content,
                 space_before,
             } => Token::InlineMath {
-                content: Cow::Borrowed(&content),
+                content: content.clone(),
                 space_before: *space_before,
             },
             Token::Reference {
                 ident,
                 space_before,
             } => Token::Reference {
-                ident: Cow::Borrowed(&ident),
+                ident: ident.clone(),
                 space_before: *space_before,
             },
             Token::FootnoteReference {
                 ident,
                 space_before,
             } => Token::FootnoteReference {
-                ident: Cow::Borrowed(ident),
+                ident: ident.clone(),
                 space_before: *space_before,
             },
             Token::FootnoteContent { content, ident } => Token::FootnoteContent {
-                content: Box::new(content.borrow_ref()),
-                ident: Cow::Borrowed(ident),
+                content: content.clone(),
+                ident: ident.clone(),
             },
             Token::CodeBlock { code, language } => Token::CodeBlock {
-                code: Cow::Borrowed(&code),
-                language: language.as_ref().map(|c| Cow::Borrowed(c.borrow())),
+                code: code.clone(),
+                language: language.clone(),
             },
             Token::Error { message } => Token::Error {
                 message: message.clone(),
