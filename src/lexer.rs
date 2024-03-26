@@ -413,6 +413,36 @@ fn figure<
     Ok((rest, token))
 }
 
+fn href_kernel<
+    'source,
+    E: ParseError<&'source str>
+        + ContextError<&'source str>
+        + FromExternalError<&'source str, KyomatoLexError>,
+>(
+    input: &'source str,
+) -> IResult<&'source str, Cow<'source, str>, E> {
+    //start with opening paren
+    let (input, _) = char('(')(input)?;
+    // then, find all the closing parens
+    let closing_parens = input.char_indices().filter(|(_, c)| c == &')');
+    // among them, find ones that are not escaped
+    let mut unescaped_parens = closing_parens
+        .enumerate()
+        .filter(|(_, (i, _))| !input[..=*i].ends_with("\\)"));
+    // I need only one here
+    let (num, (end, _)) = unescaped_parens
+        .next()
+        .ok_or(nom::Err::Error(E::from_error_kind(input, ErrorKind::Eof)))?;
+    let rest = &input[end + 1..];
+    let url: Cow<'source, str> = if num > 0 {
+        // escaping backslashes must be removed from input, unfortunately; meaning, it will be cloned
+        input[..end].replace("\\)", ")").into() // yep, this does clone the thing.
+    } else {
+        input[..end].into()
+    };
+    Ok((rest, url))
+}
+
 /// Parses markdown's hyper reference syntax
 ///
 /// Basic syntax is [DISPLAY](URL)
@@ -431,12 +461,9 @@ fn href<
             pair(
                 delimited(char('['), take_until("]"), char(']')),
                 // url should be parsed into proper format
-                map_res(
-                    delimited(char('('), take_until(")"), char(')')),
-                    |url: &str| {
-                        Url::from_str(url).map_err(|err| KyomatoLexError::bad_url(input, err))
-                    },
-                ),
+                map_res(href_kernel, |url| {
+                    Url::from_str(&url).map_err(|err| KyomatoLexError::bad_url(input, err))
+                }),
             ),
         ),
     )
@@ -1626,6 +1653,8 @@ $$
         href_ok! {href8, "[    link text](ftp://somewebsite/files/01234).", "ftp://somewebsite/files/01234", "link text", "."}
         // display text will be trimmed
         href_ok! {href9_space_before, "     [link text](ftp://somewebsite/files/01234).", "ftp://somewebsite/files/01234", "link text", "."^}
+        // display text will be trimmed
+        href_ok! {href10_escaped_paren, "     [cyrillic code](https://en.wikipedia.org/wiki/Cyrillic_(Unicode_block\\)).", "https://en.wikipedia.org/wiki/Cyrillic_(Unicode_block)", "cyrillic code", "."^}
     }
 
     // `code_block` tests
