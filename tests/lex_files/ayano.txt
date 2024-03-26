@@ -1,3 +1,17 @@
+TitleInfo {
+    header_line1: None,
+    header_line2: None,
+    document_type: None,
+    title_line1: None,
+    title_line2: None,
+    title_line3: None,
+    title_line4: None,
+    author_line1: None,
+    author_line2: None,
+    author_line3: None,
+    date: None,
+    prof: None,
+}
 Multiple {
     tokens: Owned(
         [

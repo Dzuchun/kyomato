@@ -2171,39 +2171,159 @@ $$
 }
 
 pub fn title_info<'source, Err: nom::error::ParseError<&'source str>>(
-    mut input: &'source str,
+    input: &'source str,
 ) -> IResult<&'source str, TitleInfo<'source>, Err> {
-    const FIELD_NAMES: [&'static str; 12] = [
-        "header-line1",
-        "header-line2",
-        "document-type",
-        "title-line1",
-        "title-line2",
-        "title-line3",
-        "title-line4",
-        "author-line1",
-        "author-line2",
-        "author-line3",
-        "date",
-        "prof",
-    ];
-    let (rest, _) = tag("---")(input)?;
-    input = rest;
-    
-    let mut res = TitleInfo::default();
-    // ---
-    // article-type: ЗВІТ
-    // title-line1: про Виконання лабораторної роботи
-    // title-line2: з практикуму "Методи реєстрації іонізуючого випромінювання"
-    // title-line3:
-    // title-line4: СТАТИСТИЧНІ ТА СИСТЕМАТИЧНІ ПОХИБКИ ПРИ ДЕТЕКТУВАННІ ЯДЕРНОГО ВИПРОМІНЮВАННЯ
-    // date: листопад 2023
-    // keywords: ВИПРОМІНЮВАННЯ, РОЗПОДІЛ, СТАТИСТИЧНА ПРИРОДА.
-    // abstract: |-
-    //   Об’єкт дослідження - розподіл кількості зареєстрованих частинок протягом деякого однакового проміжку часу (часу усереднення).
-    //   Мета роботи - визначити умови застосовності розподілів Пуассона та Гауса, пересвідчитись у статистичній природi процесу радiактивного розпаду. Для виконання використано радiактивний зразок, детектор, підсилювач та формувач сигналiв, лічильник імпульсів.
-    // prof: Голінка-Безшийко Л.О.
-    // ---
-    let (input, _) = cut(tag("---"))(input)?;
-    Ok((todo!(), res))
+    let Ok((rest, _)) = tag::<_, _, Err>("---")(input) else {
+        return Ok((input, TitleInfo::default()));
+    };
+    cut(|mut input: &'source str| {
+        macro_rules! match_field {
+            ($name:literal) => {
+                preceded::<_, _, _, Err, _, _>(
+                    tuple((char('\n'), tag($name), space0, char(':'), space0)),
+                    take_till1(|c| c == '\n'),
+                )
+                .map(Cow::from)
+            };
+        }
+        let (
+            input,
+            (
+                header_line1,
+                header_line2,
+                document_type,
+                title_line1,
+                title_line2,
+                title_line3,
+                title_line4,
+                author_line1,
+                author_line2,
+                author_line3,
+                date,
+                prof,
+            ),
+        ) = optional_permutation((
+            match_field!("header-line1"),
+            match_field!("header-line2"),
+            match_field!("document-type"),
+            match_field!("title-line1"),
+            match_field!("title-line2"),
+            match_field!("title-line3"),
+            match_field!("title-line4"),
+            match_field!("author-line1"),
+            match_field!("author-line2"),
+            match_field!("author-line3"),
+            match_field!("date"),
+            match_field!("prof"),
+        ))
+        .parse(input)?;
+        let res = TitleInfo {
+            header_line1,
+            header_line2,
+            document_type,
+            title_line1,
+            title_line2,
+            title_line3,
+            title_line4,
+            author_line1,
+            author_line2,
+            author_line3,
+            date,
+            prof,
+        };
+        let (input, _) = tag("\n---")(input)?;
+        Ok((input, res))
+    })(rest)
+}
+
+#[cfg(test)]
+mod title_info_tests {
+    use super::*;
+    macro_rules! title_info {
+        () => {
+            TitleInfo::default()
+        };
+        ($name:ident: $value:literal $(, $other_name:ident: $other_value:literal) *) => {{
+            let mut info  = title_info!($($other_name: $other_value), *);
+            info.$name = Some($value.into());
+            info
+        }};
+    }
+    macro_rules! test_ok {
+        {$name:ident, $input:literal, [$($expected_name:ident: $expected_value:literal), *], $left_over:literal} => {
+            #[test]
+            fn $name() {
+                // arrange
+                let input = $input;
+                let expected_info = title_info!($($expected_name: $expected_value), *);
+
+                // act
+                let (rest, actual_info) = title_info::<'_, nom::error::VerboseError<& '_ str>>(input).expect("Should succeed parsing title info in this case");
+
+                // assert
+                assert_eq!(expected_info, actual_info, "Should produce identical info");
+                assert_eq!(rest, $left_over, "Should produce identical left-over");
+            }
+        };
+    }
+
+    test_ok! {ok_empty, "", [], ""}
+    test_ok! {ok_no_fields, "---\n---\n", [], "\n"}
+    test_ok! {ok_single_field, "---\nauthor-line3 : дяч дзучунович\n---\n", [author_line3: "дяч дзучунович"], "\n"}
+    test_ok! {ok_all_fields, r"---
+header-line1: Навч. заклад
+header-line2: Факультет
+document-type: ПРОТОКОЛ
+title-line1: Виконання марної роботи
+title-line2: з історії стародавнього Єгипту
+title-line3: (пинальна частина)
+title-line4: НАЗВА РОБОТИ
+author-line1: виконувало:
+author-line2: дяч дзучунович
+author-line3: (perfectly still)
+date: вербень 2077
+prof: me :idk:
+---
+", [
+                header_line1: "Навч. заклад",
+                header_line2: "Факультет",
+                document_type: "ПРОТОКОЛ",
+                title_line1: "Виконання марної роботи",
+                title_line2: "з історії стародавнього Єгипту",
+                title_line3: "(пинальна частина)",
+                title_line4: "НАЗВА РОБОТИ",
+                author_line1: "виконувало:",
+                author_line2: "дяч дзучунович",
+                author_line3: "(perfectly still)",
+                date: "вербень 2077",
+                prof: "me :idk:"
+                ], "\n"}
+    test_ok! {ok_all_fields_permutated, r"---
+author-line2: дяч дзучунович
+header-line1: Навч. заклад
+title-line2: з історії стародавнього Єгипту
+header-line2: Факультет
+author-line1: виконувало:
+author-line3: (perfectly still)
+document-type: ПРОТОКОЛ
+date: вербень 2077
+title-line4: НАЗВА РОБОТИ
+title-line1: Виконання марної роботи
+prof: me :idk:
+title-line3: (пинальна частина)
+---
+", [
+        header_line1: "Навч. заклад",
+        header_line2: "Факультет",
+        document_type: "ПРОТОКОЛ",
+        title_line1: "Виконання марної роботи",
+        title_line2: "з історії стародавнього Єгипту",
+        title_line3: "(пинальна частина)",
+        title_line4: "НАЗВА РОБОТИ",
+        author_line1: "виконувало:",
+        author_line2: "дяч дзучунович",
+        author_line3: "(perfectly still)",
+        date: "вербень 2077",
+        prof: "me :idk:"
+        ], "\n"}
 }

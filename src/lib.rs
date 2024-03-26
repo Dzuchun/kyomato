@@ -38,13 +38,19 @@ mod lexer;
 mod path_engine;
 
 /// Reexports
-pub fn lex<'source>(input: &'source str) -> Result<data::Token<'source>, KyomatoLexError> {
-    lexer::lex::<'source, KyomatoLexError>(input)
-        .map(|(_, t)| t)
-        .map_err(|err| match err {
+pub fn lex<'source>(
+    input: &'source str,
+) -> Result<(data::TitleInfo<'source>, data::Token<'source>), KyomatoLexError> {
+    let (input, title_info) =
+        lexer::title_info::<'source, KyomatoLexError>(input).map_err(|err| match err {
             nom::Err::Error(err) | nom::Err::Failure(err) => err,
             nom::Err::Incomplete(_) => unreachable!("This is a complete input"),
-        })
+        })?;
+    let (_, tokens) = lexer::lex::<'source, KyomatoLexError>(input).map_err(|err| match err {
+        nom::Err::Error(err) | nom::Err::Failure(err) => err,
+        nom::Err::Incomplete(_) => unreachable!("This is a complete input"),
+    })?;
+    Ok((title_info, tokens))
 }
 pub fn gen<'token, 'source: 'token>(
     token: &'token data::Token<'source>,

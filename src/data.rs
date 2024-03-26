@@ -6,7 +6,7 @@ use std::{
 
 use url::Url;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct TitleInfo<'source> {
     pub header_line1: Option<Tx<'source>>,
     pub header_line2: Option<Tx<'source>>,

@@ -131,21 +131,21 @@
 \topskip0pt % source: https://tex.stackexchange.com/questions/2326/vertically-center-text-on-a-page
 \vspace*{\fill}
 \textbf{
-\LARGE 
-\LARGE 
+\LARGE Навч. заклад
+\LARGE Факультет
 \vspace{100pt}
-\LARGE 
-\Large 
-\Large 
-\Large 
-\huge 
+\LARGE ПРОТОКОЛ
+\Large Виконання марної роботи
+\Large з історії стародавнього Єгипту
+\Large (пинальна частина)
+\huge НАЗВА РОБОТИ
 \vspace{50pt}
-\large 
-\large 
-\large 
-\large 
+\large виконувало:
+\large дяч дзучунович
+\large (perfectly still)
+\large вербень 2077
 \vspace*{\fill}
-\hspace{\fill}\large  \rule{20mm}{0.4pt}
+\hspace{\fill}\large me :idk: \rule{20mm}{0.4pt}
 \vspace{10pt}
 }
 \endgroup
@@ -157,28 +157,13 @@
 \fnt
    
 
-\subsection{Перша тема}
+\subsection{First para}
 
-\tbln Тут трохи тексту і пояснень про квантові мультивироджені рефурбалідзери змішаного типу. Це нудно, тож тримайте формулу:
+\tbln This text is \textit{just} a dummy, so that document won't feel \st{too} \textbf{empty}
+\tbln Have a some oily maccaroni:
 \begin{equation}
-Ref(z) = \int \limits_{0}^{1} t^{z-1} \cdot \exp(-t) dt
-\label{eq:refurbalidzer_1}\end{equation}
+\gamma = \lim_{n \to \infty} \sum\limits_{i=1}^{n} \dfrac{1}{n} - \ln(n)
+\end{equation}
 
-\subsubsection{Підпункт}
-
-\tbln Рефурбалідзери можуть виявитись дуже важливими для збереження екологічної безпеки нашої планети. До прикладу, в них є наступні переваги:
-\begin{itemize}
-\item Нормувальний множник $|\psi|^{2} = 3/4$
-\item Кількість хромосом - $\exp(\pi)$
-\item Поживна цінність - 20 дптр/см
-\end{itemize}
-\begin{figure}[h!]
-\centering
-\includegraphics[width=0.4\textwidth]{refurb.jpg}
-\caption{\capfnt Принципове влаштування рефурбалідзера}
-\label{fig:refurb}
-\end{figure}
-
-\tbln На світлині \ref{fig:refurb} можна бачити принципову схему влаштування рефурбалідзера. Неважно помітити великі очі\footnotemark[1]\footnotetext[1]{Для поливу.}, і два термоядерних реактори, що оточують їх. Точні реакції всередині невідомі, але цілком можливо що там женуть $du + t -> {}^{5}_{6}C$...
 
 \end{document}

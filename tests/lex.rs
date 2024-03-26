@@ -65,7 +65,7 @@ fn gen_lex_output() {
         std::fs::create_dir(&output_path).expect("Failed to create directory");
     }
     for (filename, input) in input_files() {
-        let parsed = match kyomato::lex(input.as_str()) {
+        let (title_info, tokens) = match kyomato::lex(input.as_str()) {
             Ok(ok) => ok,
             Err(err) => {
                 panic!("Input files should be successfully parsed: {err:#?}");
@@ -73,7 +73,7 @@ fn gen_lex_output() {
         };
         // create representation of the parsed tokens
         // TODO this part should be replaced, once serde is supported
-        let repr = format!("{:#?}", parsed);
+        let repr = format!("{:#?}\n{:#?}", title_info, tokens);
         // write the result to output directory
         let output_file = {
             output_path.push(filename);
@@ -104,7 +104,7 @@ fn test_lex() {
         std::fs::create_dir(&output_path).expect("Failed to create directory");
     }
     for (filename, input) in input_files() {
-        let parsed = match kyomato::lex(input.as_str()) {
+        let (title_info, tokens) = match kyomato::lex(input.as_str()) {
             Ok(ok) => ok,
             Err(err) => {
                 panic!("Should successfully parse the input: {err:#?}");
@@ -112,7 +112,7 @@ fn test_lex() {
         };
         // create representation of the parsed tokens
         // TODO this part should be replaced, once serde is supported
-        let repr = format!("{:#?}", parsed);
+        let repr = format!("{:#?}\n{:#?}", title_info, tokens);
         // write the result to output directory
         let expected_output = {
             output_path.push(&filename);

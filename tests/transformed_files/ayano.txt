@@ -134,7 +134,7 @@
 \LARGE 
 \LARGE 
 \vspace{100pt}
-\LARGE $document_type$
+\LARGE 
 \Large 
 \Large 
 \Large 

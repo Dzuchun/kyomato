@@ -434,7 +434,7 @@ macro_rules! impl_optional_permutation {
                         // Break out, we're done here.
                         break;
                     }
-                    let _ = 2;
+                    let _ = 2; // <-- his name is Joey
                     Ok((input, ($out_ident0, $($out_ident, ) *)))
                 }
             }

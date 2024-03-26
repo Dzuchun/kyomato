@@ -4,13 +4,11 @@ mod meta;
 pub use context::Context;
 pub use meta::SourceMeta;
 
-use itertools::Itertools;
-use regex::Replacer;
-
 use crate::{
     data::{Formatting, TitleInfo, Token},
     path_engine::PathEngine,
 };
+use itertools::Itertools;
 use std::{borrow::Borrow, fmt::Write, marker::PhantomData};
 
 use super::{ayano::AyanoExecutor, GenerationError, OutputGenerator, Res};
@@ -767,7 +765,7 @@ y = 0.4
     }
 
     test! {ayano_fig2, Token::Ayano{data: AyanoBlock{is_display: false,is_static: false,code: r"@fig: src = 'path/to/image.jpg'".into(),insert_path: None,
-                                                                        is_space_before: false,}},
+                                                                            is_space_before: false,}},
 r"
 \begin{figure}[h!]
 \centering

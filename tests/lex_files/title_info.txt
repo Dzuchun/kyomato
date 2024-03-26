@@ -1,0 +1,94 @@
+TitleInfo {
+    header_line1: Some(
+        "Навч. заклад",
+    ),
+    header_line2: Some(
+        "Факультет",
+    ),
+    document_type: Some(
+        "ПРОТОКОЛ",
+    ),
+    title_line1: Some(
+        "Виконання марної роботи",
+    ),
+    title_line2: Some(
+        "з історії стародавнього Єгипту",
+    ),
+    title_line3: Some(
+        "(пинальна частина)",
+    ),
+    title_line4: Some(
+        "НАЗВА РОБОТИ",
+    ),
+    author_line1: Some(
+        "виконувало:",
+    ),
+    author_line2: Some(
+        "дяч дзучунович",
+    ),
+    author_line3: Some(
+        "(perfectly still)",
+    ),
+    date: Some(
+        "вербень 2077",
+    ),
+    prof: Some(
+        "me :idk:",
+    ),
+}
+Multiple {
+    tokens: Owned(
+        [
+            Header {
+                order: 1,
+                content: "First para",
+            },
+            Paragraph {
+                is_newline: true,
+                space_before: false,
+                formatting: None,
+                content: "This text is",
+            },
+            Paragraph {
+                is_newline: false,
+                space_before: true,
+                formatting: Some(
+                    Italic,
+                ),
+                content: "just",
+            },
+            Paragraph {
+                is_newline: false,
+                space_before: true,
+                formatting: None,
+                content: "a dummy, so that document won't feel",
+            },
+            Paragraph {
+                is_newline: false,
+                space_before: true,
+                formatting: Some(
+                    StrikeThrough,
+                ),
+                content: "too",
+            },
+            Paragraph {
+                is_newline: false,
+                space_before: true,
+                formatting: Some(
+                    Bold,
+                ),
+                content: "empty",
+            },
+            Paragraph {
+                is_newline: true,
+                space_before: false,
+                formatting: None,
+                content: "Have a some oily maccaroni:",
+            },
+            DisplayMath {
+                content: "\\gamma = \\lim_{n \\to \\infty} \\sum\\limits_{i=1}^{n} \\dfrac{1}{n} - \\ln(n)",
+                ident: None,
+            },
+        ],
+    ),
+}

@@ -23,13 +23,14 @@ fn input_files() -> impl Iterator<Item = (OsString, String)> {
 #[test]
 fn show_transform() {
     for (_, input) in input_files() {
-        let parsed = match kyomato::lex(input.as_str()) {
+        let (title_info, tokens) = match kyomato::lex(input.as_str()) {
             Ok(ok) => ok,
             Err(err) => {
                 panic!("Should successfully parse the input: {err:#?}");
             }
         };
-        let repr = kyomato::gen_to_string(&parsed, None).expect("Should be able to transform tokens");
+        let repr = kyomato::gen_to_string(&tokens, title_info)
+            .expect("Should be able to transform tokens");
         println!("{repr}");
         std::io::stdin()
             .read_line(&mut String::new())
@@ -63,7 +64,7 @@ fn gen_transform_output() {
         std::fs::create_dir(&output_path).expect("Failed to create directory");
     }
     for (filename, input) in input_files() {
-        let parsed = match kyomato::lex(input.as_str()) {
+        let (title_info, tokens) = match kyomato::lex(input.as_str()) {
             Ok(ok) => ok,
             Err(err) => {
                 panic!("Input files should be successfully parsed: {err:#?}");
@@ -86,7 +87,7 @@ fn gen_transform_output() {
             output_file
         };
         // write the result to output file
-        kyomato::gen(&parsed, None, &mut output_file).expect("Failed to generate output");
+        kyomato::gen(&tokens, title_info, &mut output_file).expect("Failed to generate output");
     }
 }
 
@@ -98,13 +99,13 @@ fn test_transform() {
         std::fs::create_dir(&output_path).expect("Failed to create directory");
     }
     for (filename, input) in input_files() {
-        let parsed = match kyomato::lex(input.as_str()) {
+        let (title_info, tokens) = match kyomato::lex(input.as_str()) {
             Ok(ok) => ok,
             Err(err) => {
                 panic!("Should successfully parse the input: {err:#?}");
             }
         };
-        let repr = kyomato::gen_to_string(&parsed, None).expect("Failed to generate output");
+        let repr = kyomato::gen_to_string(&tokens, title_info).expect("Failed to generate output");
         // write the result to output directory
         let expected_output = {
             output_path.push(&filename);
