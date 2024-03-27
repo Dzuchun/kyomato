@@ -93,7 +93,7 @@ impl<'code> DisplayState<'code> {
 pub struct AyanoBlock<'code> {
     pub ident: StaticDebug<u64>,
     pub display_state: DisplayState<'code>,
-    pub is_space_before: bool,
+    pub spaces_before: usize,
     pub is_static: bool,
     pub code: Tx<'code>,
     pub insert_path: Option<Cow<'code, Path>>,
@@ -102,7 +102,7 @@ pub struct AyanoBlock<'code> {
 impl PartialEq for AyanoBlock<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.display_state == other.display_state
-            && self.is_space_before == other.is_space_before
+            && self.spaces_before == other.spaces_before
             && self.is_static == other.is_static
             && self.code == other.code
             && self.insert_path == other.insert_path
@@ -279,7 +279,7 @@ impl ToStaticExt for AyanoBlock<'_> {
             insert_path,
             display_state,
             is_static,
-            is_space_before,
+            spaces_before,
         } = self;
         AyanoBlock {
             ident: ident.clone(),
@@ -287,7 +287,7 @@ impl ToStaticExt for AyanoBlock<'_> {
             insert_path: insert_path.as_ref().map(Cow::to_static),
             is_static: *is_static,
             display_state: display_state.to_static(),
-            is_space_before: *is_space_before,
+            spaces_before: *spaces_before,
         }
     }
 }

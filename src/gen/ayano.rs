@@ -100,7 +100,7 @@ impl AyanoBuilder {
             ident,
             function_name: info.function_name,
             display_info: info.caption.map(|name| DisplayInfo {
-                code: transformed_code,
+                code: block.code.to_string(),
                 caption: name,
             }),
             insert_path: info.insert_path,
@@ -170,7 +170,7 @@ impl AyanoExecutor {
         &self,
         token: &'token AyanoBlock<'source>,
     ) -> AyanoResult<'source, Token<'static>> {
-        self.call_block(token, |res, _| Ok(parse_ayano(res, token.is_space_before)?))
+        self.call_block(token, |res, _| Ok(parse_ayano(res)?))
     }
 
     pub fn display_blocks<'s>(&'s self) -> impl IntoIterator<Item = &'s DisplayInfo> {
@@ -194,7 +194,7 @@ mod ayano_tests {
                     is_static: false,
                     code: $code.into(),
                     insert_path: None,
-                    is_space_before: false,
+                    spaces_before: 0,
                 };
                 let mut builder = AyanoBuilder::new();
 
@@ -242,7 +242,7 @@ y = x / 100
                     insert_path: None,
                     display_state: DisplayState::NotDisplayed,
                     is_static: true,
-                    is_space_before: false,
+                    spaces_before: 0,
                 };
                 let function_block = AyanoBlock {
                     ident: StaticDebug(rand::thread_rng().gen()),
@@ -250,7 +250,7 @@ y = x / 100
                     insert_path: None,
                     display_state: DisplayState::NotDisplayed,
                     is_static: false,
-                    is_space_before: false,
+                    spaces_before: 0,
                 };
                 builder.add_block(&static_block).expect("Should be able to add static block");
                 builder.add_block(&function_block).expect("Should be able to add function block");
@@ -288,7 +288,7 @@ y", "2"}
                     insert_path: None,
                     display_state: DisplayState::NotDisplayed,
                     is_static: true,
-                    is_space_before: false,
+                    spaces_before: 0,
                 };
                 let function1_block = AyanoBlock {
                     ident: StaticDebug(rand::thread_rng().gen()),
@@ -296,7 +296,7 @@ y", "2"}
                     insert_path: None,
                     display_state: DisplayState::NotDisplayed,
                     is_static: false,
-                    is_space_before: false,
+                    spaces_before: 0,
                 };
                 let function2_block = AyanoBlock {
                     ident: StaticDebug(rand::thread_rng().gen()),
@@ -304,7 +304,7 @@ y", "2"}
                     insert_path: None,
                     display_state: DisplayState::NotDisplayed,
                     is_static: false,
-                    is_space_before: false,
+                    spaces_before: 0,
                 };
                 builder.add_block(&static_block).expect("Should be able to add static block");
                 builder.add_block(&function1_block).expect("Should be able to add function block");
@@ -499,7 +499,7 @@ mod apply_ayano_tests {
                     insert_path: None,
                     display_state: DisplayState::NotDisplayed,
                     is_static: false,
-                    is_space_before: false,
+                    spaces_before: 0,
                 };
 
                 // act
@@ -599,7 +599,7 @@ y = x + 2
             code: code.into(),
             insert_path: Some(insert_path.into()),
             is_static: false,
-            is_space_before: false,
+            spaces_before: 0,
         };
 
         // act
@@ -1438,10 +1438,7 @@ impl From<nom::Err<KyomatoLexError>> for ParsingError {
     }
 }
 
-fn parse_ayano(
-    python_output: &PyAny,
-    is_space_before: bool,
-) -> Result<Token<'static>, ParsingError> {
+fn parse_ayano(python_output: &PyAny) -> Result<Token<'static>, ParsingError> {
     // it was quite a journey! but I believe to be close to it's end.
     if let Ok(tuple) = python_output.downcast::<PyTuple>() {
         if let Ok(discriminator) = tuple
@@ -1538,13 +1535,13 @@ fn parse_ayano(
                         .ok_or(ParsingError::TableNoHeader)?
                         .downcast::<PyList>())?
                     .into_iter()
-                    .map(|h: &PyAny| parse_ayano(h, false))
+                    .map(|h: &PyAny| parse_ayano(h))
                     .try_collect()?;
                     let cells: Vec<_> = rows
                         .map(|row| {
                             Ok(throw_downcast!(row.downcast::<PyList>())?
                                 .into_iter()
-                                .map(|c: &PyAny| parse_ayano(c, false)))
+                                .map(|c: &PyAny| parse_ayano(c)))
                         })
                         .try_fold(Vec::new(), |acc, next: Result<_, ParsingError>| {
                             // OLD: there might be a better way with iterators directly, but I kinda can't come up with it
@@ -1583,7 +1580,7 @@ fn parse_ayano(
     Ok(Token::Paragraph {
         is_newline: false, // TODO probably add that to block too
         formatting: None,
-        space_before: is_space_before,
+        space_before: false,
         content: Cow::Owned(python_output.to_string()),
     })
 }
@@ -1623,7 +1620,7 @@ mod parsing_tests {
                     let python_output = $input(py);
 
                     // act
-                    let result = super::parse_ayano(python_output, false);
+                    let result = super::parse_ayano(python_output);
 
                     // assert
                     assert_eq!(result, $output, "Parsing should produce expected tokens");

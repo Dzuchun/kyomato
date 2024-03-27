@@ -133,10 +133,7 @@ where
                 let columns = header.len();
                 let column_format =
                     itertools::intersperse(std::iter::repeat("c").take(columns), "|");
-                write!(
-                    output,
-                    "\n\\begin{{table}}[h!]\n\\fnt\n\\begin{{center}}\n"
-                )?;
+                write!(output, "\n\\begin{{table}}[h!]\n\\fnt\n\\begin{{center}}\n")?;
                 output.write_str("\\begin{tabular}{|")?;
                 column_format
                     .map(|s| {
@@ -203,8 +200,15 @@ where
                 output.write_str("\\end{figure}\n")?;
             }
             Token::Ayano { data } => {
-                let token = meta.ayano.display_token(data)?;
-                self.write_to(output, meta, context, &token)?;
+                if !data.is_static {
+                    if data.spaces_before == 1 {
+                        output.write_char(' ')?;
+                    } else if data.spaces_before >= 2 {
+                        output.write_str(" \\newline\n")?;
+                    }
+                    let token = meta.ayano.display_token(data)?;
+                    self.write_to(output, meta, context, &token)?;
+                }
             }
             Token::List { list_type, content } => {
                 let start: &str = match list_type {
@@ -461,6 +465,7 @@ where
                 };
                 generator.write_to(output, meta, context, &block_code_block)?;
                 generator.write_to(output, meta, context, &block.caption)?;
+                output.write_str("\n\\newline\n")?;
                 Ok(())
             }
             let blocks_section_header = Token::Header {
@@ -469,7 +474,7 @@ where
                     .title_info
                     .code_section_title
                     .as_ref()
-                    .unwrap_or(&"".into())
+                    .unwrap_or(&"Code blocks".into())
                     .clone(),
             };
             self.write_to(output, meta, context, &blocks_section_header)?;
@@ -490,7 +495,8 @@ mod tests {
     use rand::Rng;
 
     use crate::{
-        data::{AyanoBlock, DisplayState, Formatting, ListType}, util::StaticDebug,
+        data::{AyanoBlock, DisplayState, Formatting, ListType},
+        util::StaticDebug,
     };
 
     use super::*;
@@ -766,7 +772,7 @@ cell_21 & cell_22 & cell_23 \\ \hline
         is_static: false,
         code: "1".into(),
         insert_path: None,
-        is_space_before: false,
+        spaces_before: 0,
     }}, r"1"}
     test! {ayano_plain2, Token::Ayano{data: AyanoBlock{
         ident: StaticDebug(rand::thread_rng().gen()),
@@ -774,7 +780,7 @@ cell_21 & cell_22 & cell_23 \\ \hline
         is_static: false,
         code: "1 + 2".into(),
         insert_path: None,
-        is_space_before: false,
+        spaces_before: 0,
     }}, r"3"}
     test! {ayano_plain3, Token::Ayano{data: AyanoBlock{
         ident: StaticDebug(rand::thread_rng().gen()),
@@ -787,7 +793,7 @@ y = sqrt(x)
 int(y)"
         .into(),
         insert_path: None,
-        is_space_before: false,
+        spaces_before: 0,
     }}, r"10"}
     test! {ayano_plain4, Token::Ayano{data: AyanoBlock{
         ident: StaticDebug(rand::thread_rng().gen()),
@@ -800,7 +806,7 @@ for i in range(101):
 res"
         .into(),
         insert_path: None,
-        is_space_before: false,
+        spaces_before: 0,
     }}, r"5050"}
     test! {ayano_err1, Token::Ayano{data: AyanoBlock{
         ident: StaticDebug(rand::thread_rng().gen()),
@@ -810,7 +816,7 @@ res"
     'err', 1.0, 0.1"
         .into(),
         insert_path: None,
-        is_space_before: false,
+        spaces_before: 0,
     }}, r"1.00 $\pm$ 0.10"}
     test! {ayano_err2, Token::Ayano{data: AyanoBlock{
         ident: StaticDebug(rand::thread_rng().gen()),
@@ -820,7 +826,7 @@ res"
     'err', 1.0, 0.4"
         .into(),
         insert_path: None,
-        is_space_before: false,
+        spaces_before: 0,
     }}, r"1.0 $\pm$ 0.4"}
     test! {ayano_err3, Token::Ayano{data: AyanoBlock{
         ident: StaticDebug(rand::thread_rng().gen()),
@@ -832,7 +838,7 @@ y = 0.4
 @dev: x, y"
             .into(),
             insert_path: None,
-            is_space_before: false,
+            spaces_before: 0,
         }}, r"1.0 $\pm$ 0.4"
     }
 
@@ -842,7 +848,7 @@ y = 0.4
         is_static: false,
         code: r"'fig', 'path/to/image.jpg', None, None, None".into(),
         insert_path: None,
-        is_space_before: false,
+        spaces_before: 0,
     }}, r"
 \begin{figure}[h!]
 \centering
@@ -856,7 +862,7 @@ y = 0.4
         is_static: false,
         code: r"'fig', 'path/to/image.jpg', None, None, 0.625".into(),
         insert_path: None,
-        is_space_before: false,
+        spaces_before: 0,
     }}, r"
 \begin{figure}[h!]
 \centering
@@ -865,7 +871,8 @@ y = 0.4
     }
 
     test! {ayano_fig2, Token::Ayano{data: AyanoBlock{
-        ident: StaticDebug(rand::thread_rng().gen()),display_state: DisplayState::NotDisplayed,is_static: false,code: r"@fig: src = 'path/to/image.jpg'".into(),insert_path: None,is_space_before: false,}},
+                                        ident: StaticDebug(rand::thread_rng().gen()),display_state: DisplayState::NotDisplayed,is_static: false,code: r"@fig: src = 'path/to/image.jpg'".into(),insert_path: None,
+                                        spaces_before: 0,}},
 r"
 \begin{figure}[h!]
 \centering
@@ -873,7 +880,7 @@ r"
 \end{figure}"}
     test! {ayano_fig3, Token::Ayano{data: AyanoBlock{
         ident: StaticDebug(rand::thread_rng().gen()), display_state: DisplayState::NotDisplayed,is_static: false,code: r#"@fig: src = 'path/to/image.jpg', ident = "meow""#.into(),insert_path: None,
-    is_space_before: false,
+        spaces_before: 0,
         }},
 r#"
 \begin{figure}[h!]
@@ -884,13 +891,13 @@ r#"
     }
     // TODO add tests with captions
 
-    test! {ayano_gen_tab1, Token::Ayano{data: AyanoBlock { 
-        ident: StaticDebug(rand::thread_rng().gen()),display_state: DisplayState::NotDisplayed, is_static: false, code:
+    test! {ayano_gen_tab1, Token::Ayano{data: AyanoBlock {
+            ident: StaticDebug(rand::thread_rng().gen()),display_state: DisplayState::NotDisplayed, is_static: false, code:
 r#"
 data = [[1, 2, 3], [4, 5, 6]]
 @gen_table: lambda r,c: data[r][c]; rows=2, columns=3
 "#.into(), insert_path: None,
-    is_space_before: false, }},
+    spaces_before: 0, }},
 r#"
 \begin{table}[h!]
 \fnt
@@ -903,7 +910,7 @@ r#"
 \end{center}
 \end{table}
 "#
-        }
+            }
     // TODO add tests with csv-tables
 
     // TODO add minted to preamble

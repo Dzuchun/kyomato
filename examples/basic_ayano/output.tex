@@ -1,0 +1,219 @@
+\documentclass[a4paper]{article}
+\usepackage{graphicx, hyperref, xcolor, gensymb, amssymb, mathtools, wrapfig, mathtools, microtype, lastpage, caption, titlesec, paracol, longtable, booktabs, cancel}
+\usepackage[T2A, T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[russian, ukrainian]{babel}
+\hypersetup{
+    colorlinks,
+    linkcolor={blue!20!black},
+    citecolor={blue!50!black},
+    urlcolor={blue!80!black}
+}
+
+\usepackage[left = 25mm, right = 10mm, top=20mm, bottom=20mm, bindingoffset=0cm]{geometry}
+
+% КОМАНДИ
+
+\newcommand{\fnt}{
+\fontshape{n}
+\fontsize{14pt} {19pt}
+\linespread{0.8}
+\selectfont
+} % нормативний шрифт
+\newcommand{\capfnt}{
+    \fnt
+} % норматичний шрифт для підписів (тимчасово співпадає зі звичайним шрифтом)
+
+\newcommand{\tb}{
+    \hspace*{10mm}
+} % відступ у 5 символів "x" відповідно до ДСТУ
+\newcommand{\tbln}{
+    \newline 
+    \tb
+} % те ж саме, але з переносом рядка
+\newcommand{\tbsp}{
+    \vspace*{1ex}
+    \tbln
+} % те ж саме, але з додатковим відступом між рядками
+
+% бібліографія
+\usepackage[square,sort,comma,numbers]{natbib}
+\renewcommand{\bibsection}{}
+\usepackage{totcount}
+\newtotcounter{citnum} 
+% лічильник цитувань
+\def\oldbibitem{} \let\oldbibitem=\bibitem
+\def\bibitem{\stepcounter{citnum}\oldbibitem}
+
+% лічильник зображень
+\newtotcounter{graphnum}
+\def\oldincludegraphics{} \let\oldincludegraphics=\includegraphics
+\def\includegraphics{\stepcounter{graphnum}\oldincludegraphics}
+
+% лічильник таблиць (НЕАВТОМАТИЧНИЙ!!!)
+\newtotcounter{tabnum}
+
+% лічильник додатків (НЕАВТОМАТИЧНИЙ!!!)
+\newtotcounter{dodnum}
+
+% нумерація сторінок
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\setlength{\headheight}{15.3pt}
+\fancyhead[R]{\fnt \thepage}
+
+% виноски
+\renewcommand{\thefootnote}{\large\arabic{footnote})~}
+\renewcommand{\footnoterule}{\rule{20mm}{0.4pt} \vspace*{0.5ex}}
+% \newcommand{\vyn}[2]{
+%     \footnote[#1]{\large #2}
+% } % створити виноску
+
+\let\oldFootnote\footnote
+\renewcommand{\footnote}[1]{
+    \oldFootnote{\large #1}
+} % перегрузка виноски
+
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+% підписи малюнків/таблиць
+\captionsetup[figure]{name={\fnt Рисунок~},labelsep=period}
+\captionsetup[table]{name={\fnt Таблиця~},labelsep=period}
+
+% markdown strikeouts
+\usepackage{soul}
+
+% codeblocks
+\usepackage{minted}
+
+% enumeration
+\usepackage[shortlabels]{enumitem}
+
+\titleformat*{\section}{\fnt\LARGE\bfseries}
+\titleformat*{\subsection}{\fnt\Large\bfseries}
+\titleformat*{\subsubsection}{\fnt\Large}
+
+\begin{document}
+\thispagestyle{empty} % [A]:for cropping
+% ------------
+% source: https://tex.stackexchange.com/questions/173651/need-help-to-create-such-a-beautiful-title-page
+\begingroup
+\centering
+\obeylines
+\topskip 0pt % source: https://tex.stackexchange.com/questions/2326/vertically-center-text-on-a-page
+\vspace*{\fill}
+\textbf{
+\LARGE 
+\LARGE 
+\vspace{100pt}
+\LARGE 
+\Large 
+\Large 
+\Large 
+\huge 
+\vspace{50pt}
+\large 
+\large 
+\large 
+\large 
+\vspace*{\fill}
+\hspace{\fill}\large  \rule{20mm}{0.4pt}
+\vspace{10pt}
+}
+\endgroup
+% ------------
+\newpage
+\tableofcontents
+
+\newpage
+\fnt
+Here's a basic Ayano explanation:
+\tbln Essentially, Ayano blocks are regular code blocks, having `python, Ayano` marked as their language. This sort of codeblocks are treated completely differently by the parser - these blocks are supposed to allow arbitrary python code execution for data generation and analysis.
+\tbln For this example, we'll only consider examples that do not interact with the filesystem.
+\tbln Say, you have some sort of dataset, you wish to find a mean a deviation of. Here's a way to do that with Ayano (without filesystem interaction):
+\tbln You might notice, that there's actually nothing displayed above in the document. That's due to \textit{static blocks} leaving nothing behind them. To actually display the dataset, we would use a regular, non-static Ayano block: \newline
+[1, 1, 2, 3, 2, 5, 5, 6, 2, 1, 4, 9]
+\tbln Above you should see a python's `str` representation of initial dataset.
+\tbln Now, let's try calculating mean and the deviation. To achieve that, I'll use `statistics` module: 3.4$\pm$2.5
+\tbln You should see dataset's mean value and deviation above. You might notice, that's it's in a good-looking format. That's because of special format used for value-deviation sort-of-values, that's described in the docs. If you wish to circumvent it, you absolutely can: 3.4166666666666665 $\pm$ 2.4664414311581235
+\tbln Ayano can generate tables too! For example, let's generate a table of our dataset, but also add information on if it's greater or less than the mean value, it's square and absolute deviation from the mean:
+\begin{table}[h!]
+\fnt
+\begin{center}
+\begin{tabular}{|c|c|c|c|}\hline
+initial data & cmp to mean & square & absdev\\ \hline
+\hline
+1.0$\pm$1.0 & less & 1 & 2.4166666666666665\\ \hline
+1.0$\pm$1.0 & less & 1 & 2.4166666666666665\\ \hline
+2.0$\pm$1.4 & less & 4 & 1.4166666666666665\\ \hline
+3.0$\pm$1.7 & less & 9 & 0.4166666666666665\\ \hline
+2.0$\pm$1.4 & less & 4 & 1.4166666666666665\\ \hline
+5.0$\pm$2.2 & greater & 25 & 1.5833333333333335\\ \hline
+5.0$\pm$2.2 & greater & 25 & 1.5833333333333335\\ \hline
+6.0$\pm$2.4 & greater & 36 & 2.5833333333333335\\ \hline
+2.0$\pm$1.4 & less & 4 & 1.4166666666666665\\ \hline
+1.0$\pm$1.0 & less & 1 & 2.4166666666666665\\ \hline
+4.0$\pm$2.0 & greater & 16 & 0.5833333333333335\\ \hline
+9$\pm$3 & greater & 81 & 5.583333333333334\\ \hline
+\end{tabular}
+\stepcounter{tabnum}
+\caption{\capfnt A crazy table containing a bunch of stuff}
+\label{tab:crazy_table}
+\end{center}
+\end{table}
+
+\tbln Above you can see that crazy table, and you also can refer to it (\ref{tab:crazy_table}).
+\tbln That's pretty much it for Ayano blocks that do not access the filesystem.
+\subsection{Code blocks}
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+# first, you declare the dataset itself in a *static* Ayano block
+# (note the exclamation mark above)
+data = [1, 1, 2, 3, 2, 5, 5, 6, 2, 1, 4, 9]
+# Static block essentially translated into a code initially executed by python, when the entire module it loaded.
+# Keep that in mind: ALL changes introduced by static blocks will be visible by ALL function blocks.
+\end{minted}
+
+That's a static block, declaring initial dataset
+\newline
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+from statistics import stdev, mean
+mean_val = mean(data)
+deviation = stdev(data)
+@dev: mean_val, deviation
+\end{minted}
+
+mean and deviation calculations
+\newline
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+from statistics import stdev, mean
+mean_val = mean(data)
+deviation = stdev(data)
+f"{mean_val} $\pm$ {deviation}"
+\end{minted}
+
+mean and deviation calculations, but without value-error formatting
+\newline
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+# look at the last line first
+# that's a table generation syntax - it involves a cell generator, number of rows, number of columns and optional ident and caption arguments
+# you could use python's function as generator too (a general requirement is for the thing to be callable with two integer args)
+from statistics import mean
+from math import sqrt
+header = ["initial data", "cmp to mean", "square", "absdev"]
+mean_val = mean(data)
+cells = list([[("err", val, sqrt(val)), "greater" if val >= mean_val else "less", val * val, abs(val - mean_val)] for val in data])
+@gen_table: lambda r,c: header[c] if r == 0 else cells[r-1][c]; rows = 13, columns = 4, ident="crazy_table", caption = "A crazy table containing a bunch of stuff"
+\end{minted}
+
+that chaotic table generation example
+\newline
+
+
+\end{document}
