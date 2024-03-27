@@ -154,10 +154,7 @@ impl AyanoExecutor {
     where
         for<'py> Transform: FnOnce(&'py PyAny, Python<'py>) -> AyanoResult<'source, Out>,
     {
-        let Some(info) = self
-            .blocks
-            .into_iter().find(|bi| bi.ident == *token.ident)
-        else {
+        let Some(info) = self.blocks.into_iter().find(|bi| bi.ident == *token.ident) else {
             // this block was not passed here before
             return Err(AyanoError::NoFunction(token.clone()));
         };
@@ -416,7 +413,7 @@ fn apply_ayano<'token, 'source: 'token>(
             is_newline: true,
             space_before: false,
             formatting: None,
-            content: block_name(&block.ident).into(),
+            content: "ayano-unnamed".into(),
         }),
         crate::data::DisplayState::Caption(tokens) => Some(tokens.to_static_token()),
     };

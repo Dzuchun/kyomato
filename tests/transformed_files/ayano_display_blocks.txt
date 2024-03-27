@@ -143,7 +143,7 @@ return 42
 
 \end{minted}
 
-\tb ayano_block__3649291653820225953
+\tb ayano-unnamed
 \begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
 # This code block has description
 # Might as well add some python syntax to check out minted's syntax highlighting:
