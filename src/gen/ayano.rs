@@ -60,29 +60,9 @@ impl<'source> PartialEq<AyanoBlock<'source>> for BlockInfo {
     }
 }
 
-impl<'source> PartialOrd<AyanoBlock<'source>> for BlockInfo {
-    fn partial_cmp(&self, other: &AyanoBlock<'source>) -> Option<std::cmp::Ordering> {
-        self.ident.partial_cmp(&other.ident)
-    }
-}
-
 impl PartialEq for BlockInfo {
     fn eq(&self, other: &Self) -> bool {
         self.ident == other.ident
-    }
-}
-
-impl Eq for BlockInfo {}
-
-impl PartialOrd for BlockInfo {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for BlockInfo {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.ident.cmp(&other.ident)
     }
 }
 
@@ -131,7 +111,6 @@ impl AyanoBuilder {
     pub fn initialize(self) -> Result<AyanoExecutor, PyErr> {
         let Self { code, mut blocks } = self;
         let token = init(&code.as_str())?;
-        blocks.sort_unstable();
         Ok(AyanoExecutor {
             token,
             blocks: blocks.into(),
@@ -175,14 +154,13 @@ impl AyanoExecutor {
     where
         for<'py> Transform: FnOnce(&'py PyAny, Python<'py>) -> AyanoResult<'source, Out>,
     {
-        let Ok(info_ind) = self
+        let Some(info) = self
             .blocks
-            .binary_search_by_key(&*token.ident, |bi| bi.ident)
+            .into_iter().find(|bi| bi.ident == *token.ident)
         else {
             // this block was not passed here before
             return Err(AyanoError::NoFunction(token.clone()));
         };
-        let info = &self.blocks[info_ind];
         let Some(function_name) = info.function_name.as_ref() else {
             // this block was passed here before, but it's not a function
             return Err(AyanoError::NoFunction(token.clone()));

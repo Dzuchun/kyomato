@@ -138,6 +138,13 @@
 \subsection{Код}
 
 \begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+# You should be able to see this comment in the output doc
+return 42
+
+\end{minted}
+
+\tb ayano_block__3649291653820225953
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
 # This code block has description
 # Might as well add some python syntax to check out minted's syntax highlighting:
 for i in range(100):
@@ -148,12 +155,5 @@ return "err", -2.034e4, 145.64
 \end{minted}
 
 me, fooling around
-\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
-# You should be able to see this comment in the output doc
-return 42
-
-\end{minted}
-
-\tb ayano_block__1574475637377647406
 
 \end{document}
