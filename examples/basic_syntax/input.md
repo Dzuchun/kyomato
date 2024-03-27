@@ -7,7 +7,7 @@ Inline math: $y = x^2\qquad \text{- is a parabola equation}$
 
 Display math:
 $$
-\Gamma(z) = \int\limits_{0}^{+\infty} \exp(-t) t^{z-1} dt \qquad \text{- is an Euler's Gamma-function definition}
+\Gamma(z) = \int\limits_{0}^{+\infty} \exp(-t) t^{z-1} dt \qquad \text{- це Euler's Gamma-function definition}
 $$
 {ref = gamma_function}
 
@@ -58,10 +58,10 @@ Here are alphabetic enumerations (latin and cyrillic are only supported, for now
 a. First item
 b. Second item
 c. Third item
-
 а. First item
 б. Second item
 в. Third item
+
 Cyrillic implementation detail: наразі у якості порядку елементів береться буквально 'а'..'я'. Тобто, згідно з [таблицею юнікоду](https://en.wikipedia.org/wiki/Cyrillic_(Unicode_block\)), тут поки що реалізовано терористичний алфавіт:
 а. Перший елемент
 б. Другий елемент

@@ -1,0 +1,85 @@
+TitleInfo {
+    header_line1: None,
+    header_line2: None,
+    document_type: None,
+    title_line1: None,
+    title_line2: None,
+    title_line3: None,
+    title_line4: None,
+    author_line1: None,
+    author_line2: None,
+    author_line3: None,
+    date: None,
+    prof: None,
+    code_section_title: None,
+}
+Multiple {
+    tokens: Tokens(
+        [
+            Paragraph {
+                is_newline: false,
+                space_before: false,
+                formatting: None,
+                content: "# List-after-para",
+            },
+            Paragraph {
+                is_newline: true,
+                space_before: false,
+                formatting: None,
+                content: "Some para",
+            },
+            List {
+                list_type: Bullet,
+                content: Tokens(
+                    [
+                        Paragraph {
+                            is_newline: false,
+                            space_before: false,
+                            formatting: None,
+                            content: "List item 1",
+                        },
+                        Paragraph {
+                            is_newline: false,
+                            space_before: false,
+                            formatting: None,
+                            content: "List item 2",
+                        },
+                    ],
+                ),
+            },
+            Paragraph {
+                is_newline: true,
+                space_before: false,
+                formatting: None,
+                content: "Some para",
+            },
+            List {
+                list_type: Bullet,
+                content: Tokens(
+                    [
+                        Paragraph {
+                            is_newline: false,
+                            space_before: false,
+                            formatting: None,
+                            content: "List item 1",
+                        },
+                        Paragraph {
+                            is_newline: false,
+                            space_before: false,
+                            formatting: None,
+                            content: "List item 2",
+                        },
+                    ],
+                ),
+            },
+            Paragraph {
+                is_newline: true,
+                space_before: false,
+                formatting: Some(
+                    Italic,
+                ),
+                content: "This bug resulted in lists to be parsed as series of paragraphs.",
+            },
+        ],
+    ),
+}

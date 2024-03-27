@@ -20,43 +20,21 @@
 \linespread{0.8}
 \selectfont
 } % нормативний шрифт
-\let\oldCaption\caption
-\renewcommand{\caption}[1]{
-\oldCaption{\fnt #1}
-} % підпис нормативним шрифтом.
+\newcommand{\capfnt}{
+    \fnt
+} % норматичний шрифт для підписів (тимчасово співпадає зі звичайним шрифтом)
 
 \newcommand{\tb}{
     \hspace*{10mm}
 } % відступ у 5 символів "x" відповідно до ДСТУ
 \newcommand{\tbln}{
     \newline 
-    \hspace*{10mm}
+    \tb
 } % те ж саме, але з переносом рядка
 \newcommand{\tbsp}{
     \vspace*{1ex}
-    \newline
-    \hspace*{10mm}
+    \tbln
 } % те ж саме, але з додатковим відступом між рядками
-
-\iffalse
-\let\oldSection\section
-\renewcommand{\section}[1]{
-    \oldSection*{\tb #1}
-    \addcontentsline{toc}{section}{#1}
-    \fnt
-    \tb
-} % відображає у тексті та змісті наданий заголовок
-\fi
-
-\iftrue
-\let\oldSubSection\subsection
-\renewcommand{\subsection}[1]{
-    \oldSubSection*{\tb #1}
-    \addcontentsline{toc}{subsection}{#1}
-    \fnt
-    \tb
-} % відображає у тексті та змісті наданий підзаголовок
-\fi
 
 % бібліографія
 \usepackage[square,sort,comma,numbers]{natbib}
@@ -105,17 +83,14 @@
 \captionsetup[figure]{name={\fnt Рисунок~},labelsep=period}
 \captionsetup[table]{name={\fnt Таблиця~},labelsep=period}
 
-% idk why, but this redefinition does not work, for some reason
-% \let\oldCaption\caption
-% \renewcommand{\caption}[1] {
-%     \oldCaption{\fnt #1}
-% }
-
 % markdown strikeouts
 \usepackage{soul}
 
 % codeblocks
 \usepackage{minted}
+
+% enumeration
+\usepackage[shortlabels]{enumitem}
 
 \titleformat*{\section}{\fnt\LARGE\bfseries}
 \titleformat*{\subsection}{\fnt\Large\bfseries}
@@ -128,7 +103,7 @@
 \begingroup
 \centering
 \obeylines
-\topskip0pt % source: https://tex.stackexchange.com/questions/2326/vertically-center-text-on-a-page
+\topskip 0pt % source: https://tex.stackexchange.com/questions/2326/vertically-center-text-on-a-page
 \vspace*{\fill}
 \textbf{
 \LARGE 
@@ -155,19 +130,16 @@
 
 \newpage
 \fnt
-   
 
 \section{Перша тема}
-
-\tbln Тут трохи тексту і пояснень про квантові мультивироджені рефурбалідзери змішаного типу. Це нудно, тож тримайте формулу:
+\tb Тут трохи тексту і пояснень про квантові мультивироджені рефурбалідзери змішаного типу. Це нудно, тож тримайте формулу:
 \begin{equation}
 Ref(z) = \int \limits_{0}^{1} t^{z-1} \cdot \exp(-t) dt
 \label{eq:refurbalidzer_1}
 \end{equation}
 
 \subsection{Підпункт}
-
-\tbln Рефурбалідзери можуть виявитись дуже важливими для збереження екологічної безпеки нашої планети. До прикладу, в них є наступні переваги:
+\tb Рефурбалідзери можуть виявитись дуже важливими для збереження екологічної безпеки нашої планети. До прикладу, в них є наступні переваги:
 \begin{itemize}
 \item Нормувальний множник $|\psi|^{2} = 3/4$
 \item Кількість хромосом - $\exp(\pi)$
@@ -179,7 +151,6 @@ Ref(z) = \int \limits_{0}^{1} t^{z-1} \cdot \exp(-t) dt
 \caption{\capfnt Принципове влаштування рефурбалідзера}
 \label{fig:refurb}
 \end{figure}
-
-\tbln На світлині \ref{fig:refurb} можна бачити принципову схему влаштування рефурбалідзера. Неважно помітити великі очі\footnotemark[1]\footnotetext[1]{Для поливу.}, і два термоядерних реактори, що оточують їх. Точні реакції всередині невідомі, але цілком можливо що там женуть $du + t -> {}^{5}_{6}C$...
+\tb На світлині \ref{fig:refurb} можна бачити принципову схему влаштування рефурбалідзера. Неважно помітити великі очі\footnotemark[1]\footnotetext[1]{Для поливу.}, і два термоядерних реактори, що оточують їх. Точні реакції всередині невідомі, але цілком можливо що там женуть $du + t -> {}^{5}_{6}C$...
 
 \end{document}

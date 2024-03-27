@@ -106,21 +106,21 @@
 \topskip 0pt % source: https://tex.stackexchange.com/questions/2326/vertically-center-text-on-a-page
 \vspace*{\fill}
 \textbf{
-\LARGE Навч. заклад
-\LARGE Факультет
+\LARGE 
+\LARGE 
 \vspace{100pt}
-\LARGE ПРОТОКОЛ
-\Large Виконання марної роботи
-\Large з історії стародавнього Єгипту
-\Large (пинальна частина)
-\huge НАЗВА РОБОТИ
+\LARGE 
+\Large 
+\Large 
+\Large 
+\huge 
 \vspace{50pt}
-\large виконувало:
-\large дяч дзучунович
-\large (perfectly still)
-\large вербень 2077
+\large 
+\large 
+\large 
+\large 
 \vspace*{\fill}
-\hspace{\fill}\large me :idk: \rule{20mm}{0.4pt}
+\hspace{\fill}\large  \rule{20mm}{0.4pt}
 \vspace{10pt}
 }
 \endgroup
@@ -130,13 +130,15 @@
 
 \newpage
 \fnt
-
-\section{First para}
-\tb This text is \textit{just} a dummy, so that document won't feel \st{too} \textbf{empty}
-\tbln Have a some oily maccaroni:
-\begin{equation}
-\gamma = \lim_{n \to \infty} \sum\limits_{i=1}^{n} \dfrac{1}{n} - \ln(n)
-\end{equation}
-
+# List-after-para
+\tbln Some para
+\begin{itemize}
+\item List item 1
+\item List item 2
+\end{itemize}\tb Some para
+\begin{itemize}
+\item List item 1
+\item List item 2
+\end{itemize}\tb \textit{This bug resulted in lists to be parsed as series of paragraphs.}
 
 \end{document}

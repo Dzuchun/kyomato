@@ -28,6 +28,35 @@ use crate::{
 };
 
 /// Matches any sort of whitespace characters, *newline*, and a provided tag at the end
+fn _multispace_line_break_some<'source, E: ParseError<&'source str>>(
+) -> impl Parser<&'source str, &'source str, E> {
+    move |input: &'source str| {
+        // here's a chars iterator
+        let chars = input.char_indices();
+        // now, limit them to fist non-whitespace character
+        let whitespace = chars.take_while(|(_, c)| c.is_whitespace());
+        // then, filter out newline characters only
+        let newline = whitespace.filter_map(|(ind, c)| (c == '\n').then_some(ind));
+        // lastly, find first newline character that prepends provided tag
+        let Some(res) = newline.last() else {
+            // if there's no newlines, that's an error
+            return Err(nom::Err::Error(E::from_error_kind(
+                input,
+                ErrorKind::MultiSpace,
+            )));
+        };
+
+        // We may now construct the answer
+        let space = &input[..=res]; // space is up to the newline included
+
+        // will return a copy of provided tag, since it was already matched
+        let rest = &input[(res + 1)..];
+
+        Ok((rest, space))
+    }
+}
+
+/// Matches any sort of whitespace characters, *newline*, and a provided tag at the end
 fn _multispace_line_break<'source, E: ParseError<&'source str>>(
     tag: &'static str,
 ) -> impl Parser<&'source str, (&'source str, &'source str), E> {
@@ -626,7 +655,7 @@ macro_rules! char_array {
 /// Don't worry about it, I guess (?)
 /// (*why would I create and format these strings each time??!*)
 /// TODO I guess, #[cached] macro would do better here, or th
-fn _list_item_generator<'scope>(
+pub(crate) fn _list_item_generator<'scope>(
     list_type: &'scope ListType,
 ) -> Box<dyn Iterator<Item = &'scope str> + 'scope> {
     match list_type {
@@ -683,7 +712,7 @@ fn _list_inner<
     input: &'source str,
 ) -> IResult<&'source str, Token<'source>, E> {
     // First, we need to actually detect list type
-    let (input, _) = _multispace_line_break("").parse(input)?;
+    let (input, _) = _multispace_line_break_some().parse(input)?;
 
     let (_, first_discriminator) = recognize(take_till1(char::is_whitespace))(input)?;
     let list_type = match first_discriminator {
@@ -2207,6 +2236,8 @@ $$
         tx!(", і два термоядерних реактори, що оточують їх. Точні реакції всередині невідомі, але цілком можливо що там женуть"), eq!(^!"du + t -> {}^{5}_{6}C"),
         tx!("."), foot!(^"1": tx!("Для поливу."))]}
         test_ok! {ok_idk2, "\n\n## Підпункт\n\n", head!(##"Підпункт")}
+        test_ok! {ok_list_newline, "Some text\n- And then\n- The list strikes\n", tks!(tx!("Some text"), ls!(- tx!("And then"), tx!("The list strikes")))}
+        test_ok! {ok_list_empty_newline, "Some text\n\n- And then\n- The list strikes\n", tks!(tx!("Some text"), ls!(- tx!("And then"), tx!("The list strikes")))}
     }
 }
 
@@ -2328,19 +2359,19 @@ date: вербень 2077
 prof: me :idk:
 ---
 ", [
-                                                                                                                                        header_line1: "Навч. заклад",
-                                                                                                                                        header_line2: "Факультет",
-                                                                                                                                        document_type: "ПРОТОКОЛ",
-                                                                                                                                        title_line1: "Виконання марної роботи",
-                                                                                                                                        title_line2: "з історії стародавнього Єгипту",
-                                                                                                                                        title_line3: "(пинальна частина)",
-                                                                                                                                        title_line4: "НАЗВА РОБОТИ",
-                                                                                                                                        author_line1: "виконувало:",
-                                                                                                                                        author_line2: "дяч дзучунович",
-                                                                                                                                        author_line3: "(perfectly still)",
-                                                                                                                                        date: "вербень 2077",
-                                                                                                                                        prof: "me :idk:"
-                                                                                                                                        ], "\n"}
+                                                                                                                                                                        header_line1: "Навч. заклад",
+                                                                                                                                                                        header_line2: "Факультет",
+                                                                                                                                                                        document_type: "ПРОТОКОЛ",
+                                                                                                                                                                        title_line1: "Виконання марної роботи",
+                                                                                                                                                                        title_line2: "з історії стародавнього Єгипту",
+                                                                                                                                                                        title_line3: "(пинальна частина)",
+                                                                                                                                                                        title_line4: "НАЗВА РОБОТИ",
+                                                                                                                                                                        author_line1: "виконувало:",
+                                                                                                                                                                        author_line2: "дяч дзучунович",
+                                                                                                                                                                        author_line3: "(perfectly still)",
+                                                                                                                                                                        date: "вербень 2077",
+                                                                                                                                                                        prof: "me :idk:"
+                                                                                                                                                                        ], "\n"}
     test_ok! {ok_all_fields_permutated, r"---
 author-line2: дяч дзучунович
 header-line1: Навч. заклад
@@ -2356,17 +2387,17 @@ prof: me :idk:
 title-line3: (пинальна частина)
 ---
 ", [
-                                                                                                                                header_line1: "Навч. заклад",
-                                                                                                                                header_line2: "Факультет",
-                                                                                                                                document_type: "ПРОТОКОЛ",
-                                                                                                                                title_line1: "Виконання марної роботи",
-                                                                                                                                title_line2: "з історії стародавнього Єгипту",
-                                                                                                                                title_line3: "(пинальна частина)",
-                                                                                                                                title_line4: "НАЗВА РОБОТИ",
-                                                                                                                                author_line1: "виконувало:",
-                                                                                                                                author_line2: "дяч дзучунович",
-                                                                                                                                author_line3: "(perfectly still)",
-                                                                                                                                date: "вербень 2077",
-                                                                                                                                prof: "me :idk:"
-                                                                                                                                ], "\n"}
+                                                                                                                                                                header_line1: "Навч. заклад",
+                                                                                                                                                                header_line2: "Факультет",
+                                                                                                                                                                document_type: "ПРОТОКОЛ",
+                                                                                                                                                                title_line1: "Виконання марної роботи",
+                                                                                                                                                                title_line2: "з історії стародавнього Єгипту",
+                                                                                                                                                                title_line3: "(пинальна частина)",
+                                                                                                                                                                title_line4: "НАЗВА РОБОТИ",
+                                                                                                                                                                author_line1: "виконувало:",
+                                                                                                                                                                author_line2: "дяч дзучунович",
+                                                                                                                                                                author_line3: "(perfectly still)",
+                                                                                                                                                                date: "вербень 2077",
+                                                                                                                                                                prof: "me :idk:"
+                                                                                                                                                                ], "\n"}
 }

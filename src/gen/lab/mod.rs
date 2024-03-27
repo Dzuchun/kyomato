@@ -133,7 +133,10 @@ where
                 let columns = header.len();
                 let column_format =
                     itertools::intersperse(std::iter::repeat("c").take(columns), "|");
-                write!(output, "\n\\begin{{table}}[h!]\n\\begin{{center}}\n")?;
+                write!(
+                    output,
+                    "\n\\begin{{table}}[h!]\n\\fnt\n\\begin{{center}}\n"
+                )?;
                 output.write_str("\\begin{tabular}{|")?;
                 column_format
                     .map(|s| {
@@ -206,13 +209,9 @@ where
             Token::List { list_type, content } => {
                 let start: &str = match list_type {
                     crate::data::ListType::Bullet => "\\begin{itemize}",
-                    crate::data::ListType::Num => "\\begin{enumerate}",
-                    crate::data::ListType::Latin => {
-                        "\\begin{enumerate}[label=\\alph*), ref=\\alph*]"
-                    }
-                    crate::data::ListType::Cyrillic => {
-                        "\\begin{enumerate}[label=\\asbuk*), ref=\\asbuk*]"
-                    }
+                    crate::data::ListType::Num
+                    | crate::data::ListType::Cyrillic
+                    | crate::data::ListType::Latin => "\\begin{enumerate}",
                     crate::data::ListType::Roman => {
                         unimplemented!("Roman numeral lists are not supported for now")
                     }
@@ -226,10 +225,22 @@ where
                         unimplemented!("Roman numeral lists are not supported for now")
                     }
                 };
+                let mut ident_producer = match list_type {
+                    data::ListType::Bullet | data::ListType::Num => None,
+                    t @ data::ListType::Latin
+                    | t @ data::ListType::Cyrillic
+                    | t @ data::ListType::Roman => Some(crate::lexer::_list_item_generator(&t)),
+                };
                 output.write_str("\n")?;
                 output.write_str(start)?;
                 for item in content {
-                    output.write_str("\n\\item ")?;
+                    if let Some(ident_producer) = ident_producer.as_mut() {
+                        output.write_str("\n\\item[")?;
+                        output.write_str(ident_producer.next().expect("List should not have more elements than there are items in the iterator"))?;
+                        output.write_str("] ")?;
+                    } else {
+                        output.write_str("\n\\item ")?;
+                    }
                     self.write_to(output, meta, context, item)?;
                 }
                 output.write_str("\n")?;
@@ -299,7 +310,11 @@ where
                 space_before,
             } => {
                 if *is_newline {
-                    output.write_str("\n\\tbln ")?;
+                    if context.allergic_to_newline {
+                        output.write_str("\\tb ")?;
+                    } else {
+                        output.write_str("\n\\tbln ")?;
+                    }
                 } else if *space_before {
                     output.write_char(' ')?;
                 }
@@ -340,13 +355,16 @@ where
                 if let Some(language) = language {
                     writeln!(
                         output,
-                        "\n\\begin{{minted}}{{{language}}}\n{code}\n\\end{{minted}}\n"
+                        "\n\\begin{{minted}}[linenos, mathescape, autogobble, breaklines]{{{language}}}\n{code}\n\\end{{minted}}\n"
                     )?;
                 } else {
                     writeln!(output, "\n\\begin{{minted}}\n{code}\n\\end{{minted}}\n")?;
                 }
             }
         };
+        if let Some(new_value) = token.is_newline_allergic() {
+            context.allergic_to_newline = new_value;
+        }
         Ok(())
     }
 
@@ -546,7 +564,7 @@ mod tests {
 
     // Paragraphs
     test! {para1, Token::Paragraph{is_newline: false, formatting: None, content: "content, content!!!".into(), space_before: false}, "content, content!!!"}
-    test! {para2, Token::Paragraph{is_newline: true, formatting: None, content: "content, content!!!".into(), space_before: false}, "\n\\tbln content, content!!!"}
+    test! {para2, Token::Paragraph{is_newline: true, formatting: None, content: "content, content!!!".into(), space_before: false}, "\\tb content, content!!!"}
 
     // Formatting
     test! {formatting1, Token::Paragraph{is_newline: false, formatting: Some(Formatting::Bold), content: "some text, idk".into(), space_before: false}, "\\textbf{some text, idk}"}
@@ -621,6 +639,7 @@ mod tests {
     ident: Some("example".into()) },
     r"
     \begin{table}[h!]
+    \fnt
     \begin{center}
     \begin{tabular}{|c|c|c|}\hline
 header1 & header2 & header3 \\ \hline \hline
@@ -646,6 +665,7 @@ cell_21 & cell_22 & cell_23 \\ \hline
     ident: Some("example".into()) },
     r#"
     \begin{table}[h!]
+    \fnt
     \begin{center}
     \begin{tabular}{|c|c|c|}\hline
 header1 & header2 & header3 \\ \hline \hline
@@ -689,10 +709,10 @@ cell_21 & cell_22 & cell_23 \\ \hline
         text!("point2"),
         text!("point3")
     ] }, r"
-    \begin{enumerate}[label=\asbuk*), ref=\asbuk*]
-    \item point1
-    \item point2
-    \item point3
+    \begin{enumerate}
+    \item[а.] point1
+    \item[б.] point2
+    \item[в.] point3
     \end{enumerate}
     "}
 
@@ -860,6 +880,7 @@ data = [[1, 2, 3], [4, 5, 6]]
     is_space_before: false, }},
 r#"
 \begin{table}[h!]
+\fnt
 \begin{center}
 \begin{tabular}{|c|c|c|}\hline
 1 &  2 & 3 \\ \hline \hline
@@ -880,7 +901,7 @@ def f():
     y = x * x
     return y".into(), language: Some("python".into()) },
 r"
-\begin{minted}{python}
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
 def f():
     x = 5
     y = x * x

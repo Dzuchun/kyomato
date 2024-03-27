@@ -20,43 +20,21 @@
 \linespread{0.8}
 \selectfont
 } % нормативний шрифт
-\let\oldCaption\caption
-\renewcommand{\caption}[1]{
-\oldCaption{\fnt #1}
-} % підпис нормативним шрифтом.
+\newcommand{\capfnt}{
+    \fnt
+} % норматичний шрифт для підписів (тимчасово співпадає зі звичайним шрифтом)
 
 \newcommand{\tb}{
     \hspace*{10mm}
 } % відступ у 5 символів "x" відповідно до ДСТУ
 \newcommand{\tbln}{
     \newline 
-    \hspace*{10mm}
+    \tb
 } % те ж саме, але з переносом рядка
 \newcommand{\tbsp}{
     \vspace*{1ex}
-    \newline
-    \hspace*{10mm}
+    \tbln
 } % те ж саме, але з додатковим відступом між рядками
-
-\iffalse
-\let\oldSection\section
-\renewcommand{\section}[1]{
-    \oldSection*{\tb #1}
-    \addcontentsline{toc}{section}{#1}
-    \fnt
-    \tb
-} % відображає у тексті та змісті наданий заголовок
-\fi
-
-\iftrue
-\let\oldSubSection\subsection
-\renewcommand{\subsection}[1]{
-    \oldSubSection*{\tb #1}
-    \addcontentsline{toc}{subsection}{#1}
-    \fnt
-    \tb
-} % відображає у тексті та змісті наданий підзаголовок
-\fi
 
 % бібліографія
 \usepackage[square,sort,comma,numbers]{natbib}
@@ -105,17 +83,14 @@
 \captionsetup[figure]{name={\fnt Рисунок~},labelsep=period}
 \captionsetup[table]{name={\fnt Таблиця~},labelsep=period}
 
-% idk why, but this redefinition does not work, for some reason
-% \let\oldCaption\caption
-% \renewcommand{\caption}[1] {
-%     \oldCaption{\fnt #1}
-% }
-
 % markdown strikeouts
 \usepackage{soul}
 
 % codeblocks
 \usepackage{minted}
+
+% enumeration
+\usepackage[shortlabels]{enumitem}
 
 \titleformat*{\section}{\fnt\LARGE\bfseries}
 \titleformat*{\subsection}{\fnt\Large\bfseries}
@@ -128,7 +103,7 @@
 \begingroup
 \centering
 \obeylines
-\topskip0pt % source: https://tex.stackexchange.com/questions/2326/vertically-center-text-on-a-page
+\topskip 0pt % source: https://tex.stackexchange.com/questions/2326/vertically-center-text-on-a-page
 \vspace*{\fill}
 \textbf{
 \LARGE 
@@ -155,23 +130,19 @@
 
 \newpage
 \fnt
-   
 Here's a quick rundown of supported markdown syntax:
 \section{Headers}
 
 \textbf{Up to 6 deep}
-
-\tbln Inline math: $y = x^2\qquad \text{- is a parabola equation}$
+\tb Inline math: $y = x^2\qquad \text{- is a parabola equation}$
 \tbln Display math:
 \begin{equation}
-\Gamma(z) = \int\limits_{0}^{+\infty} \exp(-t) t^{z-1} dt \qquad \text{- is an Euler's Gamma-function definition}
+\Gamma(z) = \int\limits_{0}^{+\infty} \exp(-t) t^{z-1} dt \qquad \text{- це Euler's Gamma-function definition}
 \label{eq:gamma_function}
 \end{equation}
-
-\tbln Page breaks:
+\tb Page breaks:
 \clearpage
-
-\tbln This text must appear on the next page
+\tb This text must appear on the next page
 \tbln Figures (take note of the caption and ident):
 \begin{figure}[h!]
 \centering
@@ -179,9 +150,9 @@ Here's a quick rundown of supported markdown syntax:
 \caption{\capfnt These are all loss functions, technically making this image a loss meme}
 \label{fig:loss_meme}
 \end{figure}
-
-\tbln Tables:
+\tb Tables:
 \begin{table}[h!]
+\fnt
 \begin{center}
 \begin{tabular}{|c|c|}\hline
  Number of appendages &  Name\\ \hline
@@ -204,8 +175,7 @@ Here's a quick rundown of supported markdown syntax:
 \label{tab:pedals}
 \end{center}
 \end{table}
-
-\tbln Hyper references: \href{https://www.somewebsite.com/}{some website}
+\tb Hyper references: \href{https://www.somewebsite.com/}{some website}
 \tbln Footnotes: say, I need to explain this text, but not include the actual explanation right where I write it\footnotemark[1]\footnotetext[1]{You can absolutely do this! \textit{Note}, that despite this footnote definition is on a separate page at the end, actual document output includes the footnote in a more convenient spot.}
 \tbln Object references: this refers to table: \ref{tab:pedals}, this refers to figure: \ref{fig:loss_meme}, an this one to the equation at the beginning: \ref{eq:gamma_function}.
 \tbln Lists are supported too; Here's a bullet list:
@@ -213,33 +183,31 @@ Here's a quick rundown of supported markdown syntax:
 \item First item
 \item Second item
 \item Third item
-\end{itemize}
-\tbln Here's an enumeration:
+\end{itemize}\tb Here's an enumeration:
 \begin{enumerate}
 \item First item
 \item Second item
 \item Third item
+\end{enumerate}\tb Here are alphabetic enumerations (latin and cyrillic are only supported, for now)
+\begin{enumerate}
+\item[a.] First item
+\item[b.] Second item
+\item[c.] Third item
 \end{enumerate}
-\tbln Here are alphabetic enumerations (latin and cyrillic are only supported, for now)
-\begin{enumerate}[label=\alph*), ref=\alph*]
-\item First item
-\item Second item
-\item Third item
-\end{enumerate}
-\tbln а. First item
-\tbln б. Second item
-\tbln в. Third item
-\tbln Cyrillic implementation detail: наразі у якості порядку елементів береться буквально 'а'..'я'. Тобто, згідно з \href{https://en.wikipedia.org/wiki/Cyrillic_(Unicode_block)}{таблицею юнікоду}, тут поки що реалізовано терористичний алфавіт:
-\begin{enumerate}[label=\asbuk*), ref=\asbuk*]
-\item Перший елемент
-\item Другий елемент
-\item Третій елемент
-\item Четвертий елемент
-\item Шостий елемент (не вистачає ґ)
-\end{enumerate}
-\tbln Це може змінитись у майбутньому, тож краще поки що утриматись від використання кириличних списків.
+\begin{enumerate}
+\item[а.] First item
+\item[б.] Second item
+\item[в.] Third item
+\end{enumerate}\tb Cyrillic implementation detail: наразі у якості порядку елементів береться буквально 'а'..'я'. Тобто, згідно з \href{https://en.wikipedia.org/wiki/Cyrillic_(Unicode_block)}{таблицею юнікоду}, тут поки що реалізовано терористичний алфавіт:
+\begin{enumerate}
+\item[а.] Перший елемент
+\item[б.] Другий елемент
+\item[в.] Третій елемент
+\item[г.] Четвертий елемент
+\item[д.] Шостий елемент (не вистачає ґ)
+\end{enumerate}\tb Це може змінитись у майбутньому, тож краще поки що утриматись від використання кириличних списків.
 \tbln Finally, code blocks are supported:
-\begin{minted}{lua}
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{lua}
 print("Hello lua!")
 function fact (n)
     if n == 0 or n == 1 then
@@ -253,7 +221,7 @@ print(fact(7))
 \end{minted}
 
 
-\begin{minted}{rust}
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{rust}
 #[repr(transparent)]
 #[derive(Debug, derive_more::From, derive_more::Deref, derive_more::DerefMut)]
 pub struct Equivalent<T>(pub T);
@@ -270,8 +238,7 @@ impl<T> Eq for Equivalent<T> {}
 // Although I might decide to remove it in the future
 \end{minted}
 
-
-\tbln These blocks are powered by \href{https://github.com/gpoore/minted}{minted}, so to get full list of supported languages, check their docs out.
+\tb These blocks are powered by \href{https://github.com/gpoore/minted}{minted}, so to get full list of supported languages, check their docs out.
 \tbln This is all of the markdown syntax supported for now. However, there's an \textit{otherside} to `kyomato`'s capabilities - namely, `ayano` blocks.
 \clearpage
 

@@ -20,43 +20,21 @@
 \linespread{0.8}
 \selectfont
 } % нормативний шрифт
-\let\oldCaption\caption
-\renewcommand{\caption}[1]{
-\oldCaption{\fnt #1}
-} % підпис нормативним шрифтом.
+\newcommand{\capfnt}{
+    \fnt
+} % норматичний шрифт для підписів (тимчасово співпадає зі звичайним шрифтом)
 
 \newcommand{\tb}{
     \hspace*{10mm}
 } % відступ у 5 символів "x" відповідно до ДСТУ
 \newcommand{\tbln}{
     \newline 
-    \hspace*{10mm}
+    \tb
 } % те ж саме, але з переносом рядка
 \newcommand{\tbsp}{
     \vspace*{1ex}
-    \newline
-    \hspace*{10mm}
+    \tbln
 } % те ж саме, але з додатковим відступом між рядками
-
-\iffalse
-\let\oldSection\section
-\renewcommand{\section}[1]{
-    \oldSection*{\tb #1}
-    \addcontentsline{toc}{section}{#1}
-    \fnt
-    \tb
-} % відображає у тексті та змісті наданий заголовок
-\fi
-
-\iftrue
-\let\oldSubSection\subsection
-\renewcommand{\subsection}[1]{
-    \oldSubSection*{\tb #1}
-    \addcontentsline{toc}{subsection}{#1}
-    \fnt
-    \tb
-} % відображає у тексті та змісті наданий підзаголовок
-\fi
 
 % бібліографія
 \usepackage[square,sort,comma,numbers]{natbib}
@@ -105,17 +83,14 @@
 \captionsetup[figure]{name={\fnt Рисунок~},labelsep=period}
 \captionsetup[table]{name={\fnt Таблиця~},labelsep=period}
 
-% idk why, but this redefinition does not work, for some reason
-% \let\oldCaption\caption
-% \renewcommand{\caption}[1] {
-%     \oldCaption{\fnt #1}
-% }
-
 % markdown strikeouts
 \usepackage{soul}
 
 % codeblocks
 \usepackage{minted}
+
+% enumeration
+\usepackage[shortlabels]{enumitem}
 
 \titleformat*{\section}{\fnt\LARGE\bfseries}
 \titleformat*{\subsection}{\fnt\Large\bfseries}
@@ -128,7 +103,7 @@
 \begingroup
 \centering
 \obeylines
-\topskip0pt % source: https://tex.stackexchange.com/questions/2326/vertically-center-text-on-a-page
+\topskip 0pt % source: https://tex.stackexchange.com/questions/2326/vertically-center-text-on-a-page
 \vspace*{\fill}
 \textbf{
 \LARGE 
@@ -155,63 +130,53 @@
 
 \newpage
 \fnt
-   
 This test is dedicated to attempts of parser deception, i.e. usage of special symbols in wrong places to see if parser recognizes them as control symbols. There we go:
 \section{Page dividers}
-
-\tbln Page dividers are represented by ------
+\tb Page dividers are represented by ------
 \tbln If the line above has dashes     ^^^^^^ here, it probably works alright.
 \tbln Here's a genuine divider
 \clearpage
-
-\tbln Fun fact: there can be a paragraph right after it!
+\tb Fun fact: there can be a paragraph right after it!
 \clearpage
  Some text, cause why not
 \tbln But this \textbf{DOES} look cursed, don't do it.
 \section{Headers}
-
-\tbln Headers are most recognizable by '#'-symbol. For it to actually represent a header, it needs to at the beginning of the line and there should be no more than 6 of them. \textbf{ANYTHING} up to the end of line will be included into a header, then.
+\tb Headers are most recognizable by '#'-symbol. For it to actually represent a header, it needs to at the beginning of the line and there should be no more than 6 of them. \textbf{ANYTHING} up to the end of line will be included into a header, then.
 \tbln Example:
 \textbf{This is a long, yet formally correct header. You can add $equations$ and *formatting* here, but I provide no guarantees as of the way these would display in final document.}
-
-\tbln Here's an example of incorrect header:
+\tb Here's an example of incorrect header:
 \tbln ###### This header is considered incorrect for this application, and will be parsed as regular paragraph instead
 \tbln Another example of incorrect header, featuring 7 hash-symbols:
 \tbln ####### This will be parsed as a regular paragraph
 \section{Equations}
-
-\tbln There are two types of equations in markdown/latex: inline mathmode and display mathmode
+\tb There are two types of equations in markdown/latex: inline mathmode and display mathmode
 \tbln Both of them are defined by $-symbols. However, they must be paired to actually represent these. Here are examples:
 \tbln Inline: $y = x ^ 2$
 \tbln Display:
 \begin{equation}
 y = x ^ 2
 \end{equation}
-
-\tbln Note that display mathmode should ALWAYS start from a new line for this application.
+\tb Note that display mathmode should ALWAYS start from a new line for this application.
 \tbln Basically, there's not much to deceive for: you can do that:
 \tbln $
 \tbln $
 \tbln (the above should not be mathmode), and that's it, basically :sad:
 \section{Table}
-
-\tbln Tables are defined by |-symbol. But the actual table will happen only if they are the first thing on the line.
+\tb Tables are defined by |-symbol. But the actual table will happen only if they are the first thing on the line.
 \tbln Due to current implementation, there's no cure apart from display mathmode and code:
 \tbln (this should be display mathmode):
 \begin{equation}
 |x|
 \end{equation}
-
-\tbln (this should be a code block):
-\begin{minted}{bash}
+\tb (this should be a code block):
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{bash}
 head /dev/random
 | cat
 \end{minted}
 
 
 \section{Figure}
-
-\tbln Figure is defined by a ![[ sequence at a start of the line. Same points should be uphold here:
+\tb Figure is defined by a ![[ sequence at a start of the line. Same points should be uphold here:
 \begin{equation}
 ![[
 \end{equation}
@@ -222,19 +187,16 @@ head /dev/random
 
 
 \section{References}
-
-\tbln These start with []
+\tb These start with []
 \subsection{Hyperrefs}
-
-\tbln These are followed by parentheses (). Nothing is allowed between them, thus
+\tb These are followed by parentheses (). Nothing is allowed between them, thus
 \tbln Here's a correct href: \href{https://youtu.be/rickroll_link_lol}{my gh page}
 \tbln Here are incorrect refs:
 \tbln [my gh page] (https://youtu.be/rickroll\textit{link}lol)
 \tbln [my gh page]
 \tbln (https://youtu.be/rickroll\textit{link}lol)
 \subsection{Footnote refs}
-
-\tbln These are started by [^.
+\tb These are started by [^.
 \tbln Here are correct footnote refs: \footnotemark[1], \footnotemark[2]
 \tbln Here are incorrect ones: [^1, ^1],
 \tbln [^
@@ -242,8 +204,7 @@ head /dev/random
 \tbln ]
 \tbln So on
 \subsection{Object refs}
-
-\tbln These refer to objects like figures, tables and equations.
+\tb These refer to objects like figures, tables and equations.
 \tbln Started by [@.
 \tbln Here's a correct ref: \ref{fig:experiment_schema}
 \tbln Here's are bad ones: [@ fig:1, @  source3],
@@ -252,31 +213,26 @@ head /dev/random
 \tbln ]
 \tbln \textbf{NOTE}: despite object types being prepended with 'eq', 'fig' or 'tab' in refs, you \textit{can} use regular latex to define your custom refs. In fact, LaTeX doesn't care about all of these at all; I'm doing these transformations just for my own comfort, as I've been doing this manually.
 \section{Formatting}
-
-\tbln This object's type is deprecated and will be removed soon.
+\tb This object's type is deprecated and will be removed soon.
 \tbln It starts and ends with
 \begin{itemize}
 \item * or _
 \item ** or __
 \item ~~
-\end{itemize}
-\tbln \textbf{WARN}: As of now, these \textit{might} cause cause massive problems if encountered at the start of the line.
+\end{itemize}\tb \textbf{WARN}: As of now, these \textit{might} cause cause massive problems if encountered at the start of the line.
 \tbln Basically, parsers for these tokens attempt parse everything up until they find a closing token. But if they are inserted in a middle of the text, then it's ok - they will be limited by current paragraph, and (most likely) will find no match inside it, if their use was unintended.
 \section{Footnote content}
-
-\tbln These start with '\footnotemark[3]:' and proceed to the end of line.
+\tb These start with '\footnotemark[3]:' and proceed to the end of line.
 \tbln Example of valid content:
 \tbln Example of invalid content:
 \tbln [^source2: This is invalid content\footnotemark[4]\footnotetext[4]{Explanation of source2.} : This is invalid content \footnotemark[4]: This is invalid content
 \tbln They also must start at the beginning of the line. If fact, this: \footnotemark[4]: Some content
 \tbln Is expected to be a footnote ref with a colon.
 \section{Code blocks}
-
-\tbln There are two fundamental types of code blocks: normal code block and \textbf{Ayano} code block.
+\tb There are two fundamental types of code blocks: normal code block and \textbf{Ayano} code block.
 \subsection{Normal code block}
-
-\tbln These start and end with '```' on a newline. There can be \textbf{practically anything} inside. Example:
-\begin{minted}{java}
+\tb These start and end with '```' on a newline. There can be \textbf{practically anything} inside. Example:
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{java}
 int x = 2;
 int y = 4;
 int[] arr = new int[2];
@@ -284,9 +240,8 @@ arr[0] = x;
 arr[1] = 4;
 \end{minted}
 
-
-\tbln There can be anything after code block had closed:
-\begin{minted}{lua(Idk why vscode detects this block closing as a valid lua syntax)}
+\tb There can be anything after code block had closed:
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{lua(Idk why vscode detects this block closing as a valid lua syntax)}
 local x = 'matt'
 local y = 'y'
 local z = x .. y -- matty!!
@@ -300,23 +255,21 @@ local z = x .. y -- matty!!
 \tbln print(x)
 \tbln ```
 \subsection{Ayano code block}
-
-\tbln \textit{because Ayano loves Kyoko}
+\tb \textit{because Ayano loves Kyoko}
 \tbln This object looks and behaves just like normal code block, but is only limited to \textit{python} language, can have spacial arguments in a language line, may leave something behind in the document. For example:
 \tbln This Ayano block will leave plain "2" behind it:2
 \tbln Akin to normal blocks, it's ok to leave something trailing:
-\begin{minted}{ayano}
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{ayano}
 2
 \end{minted}
 
  This text is ok to be here
 \tbln And these are invalid Ayano blocks:
-\begin{minted}{ayano}
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{ayano}
 2
 \end{minted}
 
-
-\tbln ```ayano
+\tb ```ayano
 \tbln 2
 \tbln ```
 
