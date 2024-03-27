@@ -36,6 +36,9 @@ Multiple {
             },
             Ayano {
                 data: AyanoBlock {
+                    ident: StaticDebug(
+                        0,
+                    ),
                     display_state: DisplayedNoCaption,
                     is_space_before: false,
                     is_static: false,
@@ -51,6 +54,9 @@ Multiple {
             },
             Ayano {
                 data: AyanoBlock {
+                    ident: StaticDebug(
+                        0,
+                    ),
                     display_state: Caption(
                         Paragraph {
                             is_newline: false,

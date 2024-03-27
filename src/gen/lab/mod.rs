@@ -487,9 +487,10 @@ where
 mod tests {
     use std::path::Path;
 
+    use rand::Rng;
+
     use crate::{
-        data::{AyanoBlock, DisplayState, Formatting, ListType},
-        util::HashIgnored,
+        data::{AyanoBlock, DisplayState, Formatting, ListType}, util::StaticDebug,
     };
 
     use super::*;
@@ -610,7 +611,7 @@ mod tests {
     \label{fig:schema-1}
     \end{figure}
     "}
-    test! {fig3_width, Token::Figure { src_name: Path::new("schema1.jpg").into(), caption: Some(Box::new(text!("A schema providing a bunch of very important info on quantum refurbalidzer function"))), ident: Some("schema-1".into()), width: Some(HashIgnored(0.25)) }, r"
+    test! {fig3_width, Token::Figure { src_name: Path::new("schema1.jpg").into(), caption: Some(Box::new(text!("A schema providing a bunch of very important info on quantum refurbalidzer function"))), ident: Some("schema-1".into()), width: Some(0.25) }, r"
     \begin{figure}[h!]
     \centering
     \includegraphics[width = 0.25 \textwidth]{schema1.jpg}
@@ -760,6 +761,7 @@ cell_21 & cell_22 & cell_23 \\ \hline
     "}
 
     test! {ayano_plain1, Token::Ayano{data: AyanoBlock{
+        ident: StaticDebug(rand::thread_rng().gen()),
         display_state: DisplayState::NotDisplayed,
         is_static: false,
         code: "1".into(),
@@ -767,6 +769,7 @@ cell_21 & cell_22 & cell_23 \\ \hline
         is_space_before: false,
     }}, r"1"}
     test! {ayano_plain2, Token::Ayano{data: AyanoBlock{
+        ident: StaticDebug(rand::thread_rng().gen()),
         display_state: DisplayState::NotDisplayed,
         is_static: false,
         code: "1 + 2".into(),
@@ -774,6 +777,7 @@ cell_21 & cell_22 & cell_23 \\ \hline
         is_space_before: false,
     }}, r"3"}
     test! {ayano_plain3, Token::Ayano{data: AyanoBlock{
+        ident: StaticDebug(rand::thread_rng().gen()),
         display_state: DisplayState::NotDisplayed,
         is_static: false,
         code: r"
@@ -786,6 +790,7 @@ int(y)"
         is_space_before: false,
     }}, r"10"}
     test! {ayano_plain4, Token::Ayano{data: AyanoBlock{
+        ident: StaticDebug(rand::thread_rng().gen()),
         display_state: DisplayState::NotDisplayed,
         is_static: false,
         code: r"
@@ -798,6 +803,7 @@ res"
         is_space_before: false,
     }}, r"5050"}
     test! {ayano_err1, Token::Ayano{data: AyanoBlock{
+        ident: StaticDebug(rand::thread_rng().gen()),
         display_state: DisplayState::NotDisplayed,
         is_static: false,
         code: r"
@@ -807,6 +813,7 @@ res"
         is_space_before: false,
     }}, r"1.00 $\pm$ 0.10"}
     test! {ayano_err2, Token::Ayano{data: AyanoBlock{
+        ident: StaticDebug(rand::thread_rng().gen()),
         display_state: DisplayState::NotDisplayed,
         is_static: false,
         code: r"
@@ -816,6 +823,7 @@ res"
         is_space_before: false,
     }}, r"1.0 $\pm$ 0.4"}
     test! {ayano_err3, Token::Ayano{data: AyanoBlock{
+        ident: StaticDebug(rand::thread_rng().gen()),
         display_state: DisplayState::NotDisplayed,
             is_static: false,
             code: r"
@@ -829,6 +837,7 @@ y = 0.4
     }
 
     test! {ayano_fig1, Token::Ayano{data: AyanoBlock{
+        ident: StaticDebug(rand::thread_rng().gen()),
         display_state: DisplayState::NotDisplayed,
         is_static: false,
         code: r"'fig', 'path/to/image.jpg', None, None, None".into(),
@@ -842,6 +851,7 @@ y = 0.4
     }
 
     test! {ayano_fig2_width, Token::Ayano{data: AyanoBlock{
+        ident: StaticDebug(rand::thread_rng().gen()),
         display_state: DisplayState::NotDisplayed,
         is_static: false,
         code: r"'fig', 'path/to/image.jpg', None, None, 0.625".into(),
@@ -854,13 +864,15 @@ y = 0.4
 \end{figure}"
     }
 
-    test! {ayano_fig2, Token::Ayano{data: AyanoBlock{display_state: DisplayState::NotDisplayed,is_static: false,code: r"@fig: src = 'path/to/image.jpg'".into(),insert_path: None,is_space_before: false,}},
+    test! {ayano_fig2, Token::Ayano{data: AyanoBlock{
+        ident: StaticDebug(rand::thread_rng().gen()),display_state: DisplayState::NotDisplayed,is_static: false,code: r"@fig: src = 'path/to/image.jpg'".into(),insert_path: None,is_space_before: false,}},
 r"
 \begin{figure}[h!]
 \centering
 \includegraphics[width = 0.9 \textwidth]{path/to/image.jpg}
 \end{figure}"}
-    test! {ayano_fig3, Token::Ayano{data: AyanoBlock{ display_state: DisplayState::NotDisplayed,is_static: false,code: r#"@fig: src = 'path/to/image.jpg', ident = "meow""#.into(),insert_path: None,
+    test! {ayano_fig3, Token::Ayano{data: AyanoBlock{
+        ident: StaticDebug(rand::thread_rng().gen()), display_state: DisplayState::NotDisplayed,is_static: false,code: r#"@fig: src = 'path/to/image.jpg', ident = "meow""#.into(),insert_path: None,
     is_space_before: false,
         }},
 r#"
@@ -872,7 +884,8 @@ r#"
     }
     // TODO add tests with captions
 
-    test! {ayano_gen_tab1, Token::Ayano{data: AyanoBlock { display_state: DisplayState::NotDisplayed, is_static: false, code:
+    test! {ayano_gen_tab1, Token::Ayano{data: AyanoBlock { 
+        ident: StaticDebug(rand::thread_rng().gen()),display_state: DisplayState::NotDisplayed, is_static: false, code:
 r#"
 data = [[1, 2, 3], [4, 5, 6]]
 @gen_table: lambda r,c: data[r][c]; rows=2, columns=3

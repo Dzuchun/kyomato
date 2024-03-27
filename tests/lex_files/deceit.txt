@@ -805,6 +805,9 @@ Multiple {
             },
             Ayano {
                 data: AyanoBlock {
+                    ident: StaticDebug(
+                        0,
+                    ),
                     display_state: NotDisplayed,
                     is_space_before: false,
                     is_static: false,

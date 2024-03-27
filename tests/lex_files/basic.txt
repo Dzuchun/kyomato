@@ -101,9 +101,7 @@ Multiple {
                     "refurb",
                 ),
                 width: Some(
-                    HashIgnored(
-                        0.4,
-                    ),
+                    0.4,
                 ),
             },
             Paragraph {

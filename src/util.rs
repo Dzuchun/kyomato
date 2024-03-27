@@ -452,13 +452,6 @@ pub fn optional_permutation<'parsers, 'source: 'parsers, In, Out, E: ParseError<
     move |input| parsers.optional_permutation(input)
 }
 
-// FIXME this is SURELY not idiomatic. I should move to ident system
-#[derive(Debug, derive_more::Deref, derive_more::DerefMut, PartialEq, Clone)]
-pub struct HashIgnored<T>(pub T);
-impl<T> std::hash::Hash for HashIgnored<T> {
-    fn hash<H: std::hash::Hasher>(&self, _state: &mut H) {}
-}
-
 #[derive(Debug)]
 pub struct FmtToIo<W>(W, VecDeque<std::io::Error>);
 impl<W> FmtToIo<W> {
@@ -484,5 +477,14 @@ impl<W: std::io::Write> std::fmt::Write for FmtToIo<W> {
             return Err(std::fmt::Error);
         }
         Ok(())
+    }
+}
+
+#[derive(derive_more::Deref, derive_more::DerefMut, Clone)]
+pub struct StaticDebug<T, const R: u64 = 0>(pub T);
+
+impl<T, const R: u64> std::fmt::Debug for StaticDebug<T, R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("StaticDebug").field(&R).finish()
     }
 }

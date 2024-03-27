@@ -18,12 +18,13 @@ use nom::{
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult, Parser,
 };
+use rand::Rng;
 use url::Url;
 
 use crate::{
     data::{AyanoBlock, DisplayState, Formatting, ListType, TitleInfo, Token, Tokens},
     util::{
-        optional_permutation, Equivalent, HashIgnored, IteratorArrayCollectExt, VecTryExtendExt,
+        optional_permutation, Equivalent, IteratorArrayCollectExt, StaticDebug, VecTryExtendExt
     },
 };
 
@@ -437,7 +438,7 @@ fn figure<
         src_name: Path::new(path).into(),
         caption: caption.map(Box::new),
         ident: ident.map(Cow::from),
-        width: width.map(HashIgnored),
+        width,
     };
     Ok((rest, token))
 }
@@ -621,6 +622,7 @@ fn ayano<
         rest,
         Token::Ayano {
             data: AyanoBlock {
+                ident: StaticDebug(rand::thread_rng().gen()),
                 insert_path: insert.map(Cow::from),
                 code,
                 display_state,
@@ -2035,7 +2037,7 @@ $$
                 src_name: Cow::Borrowed(Path::new($path)),
                 ident: $ident.map(Cow::from),
                 caption: $caption.map(Box::new),
-                width: $width.map(HashIgnored),
+                width: $width,
             }
         };
     }
@@ -2175,6 +2177,7 @@ $$
     macro_rules! ayano {
         {!$is_static:literal, *$description:expr, ~$insert_path:expr, #$_id:expr, $code:literal} => {
             Token::Ayano{data: AyanoBlock{
+                ident: StaticDebug(rand::thread_rng().gen()),
                 display_state: $description,
                 is_static: $is_static,
                 code: Cow::Borrowed($code),

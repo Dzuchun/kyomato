@@ -6,13 +6,13 @@ use pyo3::{
     types::{PyList, PyTuple},
     PyAny, Python,
 };
+use rand::Rng;
 use regex::Regex;
 use std::{
     borrow::Cow,
-    collections::{hash_map::DefaultHasher, HashMap},
+    collections::BinaryHeap,
     fmt::{Arguments, Debug, Write},
     fs::File,
-    hash::{Hash, Hasher},
     io::{BufRead, BufReader},
     num::{ParseFloatError, ParseIntError},
     path::PathBuf,
@@ -23,8 +23,8 @@ use crate::{
     data::{AyanoBlock, DisplayState, Token, Tokens},
     lexer::KyomatoLexError,
     util::{
-        Equivalent, GenericRange, GenericRangeParseError, HashIgnored, Immutable, InlinedStack,
-        InlinedStackAccessor,
+        Equivalent, GenericRange, GenericRangeParseError, Immutable, InlinedStack,
+        InlinedStackAccessor, StaticDebug,
     },
 };
 
@@ -54,10 +54,42 @@ struct BlockInfo {
     insert_path: Option<PathBuf>,      // none means there's no script to insert additionally
 }
 
+impl<'source> PartialEq<AyanoBlock<'source>> for BlockInfo {
+    fn eq(&self, other: &AyanoBlock<'source>) -> bool {
+        self.ident.eq(&other.ident)
+    }
+}
+
+impl<'source> PartialOrd<AyanoBlock<'source>> for BlockInfo {
+    fn partial_cmp(&self, other: &AyanoBlock<'source>) -> Option<std::cmp::Ordering> {
+        self.ident.partial_cmp(&other.ident)
+    }
+}
+
+impl PartialEq for BlockInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.ident == other.ident
+    }
+}
+
+impl Eq for BlockInfo {}
+
+impl PartialOrd for BlockInfo {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for BlockInfo {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.ident.cmp(&other.ident)
+    }
+}
+
 #[derive(Debug)]
 pub struct AyanoBuilder {
     code: String,
-    blocks: HashMap<u64, BlockInfo>,
+    blocks: Vec<BlockInfo>,
 }
 
 impl Default for AyanoBuilder {
@@ -70,7 +102,7 @@ impl AyanoBuilder {
     pub fn new() -> Self {
         Self {
             code: String::new(),
-            blocks: HashMap::new(),
+            blocks: Vec::new(),
         }
     }
 
@@ -84,24 +116,22 @@ impl AyanoBuilder {
         } else {
             python::append_static(&mut self.code, &transformed_code);
         }
-        self.blocks.insert(
+        self.blocks.push(BlockInfo {
             ident,
-            BlockInfo {
-                ident,
-                function_name: info.function_name,
-                display_info: info.caption.map(|name| DisplayInfo {
-                    code: transformed_code,
-                    caption: name,
-                }),
-                insert_path: info.insert_path,
-            },
-        );
+            function_name: info.function_name,
+            display_info: info.caption.map(|name| DisplayInfo {
+                code: transformed_code,
+                caption: name,
+            }),
+            insert_path: info.insert_path,
+        });
         Ok(())
     }
 
     pub fn initialize(self) -> Result<AyanoExecutor, PyErr> {
-        let Self { code, blocks } = self;
+        let Self { code, mut blocks } = self;
         let token = init(&code.as_str())?;
+        blocks.sort_unstable();
         Ok(AyanoExecutor {
             token,
             blocks: blocks.into(),
@@ -112,7 +142,7 @@ impl AyanoBuilder {
 #[derive(Debug)]
 pub struct AyanoExecutor {
     token: InitToken,
-    blocks: Immutable<HashMap<u64, BlockInfo>>,
+    blocks: Box<[BlockInfo]>,
 }
 
 #[derive(Debug, derive_more::From, PartialEq, thiserror::Error)]
@@ -145,11 +175,14 @@ impl AyanoExecutor {
     where
         for<'py> Transform: FnOnce(&'py PyAny, Python<'py>) -> AyanoResult<'source, Out>,
     {
-        let hash = calculate_hash(token);
-        let Some(info) = self.blocks.get(&hash) else {
+        let Ok(info_ind) = self
+            .blocks
+            .binary_search_by_key(&*token.ident, |bi| bi.ident)
+        else {
             // this block was not passed here before
             return Err(AyanoError::NoFunction(token.clone()));
         };
+        let info = &self.blocks[info_ind];
         let Some(function_name) = info.function_name.as_ref() else {
             // this block was passed here before, but it's not a function
             return Err(AyanoError::NoFunction(token.clone()));
@@ -167,7 +200,7 @@ impl AyanoExecutor {
 
     pub fn display_blocks<'s>(&'s self) -> impl IntoIterator<Item = &'s DisplayInfo> {
         self.blocks
-            .values()
+            .into_iter()
             .filter_map(|info| info.display_info.as_ref())
     }
 }
@@ -181,6 +214,7 @@ mod ayano_tests {
             fn $name() {
                 // arrange
                 let block = AyanoBlock {
+                    ident: StaticDebug(rand::thread_rng().gen()),
                     display_state: DisplayState::NotDisplayed,
                     is_static: false,
                     code: $code.into(),
@@ -228,6 +262,7 @@ y = x / 100
                 // arrange
                 let mut builder = AyanoBuilder::new();
                 let static_block = AyanoBlock {
+                    ident: StaticDebug(rand::thread_rng().gen()),
                     code: $static_code.into(),
                     insert_path: None,
                     display_state: DisplayState::NotDisplayed,
@@ -235,6 +270,7 @@ y = x / 100
                     is_space_before: false,
                 };
                 let function_block = AyanoBlock {
+                    ident: StaticDebug(rand::thread_rng().gen()),
                     code: $function_code.into(),
                     insert_path: None,
                     display_state: DisplayState::NotDisplayed,
@@ -272,6 +308,7 @@ y", "2"}
                 // arrange
                 let mut builder = AyanoBuilder::new();
                 let static_block = AyanoBlock {
+                    ident: StaticDebug(rand::thread_rng().gen()),
                     code: $static_code.into(),
                     insert_path: None,
                     display_state: DisplayState::NotDisplayed,
@@ -279,6 +316,7 @@ y", "2"}
                     is_space_before: false,
                 };
                 let function1_block = AyanoBlock {
+                    ident: StaticDebug(rand::thread_rng().gen()),
                     code: $function1_code.into(),
                     insert_path: None,
                     display_state: DisplayState::NotDisplayed,
@@ -286,6 +324,7 @@ y", "2"}
                     is_space_before: false,
                 };
                 let function2_block = AyanoBlock {
+                    ident: StaticDebug(rand::thread_rng().gen()),
                     code: $function2_code.into(),
                     insert_path: None,
                     display_state: DisplayState::NotDisplayed,
@@ -316,18 +355,12 @@ y", "2"}
     // TODO add function for display block tests
 }
 
-fn function_name(ident: u64) -> String {
-    format!("f_{ident}")
+fn function_name(ident: &impl std::ops::Deref<Target = u64>) -> String {
+    format!("f_{}", **ident)
 }
 
-fn block_name(ident: u64) -> String {
-    format!("ayano_block__{ident}")
-}
-
-fn calculate_hash<T: Hash>(t: &T) -> u64 {
-    let mut s = DefaultHasher::new();
-    t.hash(&mut s);
-    s.finish()
+fn block_name(ident: &impl std::ops::Deref<Target = u64>) -> String {
+    format!("ayano_block__{}", **ident)
 }
 
 #[derive(
@@ -371,7 +404,6 @@ impl CsvTableColumn<'_> {
 fn apply_ayano<'token, 'source: 'token>(
     block: &'token AyanoBlock<'source>,
 ) -> Result<(String, CodelessBlockInfo), SyntaxError> {
-    let ident = calculate_hash(block);
     // FIRST OF ALL,
     // read the code from insert-file (if present)
     let insert_path = block.insert_path.as_ref().map(|path| path.to_path_buf());
@@ -406,7 +438,7 @@ fn apply_ayano<'token, 'source: 'token>(
             is_newline: true,
             space_before: false,
             formatting: None,
-            content: block_name(ident).into(),
+            content: block_name(&block.ident).into(),
         }),
         crate::data::DisplayState::Caption(tokens) => Some(tokens.to_static_token()),
     };
@@ -417,7 +449,7 @@ fn apply_ayano<'token, 'source: 'token>(
         return Ok((
             res,
             CodelessBlockInfo {
-                ident,
+                ident: *block.ident,
                 function_name: None,
                 caption: display_name,
                 insert_path,
@@ -425,7 +457,7 @@ fn apply_ayano<'token, 'source: 'token>(
         ));
     }
     // block is a function-block at this point
-    let function_name = Some(function_name(ident));
+    let function_name = Some(function_name(&block.ident));
 
     // take out last line, as it may contain ayano syntax
     let Some(last_line) = code_lines.next_back() else {
@@ -435,7 +467,7 @@ fn apply_ayano<'token, 'source: 'token>(
         return Ok((
             res,
             CodelessBlockInfo {
-                ident,
+                ident: *block.ident,
                 function_name,
                 caption: display_name,
                 insert_path,
@@ -460,7 +492,7 @@ fn apply_ayano<'token, 'source: 'token>(
     Ok((
         res,
         CodelessBlockInfo {
-            ident,
+            ident: *block.ident,
             function_name,
             insert_path,
             caption: display_name,
@@ -487,6 +519,7 @@ mod apply_ayano_tests {
             fn $name() {
                 // arrange
                 let block = AyanoBlock {
+                    ident: StaticDebug(rand::thread_rng().gen()),
                     code: $input.into(),
                     insert_path: None,
                     display_state: DisplayState::NotDisplayed,
@@ -586,6 +619,7 @@ y = x + 2
 
         let code = "@dev: x,y";
         let block = AyanoBlock {
+            ident: StaticDebug(rand::thread_rng().gen()),
             display_state: DisplayState::NotDisplayed,
             code: code.into(),
             insert_path: Some(insert_path.into()),
@@ -1507,7 +1541,7 @@ fn parse_ayano(
                         None
                     } else {
                         let width_str = throw_syntax!(width.str().and_then(|s| s.to_str()))?;
-                        Some(HashIgnored(width_str.parse()?))
+                        Some(width_str.parse()?)
                     };
                     return Ok(Token::Figure {
                         src_name: Cow::Owned(PathBuf::from(src)),
@@ -1663,7 +1697,7 @@ mod parsing_tests {
         src_name: Cow::Owned(PathBuf::from("path/to/file.png")),
         caption: Some(Box::new(Token::text("figure caption"))),
         ident: Some("circle".into()),
-        width: Some(HashIgnored(0.625)),
+        width: Some(0.625),
     })}
 
     test! {table_nocaption, |py| {

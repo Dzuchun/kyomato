@@ -7,7 +7,7 @@ use std::{
 
 use url::Url;
 
-use crate::util::HashIgnored;
+use crate::util::StaticDebug;
 
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct TitleInfo<'source> {
@@ -34,7 +34,7 @@ pub struct TitleInfo<'source> {
 // Also, vectors of parsed tokens are obviously not intended to live longer than the source.
 // In fact, for any possible appliance they can be assumed to life for as long as source does.
 // Hope is for lifetime variance to help with lifetime casting, or th
-#[derive(Debug, PartialEq, Hash, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 // #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Tokens<'source>(Rc<[Token<'source>]>);
 
@@ -69,7 +69,7 @@ impl<'source> Tokens<'source> {
     }
 }
 
-#[derive(Debug, Clone, Hash, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DisplayState<'code> {
     NotDisplayed,
     DisplayedNoCaption,
@@ -88,14 +88,25 @@ impl<'code> DisplayState<'code> {
     }
 }
 
-#[derive(Debug, Clone, Hash, PartialEq)]
+#[derive(Debug, Clone)]
 // #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AyanoBlock<'code> {
+    pub ident: StaticDebug<u64>,
     pub display_state: DisplayState<'code>,
     pub is_space_before: bool,
     pub is_static: bool,
     pub code: Tx<'code>,
     pub insert_path: Option<Cow<'code, Path>>,
+}
+
+impl PartialEq for AyanoBlock<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.display_state == other.display_state
+            && self.is_space_before == other.is_space_before
+            && self.is_static == other.is_static
+            && self.code == other.code
+            && self.insert_path == other.insert_path
+    }
 }
 
 // an abandoned idea. this would result in weird behavior, if underlying data happened to be moved.
@@ -112,7 +123,7 @@ impl PartialEq for AyanoBlock<'_> {
 }
 */
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 // #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ListType {
     Bullet,
@@ -122,7 +133,7 @@ pub enum ListType {
     Roman,
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 // #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Formatting {
     Bold,
@@ -133,7 +144,7 @@ pub enum Formatting {
 type Tx<'source> = Cow<'source, str>;
 type Pth<'source> = Cow<'source, Path>;
 
-#[derive(Debug, PartialEq, Clone, Hash)]
+#[derive(Debug, PartialEq, Clone)]
 // #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Token<'source> {
     PageDiv,
@@ -156,7 +167,7 @@ pub enum Token<'source> {
         src_name: Pth<'source>,
         caption: Option<Box<Token<'source>>>,
         ident: Option<Tx<'source>>,
-        width: Option<HashIgnored<f32>>,
+        width: Option<f32>,
     },
     Href {
         space_before: bool,
@@ -263,6 +274,7 @@ impl ToStaticExt for AyanoBlock<'_> {
 
     fn to_static(&self) -> Self::AsStatic {
         let AyanoBlock {
+            ident,
             code,
             insert_path,
             display_state,
@@ -270,6 +282,7 @@ impl ToStaticExt for AyanoBlock<'_> {
             is_space_before,
         } = self;
         AyanoBlock {
+            ident: ident.clone(),
             code: code.to_static(),
             insert_path: insert_path.as_ref().map(Cow::to_static),
             is_static: *is_static,
