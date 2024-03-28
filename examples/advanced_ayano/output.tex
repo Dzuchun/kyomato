@@ -1,0 +1,495 @@
+\documentclass[a4paper]{article}
+\usepackage{graphicx, hyperref, xcolor, gensymb, amssymb, mathtools, wrapfig, mathtools, microtype, lastpage, caption, titlesec, paracol, longtable, booktabs, cancel}
+\usepackage[T2A, T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[russian, ukrainian]{babel}
+\hypersetup{
+    colorlinks,
+    linkcolor={blue!20!black},
+    citecolor={blue!50!black},
+    urlcolor={blue!80!black}
+}
+
+\usepackage[left = 25mm, right = 10mm, top=20mm, bottom=20mm, bindingoffset=0cm]{geometry}
+
+% КОМАНДИ
+
+\newcommand{\fnt}{
+\fontshape{n}
+\fontsize{14pt} {19pt}
+\linespread{0.8}
+\selectfont
+} % нормативний шрифт
+\newcommand{\capfnt}{
+    \fnt
+} % норматичний шрифт для підписів (тимчасово співпадає зі звичайним шрифтом)
+
+\newcommand{\tb}{
+    \hspace*{10mm}
+} % відступ у 5 символів "x" відповідно до ДСТУ
+\newcommand{\tbln}{
+    \newline 
+    \tb
+} % те ж саме, але з переносом рядка
+\newcommand{\tbsp}{
+    \vspace*{1ex}
+    \tbln
+} % те ж саме, але з додатковим відступом між рядками
+
+% бібліографія
+\usepackage[square,sort,comma,numbers]{natbib}
+\renewcommand{\bibsection}{}
+\usepackage{totcount}
+\newtotcounter{citnum} 
+% лічильник цитувань
+\def\oldbibitem{} \let\oldbibitem=\bibitem
+\def\bibitem{\stepcounter{citnum}\oldbibitem}
+
+% лічильник зображень
+\newtotcounter{graphnum}
+\def\oldincludegraphics{} \let\oldincludegraphics=\includegraphics
+\def\includegraphics{\stepcounter{graphnum}\oldincludegraphics}
+
+% лічильник таблиць (НЕАВТОМАТИЧНИЙ!!!)
+\newtotcounter{tabnum}
+
+% лічильник додатків (НЕАВТОМАТИЧНИЙ!!!)
+\newtotcounter{dodnum}
+
+% нумерація сторінок
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\setlength{\headheight}{15.3pt}
+\fancyhead[R]{\fnt \thepage}
+
+% виноски
+\renewcommand{\thefootnote}{\large\arabic{footnote})~}
+\renewcommand{\footnoterule}{\rule{20mm}{0.4pt} \vspace*{0.5ex}}
+% \newcommand{\vyn}[2]{
+%     \footnote[#1]{\large #2}
+% } % створити виноску
+
+\let\oldFootnote\footnote
+\renewcommand{\footnote}[1]{
+    \oldFootnote{\large #1}
+} % перегрузка виноски
+
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+% підписи малюнків/таблиць
+\captionsetup[figure]{name={\fnt Рисунок~},labelsep=period}
+\captionsetup[table]{name={\fnt Таблиця~},labelsep=period}
+
+% markdown strikeouts
+\usepackage{soul}
+
+% codeblocks
+\usepackage{minted}
+
+% enumeration
+\usepackage[shortlabels]{enumitem}
+
+\titleformat*{\section}{\fnt\LARGE\bfseries}
+\titleformat*{\subsection}{\fnt\Large\bfseries}
+\titleformat*{\subsubsection}{\fnt\Large}
+
+\begin{document}
+\thispagestyle{empty} % [A]:for cropping
+% ------------
+% source: https://tex.stackexchange.com/questions/173651/need-help-to-create-such-a-beautiful-title-page
+\begingroup
+\centering
+\obeylines
+\topskip 0pt % source: https://tex.stackexchange.com/questions/2326/vertically-center-text-on-a-page
+\vspace*{\fill}
+\textbf{
+\LARGE 
+\LARGE 
+\vspace{100pt}
+\LARGE 
+\Large 
+\Large 
+\Large 
+\huge 
+\vspace{50pt}
+\large 
+\large 
+\large 
+\large 
+\vspace*{\fill}
+\hspace{\fill}\large  \rule{20mm}{0.4pt}
+\vspace{10pt}
+}
+\endgroup
+% ------------
+\newpage
+\tableofcontents
+
+\newpage
+\fnt
+This is an example of advanced `Ayano` features.
+\tbln First, there are insert blocks. These can load some code from specified python script, and insert it at the start:
+\tbln Note that their displayed version at the end actually includes the loaded script. These blocks can be used for display too: \\
+e = 2.7182818284590455, pi = 3.141592653589793, pi != 2.7182818284590455
+\tbln Sometimes you wish to only include part of the script, and do something else after some point. To achieve that, you can include `# TOSHINO KYOKO!` comment (note the space and casing; you can append anything after it at that line). Once this comment is seen by `Ayano`, it stops inserting the file, and appends the actual code you've provided in the block (possibly none). Comment itself is not included: 2
+\tbln Ayano blocks can actually interact with the filesystem themselves. The caveat is - where exactly python thinks it's current directory is.
+\tbln Well, the rule of thumb turns out to be quite simple:
+\begin{itemize}
+\item if there is an insertion declared for a block, it's execution will be in the directory that file is in
+\item if there is no insertion declared, python will continue it's execution at `kyomato`'s process directory
+\end{itemize}5
+\tbln Ayano can be used to insert csv tables (possibly generated at runtime too). Here's a special syntax for it:
+\begin{table}[h!]
+\fnt
+\begin{center}
+\begin{tabular}{|c|c|c|c|c|}\hline
+First Name & Last Name & Age & Salary & Tenacity\\ \hline
+\hline
+Wilson & Bennett & 19 & 5639 & 97155\\ \hline
+Hailey & Robinson & 21 & 8419 & 68689\\ \hline
+Edith & Morris & 24 & 8134 & 10937\\ \hline
+Adison & Brown & 20 & 6131 & 41745\\ \hline
+Vivian & Cunningham & 22 & 7834 & 35514\\ \hline
+Heather & Roberts & 24 & 4881 & 73425\\ \hline
+Michael & Armstrong & 23 & 5781 & 30899\\ \hline
+Miranda & Martin & 19 & 8283 & 33619\\ \hline
+Alexander & Kelley & 29 & 1990 & 98055\\ \hline
+Chloe & Spencer & 24 & 779 & 89818\\ \hline
+Sam & Johnston & 25 & 1147 & 71225\\ \hline
+Alissa & Spencer & 18 & 3877 & 64965\\ \hline
+Abraham & Kelley & 20 & 1622 & 65308\\ \hline
+Edwin & Stewart & 20 & 4376 & 01364\\ \hline
+Adam & Grant & 19 & 9616 & 38385\\ \hline
+\end{tabular}
+\stepcounter{tabnum}
+\caption{\capfnt cred: \href{http://randat.com/}{randat}}
+\label{tab:random_table1}
+\end{center}
+\end{table}
+
+\tb This can be combined with insertion blocks to achieve generated table insertion; you can specify a path relative to the inserted file,
+\begin{table}[h!]
+\fnt
+\begin{center}
+\begin{tabular}{|c|c|c|c|}\hline
+name & value & err & \%\\ \hline
+\hline
+tau & 4.3535223 & 0.0034342 & 8e-06\\ \hline
+pi & 4334.34434 & 10 & 2.3e-05\\ \hline
+chi & -2332.332424 & 1e-07 & -0.0\\ \hline
+zeta & 4444.0 & 0.033 & 0.0\\ \hline
+\end{tabular}
+\stepcounter{tabnum}\end{center}
+\end{table}
+
+\tb ... but you've not forced to do that; you may do execution-relative path too:
+\begin{table}[h!]
+\fnt
+\begin{center}
+\begin{tabular}{|c|c|c|c|}\hline
+name & value & err & \%\\ \hline
+\hline
+tau & 4.3535223 & 0.0034342 & 8e-06\\ \hline
+pi & 4334.34434 & 10 & 2.3e-05\\ \hline
+chi & -2332.332424 & 1e-07 & -0.0\\ \hline
+zeta & 4444.0 & 0.033 & 0.0\\ \hline
+\end{tabular}
+\stepcounter{tabnum}\end{center}
+\end{table}
+
+\tb An of course, once data was already generated (it happened twice here, twice, in fact), you can insert it without any script:
+\begin{table}[h!]
+\fnt
+\begin{center}
+\begin{tabular}{|c|c|c|c|}\hline
+name & value & err & \%\\ \hline
+\hline
+tau & 4.3535223 & 0.0034342 & 8e-06\\ \hline
+pi & 4334.34434 & 10 & 2.3e-05\\ \hline
+chi & -2332.332424 & 1e-07 & -0.0\\ \hline
+zeta & 4444.0 & 0.033 & 0.0\\ \hline
+\end{tabular}
+\stepcounter{tabnum}\end{center}
+\end{table}
+
+\tb You can also restrict the columns and rows you want, for example:
+\begin{table}[h!]
+\fnt
+\begin{center}
+\begin{tabular}{|c|}\hline
+name\\ \hline
+\hline
+chi\\ \hline
+\end{tabular}
+\stepcounter{tabnum}
+\caption{\capfnt That's a-bit-cut table!}
+\end{center}
+\end{table}
+
+\tb There's also a special columns syntax to display some columns in value-error format:
+\begin{table}[h!]
+\fnt
+\begin{center}
+\begin{tabular}{|c|c|c|}\hline
+name & value & \%\\ \hline
+\hline
+tau & 4.354$\pm$0.003 & 8e-06\\ \hline
+pi & 4334$\pm$10 & 2.3e-05\\ \hline
+chi & -2332.33242400$\pm$0.00000010 & -0.0\\ \hline
+zeta & 4444.00$\pm$0.03 & 0.0\\ \hline
+\end{tabular}
+\stepcounter{tabnum}
+\caption{\capfnt That's a table with value-error formatting!}
+\end{center}
+\end{table}
+
+\tb That's pretty much it, regarding tables.
+\tbln Ayano also allows you to include dynamically-generated figures. You can go two ways about that:
+\subsubsection{1st way}
+
+\tb Generate a figure in a static block, and save it somewhere. After that, include it as an image:
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.9\textwidth]{./sine_graph.png}
+\caption{\capfnt that's a nice little sine graph!}
+\label{fig:sine}
+\end{figure}
+
+\subsubsection{2nd way (more idiomatic, in my opinion)}
+
+\tb Generate a figure in function block, and insert it with a special syntax:
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.9\textwidth]{././sine_graph.png}
+\caption{\capfnt That's another way to include a figure from Ayano!}
+\label{fig:other_sine_graph}
+\end{figure}
+
+\tb The only real upside I can see here - you can generate-and-include figures with prior-unknown names or locations
+\tbln Oh, and you also can specify width of the figure this way, if it matters to you, that is
+\tbln And of course you can generate a figure with inserted block too!
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.2\textwidth]{./source/other_sine_graph.png}
+\caption{\capfnt The same sine. Again.}
+\label{fig:yet_another_sine_graph}
+\end{figure}
+
+\tb Note, that in the last example, script actually saves sine into a folder near input markdown fine, and yet `Kyomato` will be able to find it (if configured properly, that is)
+\subsection{Code blocks}
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+e = 1.0
+f = 1.0
+for i in range(1, 100):
+    f /= i
+    e += f
+not_pi = e
+\end{minted}
+
+That's a way to calculate pi \\
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+e = 1.0
+f = 1.0
+for i in range(1, 100):
+    f /= i
+    e += f
+from math import pi
+f"e = {e}, pi = {pi}, pi != {not_pi}"
+\end{minted}
+
+Ooops, that actually turns out to be a formula for e :( \\
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+# You will see this comment
+x = 2
+# And you'll see this one
+# you'll see this comment, and the 2
+x
+\end{minted}
+
+the all-mighty \textbf{2}!!! \\
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+three = None
+with open("3", "r") as f:
+    three = int(f.readline())
+
+\end{minted}
+
+Here you can see an empty static block displayed as inserted script \\
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+two = None
+with open("2", "r") as f:
+    two = int(f.readline())
+\end{minted}
+
+You can clearly see that this block has no insert statement, yet it knows \textbf{exactly} where to find the file \\
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+two + three
+\end{minted}
+
+This block here uses variables prior-defined in static blocks. \\
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+@csv_table: src=data/20240327230336_8798.csv, caption="cred: [randat](http://randat.com/)", ident = "random_table1"
+\end{minted}
+
+table insertion example \\
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+import csv
+
+# let's just create a bunch of variables and fill a local generated table with them
+with open("calculations_table.csv", "w") as f:
+    writer = csv.DictWriter(
+        f,
+        fieldnames=[
+            "name",
+            "value",
+            "err",
+            "%",
+        ],
+        quoting=csv.QUOTE_NONNUMERIC,
+        delimiter=" ",
+        quotechar="'",
+    )
+    writer.writeheader()
+
+    tau = (4.3535223, 0.0034342)
+    pi = (4334.34434, 10)
+    chi = (-2332.332424, 1e-7)
+    zeta = (4444.00, 0.033)
+
+    def write_var(writer, val, name):
+        writer.writerow(
+            {
+                "name": name,
+                "value": val[0],
+                "err": val[1],
+                "%": round(val[1] / val[0] / 100, ndigits=6),
+            }
+        )
+
+    write_var(writer, tau, 'tau')
+    write_var(writer, pi, 'pi')
+    write_var(writer, chi, 'chi')
+    write_var(writer, zeta, 'zeta')
+
+# say, we do something undesirable in this script next, and we do not want kyomato to execute that
+@csv_table: src=calculations_table.csv
+\end{minted}
+
+An example of runtime-generated table insertion \\
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+import csv
+
+# let's just create a bunch of variables and fill a local generated table with them
+with open("calculations_table.csv", "w") as f:
+    writer = csv.DictWriter(
+        f,
+        fieldnames=[
+            "name",
+            "value",
+            "err",
+            "%",
+        ],
+        quoting=csv.QUOTE_NONNUMERIC,
+        delimiter=" ",
+        quotechar="'",
+    )
+    writer.writeheader()
+
+    tau = (4.3535223, 0.0034342)
+    pi = (4334.34434, 10)
+    chi = (-2332.332424, 1e-7)
+    zeta = (4444.00, 0.033)
+
+    def write_var(writer, val, name):
+        writer.writerow(
+            {
+                "name": name,
+                "value": val[0],
+                "err": val[1],
+                "%": round(val[1] / val[0] / 100, ndigits=6),
+            }
+        )
+
+    write_var(writer, tau, 'tau')
+    write_var(writer, pi, 'pi')
+    write_var(writer, chi, 'chi')
+    write_var(writer, zeta, 'zeta')
+
+# say, we do something undesirable in this script next, and we do not want kyomato to execute that
+@csv_table: src=data/calculations_table.csv
+\end{minted}
+
+An example of runtime-generated table insertion with execution-relative path \\
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+@csv_table: src=data/calculations_table.csv
+\end{minted}
+
+An example of runtime-generated table insertion with execution-relative path \\
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+@csv_table: src=data/calculations_table.csv, rows = 3..4, columns = ["name"], caption = "That's a-bit-cut table!"
+\end{minted}
+
+This is only a part of the table above, due to specified column and row restrictions \\
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+@csv_table: src=data/calculations_table.csv, columns = ["name", ("value", "err"), "%"], caption = "That's a table with value-error formatting!"
+\end{minted}
+
+You can see values having error right beside them, and formatted accordingly! \\
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+import numpy as np
+import matplotlib.pyplot as plt
+from math import pi
+x = np.arange(-pi, pi, 0.01)
+y = np.sin(x)
+plt.plot(x, y)
+plt.savefig("sine_graph.png")
+\end{minted}
+
+some figure generation \\
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+import numpy as np
+import matplotlib.pyplot as plt
+from math import pi
+x = np.arange(-pi, pi, 0.01)
+y = np.sin(x)
+plt.plot(x, y)
+plt.savefig("sine_graph.png")
+@fig: src = sine_graph.png, ident = "other_sine_graph", caption = "That's another way to include a figure from Ayano!", width = 0.9
+\end{minted}
+
+that's a figure insertion syntax, all-in-one! \\
+
+\begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
+import numpy as np
+import matplotlib.pyplot as plt
+from math import pi
+x = np.arange(-pi, pi, 0.01)
+y = np.sin(x)
+plt.plot(x, y)
+plt.savefig("../source/other_sine_graph.png")
+
+# let's say, that there's some debugging going on here:
+@fig: src = other_sine_graph.png, ident = "yet_another_sine_graph", caption = "The same sine. Again.", width = 0.2
+\end{minted}
+
+That's a third way to do the same thing! \\
+
+
+\end{document}

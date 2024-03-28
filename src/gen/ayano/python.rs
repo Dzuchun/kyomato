@@ -1,3 +1,5 @@
+use std::{borrow::Cow, path::Path};
+
 use pyo3::prelude::*;
 use rand::random;
 
@@ -27,10 +29,18 @@ pub fn init(code: &str) -> Result<InitToken, PyErr> {
     })
 }
 
-pub fn append_static(target: &mut String, code: &str) {
+pub fn append_static(target: &mut String, code: &str, execution_path: impl AsRef<Path>) {
+    target.push_str(
+        format!(
+            "\nimport os\n___cwd___ = os.getcwd()\nos.chdir('{}')",
+            execution_path.as_ref().to_string_lossy()
+        )
+        .as_str(),
+    );
     for line in code.lines() {
         target.push_str(format!("\n{line}").as_str())
     }
+    target.push_str("\nos.chdir(___cwd___)");
 }
 
 pub fn append_function(target: &mut String, name: &str, code: &str) {
@@ -45,6 +55,7 @@ pub fn call_function<Out, Err, Transform>(
     token: &InitToken,
     name: &str,
     transform: Transform,
+    execution_path: impl AsRef<Path>,
 ) -> Result<Out, Err>
 where
     Err: From<PyErr>,
@@ -52,8 +63,13 @@ where
 {
     Python::with_gil(|py| {
         let main_module = token.module(py)?;
+        let os = PyModule::import(py, "os")?;
+        let cwd = os.getattr("getcwd")?.call0()?;
+        let chdir = os.getattr("chdir")?;
+        chdir.call1((execution_path.as_ref(),))?;
         let function = main_module.getattr(name)?;
         let res = function.call((), None)?;
+        chdir.call1((cwd,))?;
         Ok(transform(res, py)?)
     })
 }
@@ -107,9 +123,12 @@ mod tests {
         let token = init_functions!(code, []).expect("Should be able to create module");
 
         // act + assert
-        let _res = call_function(&token, "absent_function", |res, _| {
-            Ok::<_, super::PyErr>(res.str()?.to_string())
-        })
+        let _res = call_function(
+            &token,
+            "absent_function",
+            |res, _| Ok::<_, super::PyErr>(res.str()?.to_string()),
+            "",
+        )
         .expect_err("Should get error for non-existent function call");
     }
 
@@ -121,9 +140,12 @@ mod tests {
             .expect("Should be able to create module");
 
         // act
-        let res = call_function(&token, "ok_function", |res, _| {
-            Ok::<_, super::PyErr>(res.str()?.to_string())
-        });
+        let res = call_function(
+            &token,
+            "ok_function",
+            |res, _| Ok::<_, super::PyErr>(res.str()?.to_string()),
+            "",
+        );
 
         // assert
         assert_eq!(

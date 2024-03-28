@@ -504,12 +504,7 @@ impl<'source> Token<'source> {
     /// None means that it depends on previous tokens
     pub fn is_newline_allergic(&self) -> Option<bool> {
         match self {
-            Token::Ayano {
-                data: AyanoBlock {
-                    is_static: false, ..
-                },
-            }
-            | Token::Href { .. }
+            Token::Href { .. }
             | Token::Paragraph { .. }
             | Token::InlineMath { .. }
             | Token::Reference { .. }
@@ -523,12 +518,7 @@ impl<'source> Token<'source> {
             | Token::Figure { .. }
             | Token::List { .. }
             | Token::CodeBlock { .. } => Some(true),
-            Token::Ayano {
-                data: AyanoBlock {
-                    is_static: true, ..
-                },
-            }
-            | Token::Multiple { .. } => None,
+            Token::Ayano { .. } | Token::Multiple { .. } => None,
         }
     }
 }

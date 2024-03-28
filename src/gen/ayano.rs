@@ -15,13 +15,14 @@ use std::{
     fs::File,
     io::{BufRead, BufReader},
     num::{ParseFloatError, ParseIntError},
-    path::PathBuf,
+    path::{self, Path, PathBuf},
     str::FromStr,
 };
 
 use crate::{
     data::{AyanoBlock, DisplayState, Token, Tokens},
     lexer::KyomatoLexError,
+    path_engine::{self, PathEngine},
     util::{
         Equivalent, GenericRange, GenericRangeParseError, Immutable, InlinedStack,
         InlinedStackAccessor, StaticDebug,
@@ -39,11 +40,12 @@ pub struct DisplayInfo {
 }
 
 #[derive(Debug, PartialEq)]
-struct CodelessBlockInfo {
+struct DisplayCodeBlockInfo {
     ident: u64,
     function_name: Option<String>,
     caption: Option<Token<'static>>,
     insert_path: Option<PathBuf>,
+    display_code: Option<String>,
 }
 
 #[derive(Debug)]
@@ -86,21 +88,40 @@ impl AyanoBuilder {
         }
     }
 
-    pub fn add_block(&mut self, block: &AyanoBlock<'_>) -> Result<(), SyntaxError> {
-        let (transformed_code, info) = apply_ayano(block)?;
+    pub fn add_block<
+        'source,
+        'error: 'source,
+        PEErr: std::error::Error + 'error,
+        PE: PathEngine<PEErr>,
+    >(
+        &mut self,
+        block: &AyanoBlock<'source>,
+        path_engine: &PE,
+    ) -> Result<(), SyntaxError<'error>> {
+        let (transformed_code, info) = apply_ayano(block, path_engine)?;
         let ident = info.ident;
 
         // Now, append the code to python handler
         if let Some(function_name) = info.function_name.as_ref() {
             python::append_function(&mut self.code, &function_name, &transformed_code);
         } else {
-            python::append_static(&mut self.code, &transformed_code);
+            let insert_path = if let Some(insert_path) = info.insert_path.as_deref() {
+                let mut path = path_engine
+                    .ayano_insert(insert_path)
+                    .map_err(|err| SyntaxError::PathEngine(Equivalent(Box::new(err))))?
+                    .into_owned();
+                path.pop();
+                path
+            } else {
+                PathBuf::from(".")
+            };
+            python::append_static(&mut self.code, &transformed_code, insert_path);
         }
         self.blocks.push(BlockInfo {
             ident,
             function_name: info.function_name,
             display_info: info.caption.map(|name| DisplayInfo {
-                code: block.code.to_string(),
+                code: info.display_code.unwrap_or(transformed_code),
                 caption: name,
             }),
             insert_path: info.insert_path,
@@ -130,10 +151,12 @@ pub enum AyanoError<'b> {
     Python(Equivalent<PyErr>),
     #[error("There's no function for ayano block: {:?}", .0)]
     NoFunction(AyanoBlock<'b>),
-    #[error("{}", .0)]
-    Applying(SyntaxError),
-    #[error("{}", .0)]
+    #[error(transparent)]
+    Applying(SyntaxError<'b>),
+    #[error(transparent)]
     Parsing(ParsingError),
+    #[error("{}", (.0).0)]
+    PathEngine(Equivalent<Box<dyn std::error::Error + 'b>>),
 }
 
 impl From<PyErr> for AyanoError<'_> {
@@ -146,10 +169,18 @@ type AyanoResult<'b, T = ()> = Result<T, AyanoError<'b>>;
 
 impl AyanoExecutor {
     // this could easily be part of `display_token`, but I separated it for debugging purposes
-    fn call_block<'token, 'source: 'token, Out, Transform>(
+    fn call_block<
+        'token,
+        'source: 'token,
+        Out,
+        Transform,
+        PEErr: std::error::Error + 'source,
+        PE: PathEngine<PEErr>,
+    >(
         &self,
         token: &'token AyanoBlock<'source>,
         transform: Transform,
+        path_engine: &PE,
     ) -> AyanoResult<'source, Out>
     where
         for<'py> Transform: FnOnce(&'py PyAny, Python<'py>) -> AyanoResult<'source, Out>,
@@ -162,15 +193,30 @@ impl AyanoExecutor {
             // this block was passed here before, but it's not a function
             return Err(AyanoError::NoFunction(token.clone()));
         };
-
-        python::call_function(&self.token, function_name, transform)
+        let insert_path = if let Some(insert_path) = token.insert_path.as_deref() {
+            let mut path = path_engine
+                .ayano_insert(insert_path)
+                .map_err(|err| SyntaxError::PathEngine(Equivalent(Box::new(err))))?
+                .into_owned();
+            path.pop();
+            path
+        } else {
+            PathBuf::from(".")
+        };
+        python::call_function(&self.token, function_name, transform, insert_path)
     }
 
-    pub fn display_token<'token, 'source: 'token>(
+    pub fn display_token<
+        'token,
+        'source: 'token,
+        PEErr: std::error::Error + 'source,
+        PE: PathEngine<PEErr>,
+    >(
         &self,
         token: &'token AyanoBlock<'source>,
-    ) -> AyanoResult<'source, Token<'static>> {
-        self.call_block(token, |res, _| Ok(parse_ayano(res)?))
+        path_engine: &PE,
+    ) -> AyanoResult<'source, Token<'source>> {
+        self.call_block(token, |res, _| Ok(parse_ayano(res)?), path_engine)
     }
 
     pub fn display_blocks<'s>(&'s self) -> impl IntoIterator<Item = &'s DisplayInfo> {
@@ -199,10 +245,10 @@ mod ayano_tests {
                 let mut builder = AyanoBuilder::new();
 
                 // act
-                builder.add_block(&block).expect("Should be able to add block");
+                builder.add_block(&block, &path_engine::primitive()).expect("Should be able to add block");
                 // dbg!(&handler);
                 let executor = builder.initialize().expect("Should be able to initialize");
-                let output = executor.call_block(&block, |res, _| Ok::<_, super::AyanoError<'_>>(res.str()?.to_string())).expect("Should be able to call this function");
+                let output = executor.call_block(&block, |res, _| Ok::<_, super::AyanoError<'_>>(res.str()?.to_string()), &path_engine::primitive()).expect("Should be able to call this function");
 
                 // assert
                 assert_eq!(output, $output);
@@ -252,14 +298,14 @@ y = x / 100
                     is_static: false,
                     spaces_before: 0,
                 };
-                builder.add_block(&static_block).expect("Should be able to add static block");
-                builder.add_block(&function_block).expect("Should be able to add function block");
+                builder.add_block(&static_block, &path_engine::primitive()).expect("Should be able to add static block");
+                builder.add_block(&function_block, &path_engine::primitive()).expect("Should be able to add function block");
                 // dbg!(&builder);
                 let executor = builder.initialize().expect("Should be able to initialize");
 
                 // act
-                let static_output = executor.call_block(&static_block, |res, _| Ok(res.str()?.to_string()));
-                let function_output = executor.call_block(&function_block, |res, _| Ok(res.str()?.to_string()));
+                let static_output = executor.call_block(&static_block, |res, _| Ok(res.str()?.to_string()), &path_engine::primitive());
+                let function_output = executor.call_block(&function_block, |res, _| Ok(res.str()?.to_string()), &path_engine::primitive());
 
                 // assert
                 assert_eq!(static_output, Err(AyanoError::NoFunction(static_block.clone())), "Static block shouldn't be callable!");
@@ -306,16 +352,16 @@ y", "2"}
                     is_static: false,
                     spaces_before: 0,
                 };
-                builder.add_block(&static_block).expect("Should be able to add static block");
-                builder.add_block(&function1_block).expect("Should be able to add function block");
-                builder.add_block(&function2_block).expect("Should be able to add function block");
+                builder.add_block(&static_block, &path_engine::primitive()).expect("Should be able to add static block");
+                builder.add_block(&function1_block, &path_engine::primitive()).expect("Should be able to add function block");
+                builder.add_block(&function2_block, &path_engine::primitive()).expect("Should be able to add function block");
                 // dbg!(&builder);
                 let executor = builder.initialize().expect("Should be able to initialize");
 
                 // act
-                let static_output = executor.call_block(&static_block, |res, _| Ok(res.str()?.to_string()));
-                let function1_output = executor.call_block(&function1_block, |res, _| Ok(res.str()?.to_string()));
-                let function2_output = executor.call_block(&function1_block, |res, _| Ok(res.str()?.to_string()));
+                let static_output = executor.call_block(&static_block, |res, _| Ok(res.str()?.to_string()), &path_engine::primitive());
+                let function1_output = executor.call_block(&function1_block, |res, _| Ok(res.str()?.to_string()), &path_engine::primitive());
+                let function2_output = executor.call_block(&function1_block, |res, _| Ok(res.str()?.to_string()), &path_engine::primitive());
 
                 // assert
                 assert_eq!(static_output, Err(AyanoError::NoFunction(static_block.clone())), "Static block shouldn't be callable!");
@@ -376,12 +422,28 @@ impl CsvTableColumn<'_> {
     }
 }
 
-fn apply_ayano<'token, 'source: 'token>(
+fn apply_ayano<
+    'token,
+    'source: 'token,
+    'error: 'source,
+    PEErr: std::error::Error + 'error,
+    PE: PathEngine<PEErr>,
+>(
     block: &'token AyanoBlock<'source>,
-) -> Result<(String, CodelessBlockInfo), SyntaxError> {
+    path_engine: &PE,
+) -> Result<(String, DisplayCodeBlockInfo), SyntaxError<'error>> {
     // FIRST OF ALL,
     // read the code from insert-file (if present)
-    let insert_path = block.insert_path.as_ref().map(|path| path.to_path_buf());
+    let insert_path = if let Some(path) = block.insert_path.as_ref() {
+        Some(
+            path_engine
+                .ayano_insert(path.clone())
+                .map_err(|err| SyntaxError::PathEngine(Equivalent(Box::new(err))))?
+                .into_owned(),
+        )
+    } else {
+        None
+    };
     let mut res = if let Some(insert_path) = insert_path.as_ref() {
         let mut res = String::new();
         for line in BufReader::new(File::open(insert_path).map_err(Equivalent::from)?).lines() {
@@ -396,7 +458,11 @@ fn apply_ayano<'token, 'source: 'token>(
     } else {
         String::new()
     };
-    let mut code_lines = block.code.lines();
+    let code: &'source str = match block.code.clone() {
+        Cow::Borrowed(s) => s,
+        Cow::Owned(_) => unreachable!("We'd just cloned the cow"),
+    };
+    let mut code_lines = code.lines();
     // I used to have this filter here, but I don't think that's a good thing anymore
     // There's no harm in preserving basic formatting for better debugging
     // TODO probably and #[cfg(test)] switch, that would simplify the code is it's added to Python module itself (i.e. this is to be done in `python` module)
@@ -423,11 +489,12 @@ fn apply_ayano<'token, 'source: 'token>(
         res.extend(itertools::intersperse(code_lines, "\n"));
         return Ok((
             res,
-            CodelessBlockInfo {
+            DisplayCodeBlockInfo {
                 ident: *block.ident,
                 function_name: None,
                 caption: display_name,
                 insert_path,
+                display_code: None,
             },
         ));
     }
@@ -441,11 +508,12 @@ fn apply_ayano<'token, 'source: 'token>(
         // no Ayano syntax is expected there, and that code should not be altered
         return Ok((
             res,
-            CodelessBlockInfo {
+            DisplayCodeBlockInfo {
                 ident: *block.ident,
                 function_name,
                 caption: display_name,
                 insert_path,
+                display_code: None,
             },
         ));
     };
@@ -456,21 +524,30 @@ fn apply_ayano<'token, 'source: 'token>(
         res.push('\n'); // and a newline character
     }
 
+    // create display code (basically, the same code, but with last line left unchanged)
+    let mut display_code = res.clone();
+    display_code.push_str(last_line);
+
     // extract syntax from the last line,
-    let syntax = SyntaxData::try_from(last_line)?;
+    let syntax: SyntaxData<'source> = SyntaxData::try_from(last_line)?;
     // and write code corresponding to it
     syntax
-        .write_to(&mut res)
+        .write_to(
+            &mut res,
+            path_engine,
+            insert_path.as_deref().map(Cow::Borrowed),
+        )
         .expect("Should always be able to write into an owned String");
     res.push('\n'); // newline for a good measure
 
     Ok((
         res,
-        CodelessBlockInfo {
+        DisplayCodeBlockInfo {
             ident: *block.ident,
             function_name,
             insert_path,
             caption: display_name,
+            display_code: Some(display_code),
         },
     ))
 }
@@ -503,7 +580,7 @@ mod apply_ayano_tests {
                 };
 
                 // act
-                let actual = apply_ayano(&block).map(|(s, _)| s);
+                let actual = apply_ayano(&block, &path_engine::primitive()).map(|(s, _)| s);
 
                 // assert
                 assert_eq!(actual, $output, "Should yield expected result");
@@ -603,8 +680,8 @@ y = x + 2
         };
 
         // act
-        let transformed_code =
-            apply_ayano(&block).expect("Should be able to apply ayano transform");
+        let transformed_code = apply_ayano(&block, &path_engine::primitive())
+            .expect("Should be able to apply ayano transform");
 
         // assert
         assert_eq!(
@@ -653,7 +730,7 @@ enum Syntax<'source> {
 }
 
 #[derive(Debug, derive_more::From, PartialEq, thiserror::Error)]
-pub enum SyntaxError {
+pub enum SyntaxError<'error> {
     #[error("Required argument is missing: {}", .0)]
     MissingArgument(&'static str),
     #[error("Unknown argument is present: {}", .0)]
@@ -667,6 +744,8 @@ pub enum SyntaxError {
     IntParse(ParseIntError),
     #[error("{}", **.0)]
     InsertIo(Equivalent<std::io::Error>),
+    #[error("{}", **.0)]
+    PathEngine(Equivalent<Box<dyn std::error::Error + 'error>>),
 }
 
 macro_rules! or_bs {
@@ -796,7 +875,7 @@ macro_rules! needed {
 
 // Can't use FromStr here, as if requires parsing from &str with any lifetime
 impl<'l> TryFrom<&'l str> for SyntaxData<'l> {
-    type Error = SyntaxError;
+    type Error = SyntaxError<'static>;
 
     fn try_from(mut s: &'l str) -> Result<Self, Self::Error> {
         // First, cut off empty space (but record number of them)
@@ -936,17 +1015,17 @@ mod syntax_data_tests {
     test! {value_error1, "@dev: 1, 2", SyntaxData {indent: 0, syntax: Syntax::ValueError { value: "1", error: "2" }}}
     test! {value_error2, "@dev:  1,    2   ", SyntaxData {indent: 0, syntax: Syntax::ValueError { value: "1", error: "2" }}}
     test! {value_error3, "@dev:  x + 1,  (2 + 3) / 10   ", SyntaxData {indent: 0, syntax: Syntax::ValueError { value: "x + 1", error: "(2 + 3) / 10" }}}
-    test! {fig1, r#"    @fig:  src = "path.png" , caption   =  "Wow, such caption", ident="path"  "#, SyntaxData {indent: 4, syntax: Syntax::Figure{ src:"\"path.png\"", caption: Some("\"Wow, such caption\""), ident: Some("\"path\""), width: None}}}
-    test! {fig2, r#"    @fig:   caption   =  "Wow, such caption", ident="path" ,src = "path.png"  "#, SyntaxData {indent: 4, syntax: Syntax::Figure{ src: "\"path.png\"", caption: Some("\"Wow, such caption\""), ident: Some("\"path\""), width: None}}}
-    test! {fig3_width, r#"    @fig:   caption   =  "Wow, such caption", width=   0.125, ident="path" ,src = "path.png"  "#, SyntaxData {indent: 4, syntax: Syntax::Figure{ src: "\"path.png\"", caption: Some("\"Wow, such caption\""), ident: Some("\"path\""), width: Some("0.125")}}}
+    test! {fig1, r#"    @fig:  src = path.png , caption   =  "Wow, such caption", ident="path"  "#, SyntaxData {indent: 4, syntax: Syntax::Figure{ src:"path.png", caption: Some("\"Wow, such caption\""), ident: Some("\"path\""), width: None}}}
+    test! {fig2, r#"    @fig:   caption   =  "Wow, such caption", ident="path" ,src = path.png  "#, SyntaxData {indent: 4, syntax: Syntax::Figure{ src: "path.png", caption: Some("\"Wow, such caption\""), ident: Some("\"path\""), width: None}}}
+    test! {fig3_width, r#"    @fig:   caption   =  "Wow, such caption", width=   0.125, ident="path" ,src = path.png  "#, SyntaxData {indent: 4, syntax: Syntax::Figure{ src: "path.png", caption: Some("\"Wow, such caption\""), ident: Some("\"path\""), width: Some("0.125")}}}
     test! {fig4_width_expr, r#"    @fig:   caption   =  "Wow, such caption", width=    WIDTH + 3 , ident="path" ,src = "path.png"  "#,
     SyntaxData {indent: 4, syntax: Syntax::Figure{ src: "\"path.png\"", caption: Some("\"Wow, such caption\""), ident: Some("\"path\""), width: Some("WIDTH + 3")}}}
-    test! {csv_table1, r#"   @csv_table: src = "path/to/table.csv", caption = "such caption, wow""#, SyntaxData {indent: 3, syntax: Syntax::CsvTable { src: "\"path/to/table.csv\"", rows: GenericRange::Full, columns: None, ident: None, caption: Some("\"such caption, wow\"") }}}
-    test! {csv_table2, r#"   @csv_table: src = "path/to/table.csv", rows  =   1..1000"#, SyntaxData {indent: 3, syntax: Syntax::CsvTable { src: "\"path/to/table.csv\"", rows: GenericRange::DoubleBounded(1..1000), columns: None, ident: None, caption: None, }}}
-    test! {csv_table3, r#"   @csv_table: src = "path/to/table.csv", rows  =   2.."#, SyntaxData {indent: 3, syntax: Syntax::CsvTable { src: "\"path/to/table.csv\"", rows: GenericRange::From(2..), columns: None, ident: None, caption: None }}}
-    test! {csv_table4, r#"   @csv_table: src = "path/to/table.csv", rows  =   2.., columns = ["a", ("b", "b_err")]"#, SyntaxData {indent: 3, syntax: Syntax::CsvTable { src: "\"path/to/table.csv\"", rows: GenericRange::From(2..), columns: Some(vec![c!("a"),c!("b","b_err")]), caption: None, ident: None }}}
-    test! {csv_table5, r#"    @csv_table: src = "path/to/table.csv", rows  =   2.., columns = ["a", ("b", "b_err")], caption = "Lol, there's a bunch of random stuff going on, this should not be included into a syntax data""#,
-    SyntaxData {indent: 4, syntax: Syntax::CsvTable { src: "\"path/to/table.csv\"", rows: GenericRange::From(2..), columns: Some(vec![c!("a"),c!("b","b_err")]),
+    test! {csv_table1, r#"   @csv_table: src = path/to/table.csv, caption = "such caption, wow""#, SyntaxData {indent: 3, syntax: Syntax::CsvTable { src: "path/to/table.csv", rows: GenericRange::Full, columns: None, ident: None, caption: Some("\"such caption, wow\"") }}}
+    test! {csv_table2, r#"   @csv_table: src = path/to/table.csv, rows  =   1..1000"#, SyntaxData {indent: 3, syntax: Syntax::CsvTable { src: "path/to/table.csv", rows: GenericRange::DoubleBounded(1..1000), columns: None, ident: None, caption: None, }}}
+    test! {csv_table3, r#"   @csv_table: src = path/to/table.csv, rows  =   2.."#, SyntaxData {indent: 3, syntax: Syntax::CsvTable { src: "path/to/table.csv", rows: GenericRange::From(2..), columns: None, ident: None, caption: None }}}
+    test! {csv_table4, r#"   @csv_table: src = path/to/table.csv, rows  =   2.., columns = ["a", ("b", "b_err")]"#, SyntaxData {indent: 3, syntax: Syntax::CsvTable { src: "path/to/table.csv", rows: GenericRange::From(2..), columns: Some(vec![c!("a"),c!("b","b_err")]), caption: None, ident: None }}}
+    test! {csv_table5, r#"    @csv_table: src = path/to/table.csv, rows  =   2.., columns = ["a", ("b", "b_err")], caption = "Lol, there's a bunch of random stuff going on, this should not be included into a syntax data""#,
+    SyntaxData {indent: 4, syntax: Syntax::CsvTable { src: "path/to/table.csv", rows: GenericRange::From(2..), columns: Some(vec![c!("a"),c!("b","b_err")]),
     caption: Some("\"Lol, there's a bunch of random stuff going on, this should not be included into a syntax data\""), // ha-ha, get spec-changed, lol
      ident: None, }}}
     test! {get_table1, r#"    @gen_table: lambda row, col: 1; rows   = 10, columns =  10, caption = "Some awesome caption""#,
@@ -994,15 +1073,26 @@ impl<'w, W: Write + ?Sized> CodeWriter<'w, W> {
 }
 
 impl SyntaxData<'_> {
-    fn write_to<'w, W: Write + ?Sized>(&self, dest: &'w mut W) -> std::fmt::Result {
+    fn write_to<'w, W: Write + ?Sized, PEErr: std::error::Error, PE: PathEngine<PEErr>>(
+        &self,
+        dest: &'w mut W,
+        path_engine: &PE,
+        insert_path: Option<Cow<'_, Path>>,
+    ) -> std::fmt::Result {
         let mut writer: CodeWriter<'w, W> = CodeWriter::new(dest, self.indent)?;
-        self.syntax.write_code(&mut writer)?;
+        self.syntax
+            .write_code(&mut writer, path_engine, insert_path)?;
         Ok(())
     }
 }
 
 impl Syntax<'_> {
-    fn write_code<W: Write + ?Sized>(&self, writer: &mut CodeWriter<'_, W>) -> std::fmt::Result {
+    fn write_code<W: Write + ?Sized, PEErr: std::error::Error, PE: PathEngine<PEErr>>(
+        &self,
+        writer: &mut CodeWriter<'_, W>,
+        path_engine: &PE,
+        insert_path: Option<Cow<'_, Path>>,
+    ) -> std::fmt::Result {
         match self {
             Syntax::Nothing(s) => {
                 writer.write_str("return ")?;
@@ -1020,9 +1110,20 @@ impl Syntax<'_> {
                 caption,
                 width,
             } => {
-                writer.write_str("return \"fig\", ")?;
+                let src = Path::new(src);
+                let src = match path_engine.csv(src, insert_path.as_deref()) {
+                    Ok(existing_table) => existing_table,
+                    Err(error) => {
+                        // figure was not found, but this can be ok, if program generates it itself
+                        // but it would be wise to log this as a warn
+                        eprintln!("Figure file not found at pre-analysis: {error:?}");
+                        Cow::Borrowed(Path::new(src))
+                    }
+                };
+                let src = &*src.to_string_lossy();
+                writer.write_str("return \"fig\", \"")?;
                 writer.write_str(src)?;
-                writer.write_str(", ")?;
+                writer.write_str("\", ")?;
                 if let Some(ident) = ident {
                     writer.write_str(ident)?;
                 } else {
@@ -1048,11 +1149,37 @@ impl Syntax<'_> {
                 ident,
                 caption,
             } => {
+                let src = Path::new(src);
+                let mut src = match path_engine.csv(src, insert_path.as_deref()) {
+                    Ok(existing_table) => existing_table,
+                    Err(error) => {
+                        // table was not found, but this can be ok, if program generates it itself
+                        // but it would be wise to log this as a warn
+                        eprintln!("Table file not found at pre-analysis: {error:?}");
+                        Cow::Borrowed(src)
+                    }
+                };
+                // the problem here - this type of syntax specifically relies on Python reading the file themselves
+                // and if there is an insert path - Python will be executed at the insert directory
+                // to check for that, we do
+                if let Some(insert_directory) = insert_path.as_ref().map(|p| p.parent()).flatten() {
+                    // if there's no insert path - ignore that
+                    // if insert path has no parent - it's a file in current execution directory - no need to relocate the path
+                    // I could've implemented this thing myself, but why would I, was already done:
+                    if let Some(rebased) = pathdiff::diff_paths(&src, insert_directory) {
+                        src = rebased.into();
+                    }
+                }
+                let src = &*src.to_string_lossy();
                 writer.write_line("import csv")?;
-                writer.write_str("with open(")?;
+                writer.write_str("with open('")?;
                 writer.write_str(src)?;
-                writer.write_line(") as ___csv_file___:")?;
-                writer.write_line("    ___reader___ = csv.DictReader(___csv_file___, delimiter=',', skipinitialspace=True, strict=True)")?;
+                writer.write_line("') as ___csv_file___:")?;
+                writer.write_line(
+                    "    ___dialect___ = csv.Sniffer().sniff(___csv_file___.read(1024))",
+                )?;
+                writer.write_line("    ___csv_file___.seek(0)")?;
+                writer.write_line("    ___reader___ = csv.DictReader(___csv_file___, dialect=___dialect___, skipinitialspace=True)")?;
                 // if there is a lower bound, skip some lines
                 if let Some(mut from) = rows.from() {
                     // if it's 0 or 1, there's effectively no lines to skip
@@ -1108,7 +1235,7 @@ impl Syntax<'_> {
 
                 // If a dedicated line generator is necessary, write out one now
                 if let Some(rows_to) = rows.to() {
-                    let line_iterations = rows_to - rows.from().unwrap_or_default();
+                    let line_iterations = rows_to - rows.from().unwrap_or_default() + 1;
                     writer.write_line("    def ___line_generator___():")?;
                     write!(writer, "        for i in range({line_iterations}):")?; // it's again numbers, can't do much better
                     writer.breakline()?;
@@ -1194,7 +1321,7 @@ mod syntax_display_tests {
                 let mut actual_output = String::new();
 
                 // act
-                $input.write_to(&mut actual_output).expect("Should be able to write into string");
+                $input.write_to(&mut actual_output, &path_engine::primitive(), None).expect("Should be able to write into string");
 
                 // assert
                 assert_eq!(actual_output, expected_output, "Should produce expected result");
@@ -1259,7 +1386,7 @@ mod last_line_tests {
                 // act
                 let actual_output = SyntaxData::try_from($input).map(move |data| {
                     let mut res = String::new();
-                    data.write_to(&mut res).expect("Should be able to write");
+                    data.write_to(&mut res, &path_engine::primitive(), None).expect("Should be able to write");
                     res
                 });
 
@@ -1527,17 +1654,16 @@ fn parse_ayano(python_output: &PyAny) -> Result<Token<'static>, ParsingError> {
                     // any inconsistency will be treated as syntax error from now on.
                     // expected syntax: ('tab', [$([$(<table-cell>), +]), +], 'ident'|None, 'caption'|None)
 
-                    let list =
-                        throw_downcast!(throw_syntax!(tuple.get_item(1))?.downcast::<PyList>())?;
-                    let mut rows = list.into_iter();
-                    let header: Vec<_> = throw_downcast!(rows
-                        .next()
-                        .ok_or(ParsingError::TableNoHeader)?
-                        .downcast::<PyList>())?
-                    .into_iter()
-                    .map(|h: &PyAny| parse_ayano(h))
-                    .try_collect()?;
+                    // println!("{:?}", tuple);
+                    let header: Vec<_> =
+                        throw_downcast!(throw_syntax!(tuple.get_item(1))?.downcast::<PyList>())?
+                            .into_iter()
+                            .map(|h: &PyAny| parse_ayano(h))
+                            .try_collect()?;
+                    let rows =
+                        throw_downcast!(throw_syntax!(tuple.get_item(2))?.downcast::<PyList>())?;
                     let cells: Vec<_> = rows
+                        .into_iter()
                         .map(|row| {
                             Ok(throw_downcast!(row.downcast::<PyList>())?
                                 .into_iter()
@@ -1553,10 +1679,10 @@ fn parse_ayano(python_output: &PyAny) -> Result<Token<'static>, ParsingError> {
                             })
                         })?;
 
-                    let ident = throw_syntax!(tuple.get_item(2))?;
+                    let ident = throw_syntax!(tuple.get_item(3))?;
                     let ident = (!ident.is_none())
                         .then_some(throw_syntax!(ident.str().and_then(|s| s.to_str()))?);
-                    let caption = throw_syntax!(tuple.get_item(3))?;
+                    let caption = throw_syntax!(tuple.get_item(4))?;
                     let caption = if caption.is_none() {
                         None
                     } else {
@@ -2650,13 +2776,12 @@ mod find_args_tests {
 
 fn parse_columns<'l>(input: &'l str) -> Vec<CsvTableColumn<'l>> {
     use regex::Captures;
-    const REGEX_STR: &str = r#"("([^"]+)"|\("([^"])",\s*"([^"]+)"\))"#;
+    const REGEX_STR: &str = r#"[\[,\s]\("([^"]+)",\s*"([^"]+)"\)|([,\[\s]"([^"]+)")"#;
     static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(REGEX_STR).expect("Bad regex syntax"));
     REGEX
         .captures_iter(input)
         .map(|cap: Captures<'l>| {
-            // dbg!(&cap);
-            match (cap.get(2), cap.get(3), cap.get(4)) {
+            match (cap.get(4), cap.get(1), cap.get(2)) {
                 (Some(col), _, _) => CsvTableColumn::Single(col.as_str().into()),
                 (_, Some(value), Some(error)) => {
                     CsvTableColumn::ValueError(value.as_str(), error.as_str())
@@ -2697,8 +2822,11 @@ mod parse_columns_tests {
     }
 
     test! {empty, r#""#, []}
-    test! {single, r#""a""#, [c!("a")]}
-    test! {value_error, r#""a", ("b", "c")"#, [c!("a"), ve!("b", "c")]}
-    test! {master, r#""no", ("x", "x_err"), "y", ("z", "z_err")"#, [c!("no"), ve!("x", "x_err"), c!("y"), ve!("z", "z_err")]}
-    test! {doc1, r#""type",("a", "a_err")"#, [c!("type"), ve!("a", "a_err")]}
+    test! {single, r#"["a"]"#, [c!("a")]}
+    test! {value_error, r#"["a", ("b", "c")]"#, [c!("a"), ve!("b", "c")]}
+    test! {master, r#"["no", ("x", "x_err"), "y", ("z", "z_err")]"#, [c!("no"), ve!("x", "x_err"), c!("y"), ve!("z", "z_err")]}
+    test! {doc1, r#"["type",("a", "a_err")]"#, [c!("type"), ve!("a", "a_err")]}
+    test! {maybe_bug1, r#"["name", ("value", "err"), "a"]"#, [c!("name"), ve!("value", "err"), c!("a")]}
+    test! {bug1, r#"["name", ("value", "err"), "%"]"#, [c!("name"), ve!("value", "err"), c!("%")]}
+    
 }

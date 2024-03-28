@@ -67,8 +67,9 @@ pub fn gen_to_string<'token, 'source: 'token>(
     token: &'token data::Token<'source>,
     title_info: impl Into<Option<TitleInfo<'source>>>,
 ) -> Result<String, Box<dyn std::error::Error + 'token>> {
-    let generator = gen::lab::LabaLatex::new(path_engine::primitive());
-    let mut meta = gen::lab::SourceMeta::collect(&token)?.init_ayano()?;
+    let path_engine = path_engine::primitive();
+    let mut meta = gen::lab::SourceMeta::collect(&token, &path_engine)?.init_ayano()?;
+    let generator = gen::lab::LabaLatex::new(path_engine);
     if let Some(title_info) = title_info.into() {
         meta.title_info = title_info;
     }

@@ -11,7 +11,7 @@ use nom::{
         streaming::tag_no_case,
     },
     character::complete::{char, digit1, multispace0, space0},
-    combinator::{all_consuming, cut, iterator, map_res, opt, recognize},
+    combinator::{all_consuming, complete, cut, iterator, map_res, opt, recognize},
     error::{context, ContextError, ErrorKind, FromExternalError, ParseError},
     multi::{many0_count, many1},
     number::complete::float,
@@ -576,30 +576,27 @@ fn ayano<
             ),
             // This is guaranteed to be Ayano block at this point, so we lock in
             cut(pair(
-                terminated(
-                    optional_permutation((
-                        preceded(
-                            pair(char('*'), space0),
-                            opt(terminated(caption_kernel, space0)),
+                optional_permutation((
+                    preceded(
+                        pair(char('*'), space0),
+                        opt(terminated(caption_kernel, space0)),
+                    ),
+                    preceded(
+                        pair(char('~'), space0),
+                        terminated(take_till1(char::is_whitespace), space0),
+                    ),
+                    preceded(
+                        pair(char('#'), space0),
+                        terminated(
+                            map_res(digit1, |n| {
+                                u16::from_str(n)
+                                    .map_err(|err| KyomatoLexError::bad_indent(input, err))
+                            }),
+                            space0,
                         ),
-                        preceded(
-                            pair(char('~'), space0),
-                            terminated(take_till1(char::is_whitespace), space0),
-                        ),
-                        preceded(
-                            pair(char('#'), space0),
-                            terminated(
-                                map_res(digit1, |n| {
-                                    u16::from_str(n)
-                                        .map_err(|err| KyomatoLexError::bad_indent(input, err))
-                                }),
-                                space0,
-                            ),
-                        ),
-                        terminated(char('!'), space0),
-                    )),
-                    char('\n'),
-                ),
+                    ),
+                    terminated(char('!'), space0),
+                )),
                 terminated(take_until("\n```"), tag("\n```")),
             )),
         ),
@@ -617,7 +614,7 @@ fn ayano<
     };
     let insert: Option<&'source Path> = insert.map(Path::new);
     // XXX add support for codeblock identifiers
-    let code: Cow<'_, str> = Cow::from(code);
+    let code: Cow<'_, str> = Cow::from(code.trim_start_matches('\n'));
     let num_of_newlines: usize = before.chars().filter(|c| c == &'\n').count();
     Ok((
         rest,
@@ -1359,7 +1356,7 @@ pub fn lex<
 ) -> IResult<&'source str, Token<'source>, E> {
     context(
         "unlimited lex",
-        all_consuming(terminated(
+        complete(all_consuming(terminated(
             tokens_many1(alt((
                 // Allow them all!
                 div_page.map(__equalizer),
@@ -1379,7 +1376,7 @@ pub fn lex<
                 paragraph,
             ))),
             multispace0,
-        )),
+        ))),
     )
     .parse(input)
 }
@@ -2363,19 +2360,19 @@ date: вербень 2077
 prof: me :idk:
 ---
 ", [
-                                                                                                                                                                                                    header_line1: "Навч. заклад",
-                                                                                                                                                                                                    header_line2: "Факультет",
-                                                                                                                                                                                                    document_type: "ПРОТОКОЛ",
-                                                                                                                                                                                                    title_line1: "Виконання марної роботи",
-                                                                                                                                                                                                    title_line2: "з історії стародавнього Єгипту",
-                                                                                                                                                                                                    title_line3: "(пинальна частина)",
-                                                                                                                                                                                                    title_line4: "НАЗВА РОБОТИ",
-                                                                                                                                                                                                    author_line1: "виконувало:",
-                                                                                                                                                                                                    author_line2: "дяч дзучунович",
-                                                                                                                                                                                                    author_line3: "(perfectly still)",
-                                                                                                                                                                                                    date: "вербень 2077",
-                                                                                                                                                                                                    prof: "me :idk:"
-                                                                                                                                                                                                    ], "\n"}
+                                                                                                                                                                                                                    header_line1: "Навч. заклад",
+                                                                                                                                                                                                                    header_line2: "Факультет",
+                                                                                                                                                                                                                    document_type: "ПРОТОКОЛ",
+                                                                                                                                                                                                                    title_line1: "Виконання марної роботи",
+                                                                                                                                                                                                                    title_line2: "з історії стародавнього Єгипту",
+                                                                                                                                                                                                                    title_line3: "(пинальна частина)",
+                                                                                                                                                                                                                    title_line4: "НАЗВА РОБОТИ",
+                                                                                                                                                                                                                    author_line1: "виконувало:",
+                                                                                                                                                                                                                    author_line2: "дяч дзучунович",
+                                                                                                                                                                                                                    author_line3: "(perfectly still)",
+                                                                                                                                                                                                                    date: "вербень 2077",
+                                                                                                                                                                                                                    prof: "me :idk:"
+                                                                                                                                                                                                                    ], "\n"}
     test_ok! {ok_all_fields_permutated, r"---
 author-line2: дяч дзучунович
 header-line1: Навч. заклад
@@ -2391,17 +2388,17 @@ prof: me :idk:
 title-line3: (пинальна частина)
 ---
 ", [
-                                                                                                                                                                                            header_line1: "Навч. заклад",
-                                                                                                                                                                                            header_line2: "Факультет",
-                                                                                                                                                                                            document_type: "ПРОТОКОЛ",
-                                                                                                                                                                                            title_line1: "Виконання марної роботи",
-                                                                                                                                                                                            title_line2: "з історії стародавнього Єгипту",
-                                                                                                                                                                                            title_line3: "(пинальна частина)",
-                                                                                                                                                                                            title_line4: "НАЗВА РОБОТИ",
-                                                                                                                                                                                            author_line1: "виконувало:",
-                                                                                                                                                                                            author_line2: "дяч дзучунович",
-                                                                                                                                                                                            author_line3: "(perfectly still)",
-                                                                                                                                                                                            date: "вербень 2077",
-                                                                                                                                                                                            prof: "me :idk:"
-                                                                                                                                                                                            ], "\n"}
+                                                                                                                                                                                                            header_line1: "Навч. заклад",
+                                                                                                                                                                                                            header_line2: "Факультет",
+                                                                                                                                                                                                            document_type: "ПРОТОКОЛ",
+                                                                                                                                                                                                            title_line1: "Виконання марної роботи",
+                                                                                                                                                                                                            title_line2: "з історії стародавнього Єгипту",
+                                                                                                                                                                                                            title_line3: "(пинальна частина)",
+                                                                                                                                                                                                            title_line4: "НАЗВА РОБОТИ",
+                                                                                                                                                                                                            author_line1: "виконувало:",
+                                                                                                                                                                                                            author_line2: "дяч дзучунович",
+                                                                                                                                                                                                            author_line3: "(perfectly still)",
+                                                                                                                                                                                                            date: "вербень 2077",
+                                                                                                                                                                                                            prof: "me :idk:"
+                                                                                                                                                                                                            ], "\n"}
 }

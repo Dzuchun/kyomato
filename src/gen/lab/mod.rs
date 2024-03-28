@@ -68,10 +68,11 @@ impl<'source, PE: PathEngine<PEErr>, PEErr> LabaLatex<'source, PE, PEErr> {
         PEErr: std::error::Error + 'source,
     {
         let (title_info, tokens) = crate::parse_all(input)?;
+        let mut meta: SourceMeta<'source, AyanoExecutor> =
+            SourceMeta::collect(&tokens, &path_engine)
+                .map_err(|err| GenerationError::Meta(Box::new(err)))?
+                .init_ayano()?;
         let generator: LabaLatex<'source, PE, PEErr> = Self::new(path_engine);
-        let mut meta: SourceMeta<'source, AyanoExecutor> = SourceMeta::collect(&tokens)
-            .map_err(|err| GenerationError::Meta(Box::new(err)))?
-            .init_ayano()?;
         meta.title_info = title_info;
         generator.write_preamble(output, &meta)?;
         let mut context = Context::default();
@@ -203,10 +204,10 @@ where
                 if !data.is_static {
                     if data.spaces_before == 1 {
                         output.write_char(' ')?;
-                    } else if data.spaces_before >= 2 {
-                        output.write_str(" \\newline\n")?;
+                    } else if data.spaces_before >= 2 && !context.allergic_to_newline {
+                        output.write_str(" \\\\\n")?;
                     }
-                    let token = meta.ayano.display_token(data)?;
+                    let token = meta.ayano.display_token(data, &self.path_engine)?;
                     self.write_to(output, meta, context, &token)?;
                 }
             }
@@ -313,9 +314,10 @@ where
                 content,
                 space_before,
             } => {
+                let mut content = content.clone();
                 if *is_newline {
                     if context.allergic_to_newline {
-                        output.write_str("\\tb ")?;
+                        output.write_str("\n\\tb ")?;
                     } else {
                         output.write_str("\n\\tbln ")?;
                     }
@@ -329,6 +331,12 @@ where
                     Some(Formatting::StrikeThrough) => ("\\st{", "}"),
                 };
                 output.write_str(start)?;
+                if content.contains('%') {
+                    // there are percentage signs in the paragraph
+                    // most certainly this was is not intended to make a latex comment (because why?)
+                    // TODO add an option to opt this out
+                    content = content.replace('%', "\\%").into();
+                }
                 if context.inside_caption {
                     // We are generating text that was inside table/figure caption
                     // meaning, we must un-escape double quotes
@@ -465,7 +473,7 @@ where
                 };
                 generator.write_to(output, meta, context, &block_code_block)?;
                 generator.write_to(output, meta, context, &block.caption)?;
-                output.write_str("\n\\newline\n")?;
+                output.write_str(" \\\\\n")?;
                 Ok(())
             }
             let blocks_section_header = Token::Header {
@@ -540,7 +548,7 @@ mod tests {
                 use $crate::path_engine::primitive as primitive_engine;
                 // arrange
                 let token = $token;
-                let meta = SourceMeta::collect(&token)
+                let meta = SourceMeta::collect(&token, &path_engine::primitive())
                     .expect("Should be able to collect")
                     .init_ayano()
                     .expect("Should be able to init Ayano");
@@ -871,8 +879,8 @@ y = 0.4
     }
 
     test! {ayano_fig2, Token::Ayano{data: AyanoBlock{
-                                        ident: StaticDebug(rand::thread_rng().gen()),display_state: DisplayState::NotDisplayed,is_static: false,code: r"@fig: src = 'path/to/image.jpg'".into(),insert_path: None,
-                                        spaces_before: 0,}},
+                                                                                ident: StaticDebug(rand::thread_rng().gen()),display_state: DisplayState::NotDisplayed,is_static: false,code: r"@fig: src = 'path/to/image.jpg'".into(),insert_path: None,
+                                                                                spaces_before: 0,}},
 r"
 \begin{figure}[h!]
 \centering
