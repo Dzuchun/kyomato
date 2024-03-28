@@ -338,7 +338,7 @@ two + three
 This block here uses variables prior-defined in static blocks. \\
 
 \begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
-@csv_table: src=data/20240327230336_8798.csv, caption="cred: [randat](http://randat.com/)", ident = "random_table1"
+@csv_table: src="data/20240327230336_8798.csv", caption="cred: [randat](http://randat.com/)", ident = "random_table1"
 \end{minted}
 
 table insertion example \\
@@ -383,7 +383,7 @@ with open("calculations_table.csv", "w") as f:
     write_var(writer, zeta, 'zeta')
 
 # say, we do something undesirable in this script next, and we do not want kyomato to execute that
-@csv_table: src=calculations_table.csv
+@csv_table: src="calculations_table.csv"
 \end{minted}
 
 An example of runtime-generated table insertion \\
@@ -428,25 +428,25 @@ with open("calculations_table.csv", "w") as f:
     write_var(writer, zeta, 'zeta')
 
 # say, we do something undesirable in this script next, and we do not want kyomato to execute that
-@csv_table: src=data/calculations_table.csv
+@csv_table: src="data/calculations_table.csv"
 \end{minted}
 
 An example of runtime-generated table insertion with execution-relative path \\
 
 \begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
-@csv_table: src=data/calculations_table.csv
+@csv_table: src="data/calculations_table.csv"
 \end{minted}
 
 An example of runtime-generated table insertion with execution-relative path \\
 
 \begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
-@csv_table: src=data/calculations_table.csv, rows = 3..4, columns = ["name"], caption = "That's a-bit-cut table!"
+@csv_table: src="data/calculations_table.csv", rows = 3..4, columns = ["name"], caption = "That's a-bit-cut table!"
 \end{minted}
 
 This is only a part of the table above, due to specified column and row restrictions \\
 
 \begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
-@csv_table: src=data/calculations_table.csv, columns = ["name", ("value", "err"), "%"], caption = "That's a table with value-error formatting!"
+@csv_table: src="data/calculations_table.csv", columns = ["name", ("value", "err"), "%"], caption = "That's a table with value-error formatting!"
 \end{minted}
 
 You can see values having error right beside them, and formatted accordingly! \\
@@ -471,7 +471,7 @@ x = np.arange(-pi, pi, 0.01)
 y = np.sin(x)
 plt.plot(x, y)
 plt.savefig("sine_graph.png")
-@fig: src = sine_graph.png, ident = "other_sine_graph", caption = "That's another way to include a figure from Ayano!", width = 0.9
+@fig: src = "sine_graph.png", ident = "other_sine_graph", caption = "That's another way to include a figure from Ayano!", width = 0.9
 \end{minted}
 
 that's a figure insertion syntax, all-in-one! \\
@@ -486,7 +486,7 @@ plt.plot(x, y)
 plt.savefig("../source/other_sine_graph.png")
 
 # let's say, that there's some debugging going on here:
-@fig: src = other_sine_graph.png, ident = "yet_another_sine_graph", caption = "The same sine. Again.", width = 0.2
+@fig: src = "other_sine_graph.png", ident = "yet_another_sine_graph", caption = "The same sine. Again.", width = 0.2
 \end{minted}
 
 That's a third way to do the same thing! \\

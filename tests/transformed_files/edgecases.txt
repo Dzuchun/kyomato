@@ -135,10 +135,12 @@
 \begin{itemize}
 \item List item 1
 \item List item 2
-\end{itemize}\tb Some para
+\end{itemize}
+\tb Some para
 \begin{itemize}
 \item List item 1
 \item List item 2
-\end{itemize}\tb \textit{This bug resulted in lists to be parsed as series of paragraphs.}
+\end{itemize}
+\tb \textit{This bug resulted in lists to be parsed as series of paragraphs.}
 
 \end{document}

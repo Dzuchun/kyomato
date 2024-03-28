@@ -132,6 +132,7 @@
 \fnt
 
 \section{Display blocks}
+
 \tb This feature allows you to insert certain `Ayano` blocks to the end of the output document, to document your exact actions for displayed results.
 \tbln Here's an example: 42
 \tbln Display blocks can have descriptions too! Here's one: -20340$\pm$150
@@ -142,8 +143,8 @@
 42
 \end{minted}
 
-\tb ayano-unnamed
-\newline
+
+\tb ayano-unnamed \\
 
 \begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
 # This code block has description
@@ -154,8 +155,7 @@ for i in range(100):
 @dev: -2.034e4, 145.64
 \end{minted}
 
-me, fooling around
-\newline
+me, fooling around \\
 
 
 \end{document}

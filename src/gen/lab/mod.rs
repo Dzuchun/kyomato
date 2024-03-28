@@ -868,7 +868,7 @@ y = 0.4
         ident: StaticDebug(rand::thread_rng().gen()),
         display_state: DisplayState::NotDisplayed,
         is_static: false,
-        code: r"'fig', 'path/to/image.jpg', None, None, 0.625".into(),
+        code: "'fig', \"path/to/image.jpg\", None, None, 0.625".into(),
         insert_path: None,
         spaces_before: 0,
     }}, r"
@@ -878,16 +878,14 @@ y = 0.4
 \end{figure}"
     }
 
-    test! {ayano_fig2, Token::Ayano{data: AyanoBlock{
-                                                                                ident: StaticDebug(rand::thread_rng().gen()),display_state: DisplayState::NotDisplayed,is_static: false,code: r"@fig: src = 'path/to/image.jpg'".into(),insert_path: None,
-                                                                                spaces_before: 0,}},
+    test! {ayano_fig2, Token::Ayano{data: AyanoBlock{ident: StaticDebug(rand::thread_rng().gen()),display_state: DisplayState::NotDisplayed,is_static: false,code: "@fig: src = \"path/to/image.jpg\"".into(),insert_path: None,spaces_before: 0,}},
 r"
 \begin{figure}[h!]
 \centering
 \includegraphics[width = 0.9 \textwidth]{path/to/image.jpg}
 \end{figure}"}
     test! {ayano_fig3, Token::Ayano{data: AyanoBlock{
-        ident: StaticDebug(rand::thread_rng().gen()), display_state: DisplayState::NotDisplayed,is_static: false,code: r#"@fig: src = 'path/to/image.jpg', ident = "meow""#.into(),insert_path: None,
+        ident: StaticDebug(rand::thread_rng().gen()), display_state: DisplayState::NotDisplayed,is_static: false,code: r#"@fig: src = "path/to/image.jpg", ident = "meow""#.into(),insert_path: None,
         spaces_before: 0,
         }},
 r#"

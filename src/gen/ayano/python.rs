@@ -127,7 +127,7 @@ mod tests {
             &token,
             "absent_function",
             |res, _| Ok::<_, super::PyErr>(res.str()?.to_string()),
-            "",
+            ".",
         )
         .expect_err("Should get error for non-existent function call");
     }
@@ -144,7 +144,7 @@ mod tests {
             &token,
             "ok_function",
             |res, _| Ok::<_, super::PyErr>(res.str()?.to_string()),
-            "",
+            ".",
         );
 
         // assert

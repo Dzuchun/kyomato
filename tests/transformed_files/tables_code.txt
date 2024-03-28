@@ -132,6 +132,7 @@
 \fnt
 Наступний тест. Тут протестуємо таблиці і блоки коду.
 \subsection{Таблиці}
+
 \tb Звичайні таблиці; Можуть всередині мати \textbf{формули} чи \textit{посилання} на інші штуки
 \begin{table}[h!]
 \fnt
@@ -147,6 +148,7 @@
 \label{tab:example_1}
 \end{center}
 \end{table}
+
 \tb Таблиця цілком собі може не мати ідентифікатора або опису:
 \begin{table}[h!]
 \fnt
@@ -162,6 +164,7 @@
 \end{table}
 
 \subsection{Блоки коду}
+
 \tb Наразі мають досить обмежену підтримку, адже у $\LaTeX$ немає нативного поняття блоків коду.
 \tbln На щастя, у \textbf{markdown} таке поняття є\footnotemark[2]\footnotetext[2]{Принаймні, \textit{Obsidian} таке робить}:
 \begin{minted}[linenos, mathescape, autogobble, breaklines]{rust}

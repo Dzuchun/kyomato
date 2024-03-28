@@ -134,7 +134,7 @@ Here's a basic Ayano explanation:
 \tbln Essentially, Ayano blocks are regular code blocks, having `python, Ayano` marked as their language. This sort of codeblocks are treated completely differently by the parser - these blocks are supposed to allow arbitrary python code execution for data generation and analysis.
 \tbln For this example, we'll only consider examples that do not interact with the filesystem.
 \tbln Say, you have some sort of dataset, you wish to find a mean a deviation of. Here's a way to do that with Ayano (without filesystem interaction):
-\tbln You might notice, that there's actually nothing displayed above in the document. That's due to \textit{static blocks} leaving nothing behind them. To actually display the dataset, we would use a regular, non-static Ayano block: \newline
+\tbln You might notice, that there's actually nothing displayed above in the document. That's due to \textit{static blocks} leaving nothing behind them. To actually display the dataset, we would use a regular, non-static Ayano block: \\
 [1, 1, 2, 3, 2, 5, 5, 6, 2, 1, 4, 9]
 \tbln Above you should see a python's `str` representation of initial dataset.
 \tbln Now, let's try calculating mean and the deviation. To achieve that, I'll use `statistics` module: 3.4$\pm$2.5
@@ -165,7 +165,7 @@ initial data & cmp to mean & square & absdev\\ \hline
 \end{center}
 \end{table}
 
-\tbln Above you can see that crazy table, and you also can refer to it (\ref{tab:crazy_table}).
+\tb Above you can see that crazy table, and you also can refer to it (\ref{tab:crazy_table}).
 \tbln That's pretty much it for Ayano blocks that do not access the filesystem.
 \subsection{Code blocks}
 
@@ -177,8 +177,7 @@ data = [1, 1, 2, 3, 2, 5, 5, 6, 2, 1, 4, 9]
 # Keep that in mind: ALL changes introduced by static blocks will be visible by ALL function blocks.
 \end{minted}
 
-That's a static block, declaring initial dataset
-\newline
+That's a static block, declaring initial dataset \\
 
 \begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
 from statistics import stdev, mean
@@ -187,8 +186,7 @@ deviation = stdev(data)
 @dev: mean_val, deviation
 \end{minted}
 
-mean and deviation calculations
-\newline
+mean and deviation calculations \\
 
 \begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
 from statistics import stdev, mean
@@ -197,8 +195,7 @@ deviation = stdev(data)
 f"{mean_val} $\pm$ {deviation}"
 \end{minted}
 
-mean and deviation calculations, but without value-error formatting
-\newline
+mean and deviation calculations, but without value-error formatting \\
 
 \begin{minted}[linenos, mathescape, autogobble, breaklines]{python}
 # look at the last line first
@@ -212,8 +209,7 @@ cells = list([[("err", val, sqrt(val)), "greater" if val >= mean_val else "less"
 @gen_table: lambda r,c: header[c] if r == 0 else cells[r-1][c]; rows = 13, columns = 4, ident="crazy_table", caption = "A crazy table containing a bunch of stuff"
 \end{minted}
 
-that chaotic table generation example
-\newline
+that chaotic table generation example \\
 
 
 \end{document}

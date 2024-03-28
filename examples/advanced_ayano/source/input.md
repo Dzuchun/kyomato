@@ -42,32 +42,32 @@ two + three
 
 Ayano can be used to insert csv tables (possibly generated at runtime too). Here's a special syntax for it:
 ```python, Ayano * "table insertion example"
-@csv_table: src=data/20240327230336_8798.csv, caption="cred: [randat](http://randat.com/)", ident = "random_table1"
+@csv_table: src="data/20240327230336_8798.csv", caption="cred: [randat](http://randat.com/)", ident = "random_table1"
 ```
 
 This can be combined with insertion blocks to achieve generated table insertion; you can specify a path relative to the inserted file,
 ```python, Ayano * "An example of runtime-generated table insertion" ~ data/doing_stuff.py
-@csv_table: src=calculations_table.csv
+@csv_table: src="calculations_table.csv"
 ```
 
 ... but you've not forced to do that; you may do execution-relative path too:
 ```python, Ayano * "An example of runtime-generated table insertion with execution-relative path" ~ data/doing_stuff.py
-@csv_table: src=data/calculations_table.csv
+@csv_table: src="data/calculations_table.csv"
 ```
 
 An of course, once data was already generated (it happened twice here, twice, in fact), you can insert it without any script:
 ```python, Ayano * "An example of runtime-generated table insertion with execution-relative path"
-@csv_table: src=data/calculations_table.csv
+@csv_table: src="data/calculations_table.csv"
 ```
 
 You can also restrict the columns and rows you want, for example:
 ```python, Ayano * "This is only a part of the table above, due to specified column and row restrictions"
-@csv_table: src=data/calculations_table.csv, rows = 3..4, columns = ["name"], caption = "That's a-bit-cut table!"
+@csv_table: src="data/calculations_table.csv", rows = 3..4, columns = ["name"], caption = "That's a-bit-cut table!"
 ```
 
 There's also a special columns syntax to display some columns in value-error format:
 ```python, Ayano * "You can see values having error right beside them, and formatted accordingly!"
-@csv_table: src=data/calculations_table.csv, columns = ["name", ("value", "err"), "%"], caption = "That's a table with value-error formatting!"
+@csv_table: src="data/calculations_table.csv", columns = ["name", ("value", "err"), "%"], caption = "That's a table with value-error formatting!"
 ```
 
 That's pretty much it, regarding tables.
@@ -100,7 +100,7 @@ x = np.arange(-pi, pi, 0.01)
 y = np.sin(x)
 plt.plot(x, y)
 plt.savefig("sine_graph.png")
-@fig: src = sine_graph.png, ident = "other_sine_graph", caption = "That's another way to include a figure from Ayano!", width = 0.9
+@fig: src = "sine_graph.png", ident = "other_sine_graph", caption = "That's another way to include a figure from Ayano!", width = 0.9
 ```
 The only real upside I can see here - you can generate-and-include figures with prior-unknown names or locations
 
@@ -108,7 +108,7 @@ Oh, and you also can specify width of the figure this way, if it matters to you,
 
 And of course you can generate a figure with inserted block too!
 ```python, Ayano * "That's a third way to do the same thing!" ~ scripts/generate_sine.py
-@fig: src = other_sine_graph.png, ident = "yet_another_sine_graph", caption = "The same sine. Again.", width = 0.2
+@fig: src = "other_sine_graph.png", ident = "yet_another_sine_graph", caption = "The same sine. Again.", width = 0.2
 ```
 
 Note, that in the last example, script actually saves sine into a folder near input markdown fine, and yet `Kyomato` will be able to find it (if configured properly, that is)

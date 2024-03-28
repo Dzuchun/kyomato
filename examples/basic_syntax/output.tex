@@ -134,14 +134,17 @@ Here's a quick rundown of supported markdown syntax:
 \section{Headers}
 
 \textbf{Up to 6 deep}
+
 \tb Inline math: $y = x^2\qquad \text{- is a parabola equation}$
 \tbln Display math:
 \begin{equation}
 \Gamma(z) = \int\limits_{0}^{+\infty} \exp(-t) t^{z-1} dt \qquad \text{- це Euler's Gamma-function definition}
 \label{eq:gamma_function}
 \end{equation}
+
 \tb Page breaks:
 \clearpage
+
 \tb This text must appear on the next page
 \tbln Figures (take note of the caption and ident):
 \begin{figure}[h!]
@@ -150,6 +153,7 @@ Here's a quick rundown of supported markdown syntax:
 \caption{\capfnt These are all loss functions, technically making this image a loss meme}
 \label{fig:loss_meme}
 \end{figure}
+
 \tb Tables:
 \begin{table}[h!]
 \fnt
@@ -175,6 +179,7 @@ Here's a quick rundown of supported markdown syntax:
 \label{tab:pedals}
 \end{center}
 \end{table}
+
 \tb Hyper references: \href{https://www.somewebsite.com/}{some website}
 \tbln Footnotes: say, I need to explain this text, but not include the actual explanation right where I write it\footnotemark[1]\footnotetext[1]{You can absolutely do this! \textit{Note}, that despite this footnote definition is on a separate page at the end, actual document output includes the footnote in a more convenient spot.}
 \tbln Object references: this refers to table: \ref{tab:pedals}, this refers to figure: \ref{fig:loss_meme}, an this one to the equation at the beginning: \ref{eq:gamma_function}.
@@ -183,12 +188,14 @@ Here's a quick rundown of supported markdown syntax:
 \item First item
 \item Second item
 \item Third item
-\end{itemize}\tb Here's an enumeration:
+\end{itemize}
+\tb Here's an enumeration:
 \begin{enumerate}
 \item First item
 \item Second item
 \item Third item
-\end{enumerate}\tb Here are alphabetic enumerations (latin and cyrillic are only supported, for now)
+\end{enumerate}
+\tb Here are alphabetic enumerations (latin and cyrillic are only supported, for now)
 \begin{enumerate}
 \item[a.] First item
 \item[b.] Second item
@@ -198,14 +205,16 @@ Here's a quick rundown of supported markdown syntax:
 \item[а.] First item
 \item[б.] Second item
 \item[в.] Third item
-\end{enumerate}\tb Cyrillic implementation detail: наразі у якості порядку елементів береться буквально 'а'..'я'. Тобто, згідно з \href{https://en.wikipedia.org/wiki/Cyrillic_(Unicode_block)}{таблицею юнікоду}, тут поки що реалізовано терористичний алфавіт:
+\end{enumerate}
+\tb Cyrillic implementation detail: наразі у якості порядку елементів береться буквально 'а'..'я'. Тобто, згідно з \href{https://en.wikipedia.org/wiki/Cyrillic_(Unicode_block)}{таблицею юнікоду}, тут поки що реалізовано терористичний алфавіт:
 \begin{enumerate}
 \item[а.] Перший елемент
 \item[б.] Другий елемент
 \item[в.] Третій елемент
 \item[г.] Четвертий елемент
 \item[д.] Шостий елемент (не вистачає ґ)
-\end{enumerate}\tb Це може змінитись у майбутньому, тож краще поки що утриматись від використання кириличних списків.
+\end{enumerate}
+\tb Це може змінитись у майбутньому, тож краще поки що утриматись від використання кириличних списків.
 \tbln Finally, code blocks are supported:
 \begin{minted}[linenos, mathescape, autogobble, breaklines]{lua}
 print("Hello lua!")
@@ -237,6 +246,7 @@ impl<T> Eq for Equivalent<T> {}
 // This is a real type used in this project's codebase to allow error comparison for testing
 // Although I might decide to remove it in the future
 \end{minted}
+
 
 \tb These blocks are powered by \href{https://github.com/gpoore/minted}{minted}, so to get full list of supported languages, check their docs out.
 \tbln This is all of the markdown syntax supported for now. However, there's an \textit{otherside} to `kyomato`'s capabilities - namely, `ayano` blocks.

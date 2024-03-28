@@ -139,13 +139,13 @@ This is a test of ayano-generated stuff.
 \label{fig:circle}
 \end{figure}
 
-\tbln Here's a table with specified width:
+\tb Here's a table with specified width:
 \begin{figure}[h!]
 \centering
 \includegraphics[width=0.2\textwidth]{graph.png}
 \end{figure}
 
-\tbln This is expected to be a generated table:
+\tb This is expected to be a generated table:
 \begin{table}[h!]
 \fnt
 \begin{center}

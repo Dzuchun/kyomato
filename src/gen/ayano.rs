@@ -270,11 +270,11 @@ y = x / 100
     function! {csv_table1, "@csv_table: src=\"src/gen/ayano/test_table.csv\", columns=[(\"a\", \"a_err\")]",
     "('tab', ['a'], [[('err', '1.0', '0.001')], [('err', '1.0', '0.001')], [('err', '1.0', '0.001')], [('err', '1.0', '0.001')], [('err', '1.0', '0.001')], [('err', '1.0', '0.001')], [('err', '1.0', '0.001')], [('err', '1.0', '0.001')]], None, None)"}
 
-    function! {csv_table2, "@csv_table: src=\"src/gen/ayano/test_table.csv\", rows = 3..5, columns=[(\"a\", \"a_err\"), \"b\", (\"d\", \"d_err\")]",
+    function! {csv_table2, "@csv_table: src=\"src/gen/ayano/test_table.csv\", rows = 3..4, columns=[(\"a\", \"a_err\"), \"b\", (\"d\", \"d_err\")]",
     "('tab', ['a', 'b', 'd'], [[('err', '1.0', '0.001'), '3', ('err', '-5', '0.001')]], None, None)"}
 
     function! {gen_table1, "@gen_table: lambda r,c: r + c; rows=4, columns=2",
-    "('tab', [[0, 1], [1, 2], [2, 3], [3, 4]], None, None)"}
+    "('tab', [0, 1], [[1, 2], [2, 3], [3, 4]], None, None)"}
 
     macro_rules! static_function {
         {$name:ident, $static_code:literal, $function_code:literal, $expected_output:literal} => {
@@ -320,7 +320,7 @@ r"y = x + 1
 y", "2"}
     static_function! {function_static_err, "x, x_err = 1.0, 0.025", "@dev: x, x_err", "('err', 1.0, 0.025)"}
     static_function! {function_static_gen_tab1, "table = [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]]", "@gen_table: lambda r,c: table[r][c]; rows = 2, columns = 3",
-    "('tab', [[1, 2, 3], [5, 6, 7]], None, None)"}
+    "('tab', [1, 2, 3], [[5, 6, 7]], None, None)"}
 
     macro_rules! static_function_function {
         {$name:ident, $static_code:literal, $function1_code:literal, $function2_code:literal, $expected_output1:literal, $expected_output2:literal} => {
@@ -1110,20 +1110,30 @@ impl Syntax<'_> {
                 caption,
                 width,
             } => {
-                let src = Path::new(src);
-                let src = match path_engine.csv(src, insert_path.as_deref()) {
-                    Ok(existing_table) => existing_table,
-                    Err(error) => {
-                        // figure was not found, but this can be ok, if program generates it itself
-                        // but it would be wise to log this as a warn
-                        eprintln!("Figure file not found at pre-analysis: {error:?}");
-                        Cow::Borrowed(Path::new(src))
-                    }
-                };
-                let src = &*src.to_string_lossy();
-                writer.write_str("return \"fig\", \"")?;
-                writer.write_str(src)?;
-                writer.write_str("\", ")?;
+                let mut src: Cow<'_, str> = Cow::Borrowed(src);
+                if src.starts_with(['\'', '\"']) && src.ends_with(['\'', '\"']) {
+                    // if this insert ident is seemingly a static string,
+                    // try checking it out, and warning if it does not exist
+                    // TODO add option to opt this out
+                    let src_path = src.trim_matches(['\'', '\"']);
+                    let src_path = Path::new(&*src_path);
+                    let src_path = match path_engine.csv(src_path, insert_path.as_deref()) {
+                        Ok(existing_table) => existing_table,
+                        Err(error) => {
+                            // figure was not found, but this can be ok, if program generates it itself
+                            // but it would be wise to log this as a warn
+                            eprintln!("Figure file not found at pre-analysis: {error:?}");
+                            Cow::Borrowed(Path::new(src_path))
+                        }
+                    };
+                    let mut s = src_path.to_string_lossy().into_owned();
+                    s.push('\"');
+                    s.insert(0, '\"');
+                    src = s.into();
+                }
+                writer.write_str("return \"fig\", ")?;
+                writer.write_str(&src)?;
+                writer.write_str(", ")?;
                 if let Some(ident) = ident {
                     writer.write_str(ident)?;
                 } else {
@@ -1149,32 +1159,44 @@ impl Syntax<'_> {
                 ident,
                 caption,
             } => {
-                let src = Path::new(src);
-                let mut src = match path_engine.csv(src, insert_path.as_deref()) {
-                    Ok(existing_table) => existing_table,
-                    Err(error) => {
-                        // table was not found, but this can be ok, if program generates it itself
-                        // but it would be wise to log this as a warn
-                        eprintln!("Table file not found at pre-analysis: {error:?}");
-                        Cow::Borrowed(src)
+                let mut src: Cow<'_, str> = Cow::Borrowed(src);
+                if src.starts_with(['\'', '\"']) && src.ends_with(['\'', '\"']) {
+                    // if this insert ident is seemingly a static string,
+                    // try checking it out, and warning if it does not exist
+                    // TODO add option to opt this out
+                    let src_path = src.trim_matches(['\'', '\"']);
+                    let src_path = Path::new(&*src_path);
+                    let mut src_path = match path_engine.csv(src_path, insert_path.as_deref()) {
+                        Ok(existing_table) => existing_table,
+                        Err(error) => {
+                            // table was not found, but this can be ok, if program generates it itself
+                            // but it would be wise to log this as a warn
+                            eprintln!("Table file not found at pre-analysis: {error:?}");
+                            Cow::Borrowed(Path::new(src_path))
+                        }
+                    };
+                    // the problem here - this type of syntax specifically relies on Python reading the file themselves
+                    // and if there is an insert path - Python will be executed at the insert directory
+                    // to check for that, we do
+                    if let Some(insert_directory) =
+                        insert_path.as_ref().map(|p| p.parent()).flatten()
+                    {
+                        // if there's no insert path - ignore that
+                        // if insert path has no parent - it's a file in current execution directory - no need to relocate the path
+                        // I could've implemented this thing myself, but why would I, was already done:
+                        if let Some(rebased) = pathdiff::diff_paths(&src_path, insert_directory) {
+                            src_path = rebased.into();
+                        }
                     }
-                };
-                // the problem here - this type of syntax specifically relies on Python reading the file themselves
-                // and if there is an insert path - Python will be executed at the insert directory
-                // to check for that, we do
-                if let Some(insert_directory) = insert_path.as_ref().map(|p| p.parent()).flatten() {
-                    // if there's no insert path - ignore that
-                    // if insert path has no parent - it's a file in current execution directory - no need to relocate the path
-                    // I could've implemented this thing myself, but why would I, was already done:
-                    if let Some(rebased) = pathdiff::diff_paths(&src, insert_directory) {
-                        src = rebased.into();
-                    }
+                    let mut s = src_path.to_string_lossy().into_owned();
+                    s.push('\"');
+                    s.insert(0, '\"');
+                    src = s.into();
                 }
-                let src = &*src.to_string_lossy();
                 writer.write_line("import csv")?;
-                writer.write_str("with open('")?;
-                writer.write_str(src)?;
-                writer.write_line("') as ___csv_file___:")?;
+                writer.write_str("with open(")?;
+                writer.write_str(&src)?;
+                writer.write_line(") as ___csv_file___:")?;
                 writer.write_line(
                     "    ___dialect___ = csv.Sniffer().sniff(___csv_file___.read(1024))",
                 )?;
@@ -1235,7 +1257,7 @@ impl Syntax<'_> {
 
                 // If a dedicated line generator is necessary, write out one now
                 if let Some(rows_to) = rows.to() {
-                    let line_iterations = rows_to - rows.from().unwrap_or_default() + 1;
+                    let line_iterations = rows_to - rows.from().unwrap_or(1) + 1;
                     writer.write_line("    def ___line_generator___():")?;
                     write!(writer, "        for i in range({line_iterations}):")?; // it's again numbers, can't do much better
                     writer.breakline()?;
@@ -1283,7 +1305,11 @@ impl Syntax<'_> {
                 writer.write_str("___generator___ = ")?;
                 writer.write_line(generator)?;
                 writer.write_str("return \"tab\", [")?;
-                for row_index in 0..rows {
+                for column_index in 0..columns {
+                    write!(writer, "___generator___(0, {column_index}), ")?;
+                }
+                writer.write_str("], [")?;
+                for row_index in 1..rows {
                     writer.write_str("[")?;
                     for column_index in 0..columns {
                         write!(writer, "___generator___({row_index}, {column_index}), ")?;
@@ -1347,7 +1373,9 @@ mod syntax_display_tests {
         }},
 r#"import csv
 with open(file_path) as ___csv_file___:
-    ___reader___ = csv.DictReader(___csv_file___, delimiter=',', skipinitialspace=True, strict=True)
+    ___dialect___ = csv.Sniffer().sniff(___csv_file___.read(1024))
+    ___csv_file___.seek(0)
+    ___reader___ = csv.DictReader(___csv_file___, dialect=___dialect___, skipinitialspace=True)
     def ___line_generator___():
         for i in range(10):
             line = ___reader___.__next__()
@@ -1356,11 +1384,11 @@ with open(file_path) as ___csv_file___:
     }
     test! {gen_table1, SyntaxData {indent: 0, syntax: Syntax::GenTable { generator: "lambda r,c:1", rows: 2, columns: 3, ident: None, caption: Some("caption_variable") }},
 r#"___generator___ = lambda r,c:1
-return "tab", [[___generator___(0, 0), ___generator___(0, 1), ___generator___(0, 2), ], [___generator___(1, 0), ___generator___(1, 1), ___generator___(1, 2), ], ], None, caption_variable"#
+return "tab", [___generator___(0, 0), ___generator___(0, 1), ___generator___(0, 2), ], [[___generator___(1, 0), ___generator___(1, 1), ___generator___(1, 2), ], ], None, caption_variable"#
     }
     test! {gen_table2, SyntaxData {indent: 4, syntax: Syntax::GenTable { generator: "lambda r,c:1", rows: 2, columns: 3, ident: Some("\"table2\""), caption: None }},
 r#"    ___generator___ = lambda r,c:1
-    return "tab", [[___generator___(0, 0), ___generator___(0, 1), ___generator___(0, 2), ], [___generator___(1, 0), ___generator___(1, 1), ___generator___(1, 2), ], ], "table2", None"#
+    return "tab", [___generator___(0, 0), ___generator___(0, 1), ___generator___(0, 2), ], [[___generator___(1, 0), ___generator___(1, 1), ___generator___(1, 2), ], ], "table2", None"#
     }
 }
 
@@ -1418,7 +1446,9 @@ mod last_line_tests {
     test! {csv_tab1e_simple, "@csv_table: src=\"some/path/idk.csv\"", r#"
 import csv
 with open("some/path/idk.csv") as ___csv_file___:
-    ___reader___ = csv.DictReader(___csv_file___, delimiter=',', skipinitialspace=True, strict=True)
+    ___dialect___ = csv.Sniffer().sniff(___csv_file___.read(1024))
+    ___csv_file___.seek(0)
+    ___reader___ = csv.DictReader(___csv_file___, dialect=___dialect___, skipinitialspace=True)
     return "tab", list(___reader___.fieldnames), list([list([line[f] for f in line]) for line in ___reader___]), None, None
     "#}
 
@@ -1426,19 +1456,25 @@ with open("some/path/idk.csv") as ___csv_file___:
     test! {csv_tab1e_rows1, "@csv_table: src=\"some/path/idk.csv\", rows=..", r#"
 import csv
 with open("some/path/idk.csv") as ___csv_file___:
-    ___reader___ = csv.DictReader(___csv_file___, delimiter=',', skipinitialspace=True, strict=True)
+    ___dialect___ = csv.Sniffer().sniff(___csv_file___.read(1024))
+    ___csv_file___.seek(0)
+    ___reader___ = csv.DictReader(___csv_file___, dialect=___dialect___, skipinitialspace=True)
     return "tab", list(___reader___.fieldnames), list([list([line[f] for f in line]) for line in ___reader___]), None, None
     "#}
     test! {csv_tab1e_rows2, "@csv_table: src=\"some/path/idk.csv\", rows=1..", r#"
 import csv
 with open("some/path/idk.csv") as ___csv_file___:
-    ___reader___ = csv.DictReader(___csv_file___, delimiter=',', skipinitialspace=True, strict=True)
+    ___dialect___ = csv.Sniffer().sniff(___csv_file___.read(1024))
+    ___csv_file___.seek(0)
+    ___reader___ = csv.DictReader(___csv_file___, dialect=___dialect___, skipinitialspace=True)
     return "tab", list(___reader___.fieldnames), list([list([line[f] for f in line]) for line in ___reader___]), None, None
     "#}
     test! {csv_tab1e_rows3, "@csv_table: src=\"some/path/idk.csv\", rows=10..", r#"
 import csv
 with open("some/path/idk.csv") as ___csv_file___:
-    ___reader___ = csv.DictReader(___csv_file___, delimiter=',', skipinitialspace=True, strict=True)
+    ___dialect___ = csv.Sniffer().sniff(___csv_file___.read(1024))
+    ___csv_file___.seek(0)
+    ___reader___ = csv.DictReader(___csv_file___, dialect=___dialect___, skipinitialspace=True)
     for i in range(9):
         ___reader___.__next__()
     return "tab", list(___reader___.fieldnames), list([list([line[f] for f in line]) for line in ___reader___]), None, None
@@ -1446,17 +1482,21 @@ with open("some/path/idk.csv") as ___csv_file___:
     test! {csv_tab1e_rows4, "@csv_table: src=\"some/path/idk.csv\", rows=..10", r#"
 import csv
 with open("some/path/idk.csv") as ___csv_file___:
-    ___reader___ = csv.DictReader(___csv_file___, delimiter=',', skipinitialspace=True, strict=True)
+    ___dialect___ = csv.Sniffer().sniff(___csv_file___.read(1024))
+    ___csv_file___.seek(0)
+    ___reader___ = csv.DictReader(___csv_file___, dialect=___dialect___, skipinitialspace=True)
     def ___line_generator___():
         for i in range(9):
             line = ___reader___.__next__()
             yield list([line[f] for f in line])
     return "tab", list(___reader___.fieldnames), list(___line_generator___()), None, None
     "#}
-    test! {csv_tab1e_rows5, "@csv_table: src=\"some/path/idk.csv\", rows=5..=100", r#"
+    test! {csv_tab1e_rows5, "@csv_table: src=\"some/path/idk.csv\", rows=5..100", r#"
 import csv
 with open("some/path/idk.csv") as ___csv_file___:
-    ___reader___ = csv.DictReader(___csv_file___, delimiter=',', skipinitialspace=True, strict=True)
+    ___dialect___ = csv.Sniffer().sniff(___csv_file___.read(1024))
+    ___csv_file___.seek(0)
+    ___reader___ = csv.DictReader(___csv_file___, dialect=___dialect___, skipinitialspace=True)
     for i in range(4):
         ___reader___.__next__()
     def ___line_generator___():
@@ -1465,12 +1505,14 @@ with open("some/path/idk.csv") as ___csv_file___:
             yield list([line[f] for f in line])
     return "tab", list(___reader___.fieldnames), list(___line_generator___()), None, None
     "#}
-    test! {csv_tab1e_rows6, "@csv_table: src=\"some/path/idk.csv\", rows=1..100", r#"
+    test! {csv_tab1e_rows6, "@csv_table: src=\"some/path/idk.csv\", rows=1..=100", r#"
 import csv
 with open("some/path/idk.csv") as ___csv_file___:
-    ___reader___ = csv.DictReader(___csv_file___, delimiter=',', skipinitialspace=True, strict=True)
+    ___dialect___ = csv.Sniffer().sniff(___csv_file___.read(1024))
+    ___csv_file___.seek(0)
+    ___reader___ = csv.DictReader(___csv_file___, dialect=___dialect___, skipinitialspace=True)
     def ___line_generator___():
-        for i in range(98):
+        for i in range(100):
             line = ___reader___.__next__()
             yield list([line[f] for f in line])
     return "tab", list(___reader___.fieldnames), list(___line_generator___()), None, None
@@ -1480,25 +1522,33 @@ with open("some/path/idk.csv") as ___csv_file___:
     test! {csv_tab1e_columns1, r#"@csv_table: src="some/path/idk.csv", columns = []"#, r#"
 import csv
 with open("some/path/idk.csv") as ___csv_file___:
-    ___reader___ = csv.DictReader(___csv_file___, delimiter=',', skipinitialspace=True, strict=True)
+    ___dialect___ = csv.Sniffer().sniff(___csv_file___.read(1024))
+    ___csv_file___.seek(0)
+    ___reader___ = csv.DictReader(___csv_file___, dialect=___dialect___, skipinitialspace=True)
     return "tab", [], list([[] for line in ___reader___]), None, None
     "#}
     test! {csv_tab1e_columns2, r#"@csv_table: src="some/path/idk.csv", columns = ["a"]"#, r#"
 import csv
 with open("some/path/idk.csv") as ___csv_file___:
-    ___reader___ = csv.DictReader(___csv_file___, delimiter=',', skipinitialspace=True, strict=True)
+    ___dialect___ = csv.Sniffer().sniff(___csv_file___.read(1024))
+    ___csv_file___.seek(0)
+    ___reader___ = csv.DictReader(___csv_file___, dialect=___dialect___, skipinitialspace=True)
     return "tab", ["a", ], list([[line["a"], ] for line in ___reader___]), None, None
     "#}
     test! {csv_tab1e_columns3, r#"@csv_table: src="some/path/idk.csv", columns = ["a", ("b", "b_err")]"#, r#"
 import csv
 with open("some/path/idk.csv") as ___csv_file___:
-    ___reader___ = csv.DictReader(___csv_file___, delimiter=',', skipinitialspace=True, strict=True)
+    ___dialect___ = csv.Sniffer().sniff(___csv_file___.read(1024))
+    ___csv_file___.seek(0)
+    ___reader___ = csv.DictReader(___csv_file___, dialect=___dialect___, skipinitialspace=True)
     return "tab", ["a", "b", ], list([[line["a"], ("err", line["b"], line["b_err"]), ] for line in ___reader___]), None, None
     "#}
     test! {csv_table_combined1, r#"@csv_table: src="some/path/idk.csv", columns = ["a", ("b", "b_err")], rows =..10"#, r#"
 import csv
 with open("some/path/idk.csv") as ___csv_file___:
-    ___reader___ = csv.DictReader(___csv_file___, delimiter=',', skipinitialspace=True, strict=True)
+    ___dialect___ = csv.Sniffer().sniff(___csv_file___.read(1024))
+    ___csv_file___.seek(0)
+    ___reader___ = csv.DictReader(___csv_file___, dialect=___dialect___, skipinitialspace=True)
     def ___line_generator___():
         for i in range(9):
             line = ___reader___.__next__()
@@ -1508,7 +1558,23 @@ with open("some/path/idk.csv") as ___csv_file___:
     test! {csv_table_combined2, r#"@csv_table: src="some/path/idk.csv", columns = ["a", ("b", "b_err")], rows =10..=100"#, r#"
 import csv
 with open("some/path/idk.csv") as ___csv_file___:
-    ___reader___ = csv.DictReader(___csv_file___, delimiter=',', skipinitialspace=True, strict=True)
+    ___dialect___ = csv.Sniffer().sniff(___csv_file___.read(1024))
+    ___csv_file___.seek(0)
+    ___reader___ = csv.DictReader(___csv_file___, dialect=___dialect___, skipinitialspace=True)
+    for i in range(9):
+        ___reader___.__next__()
+    def ___line_generator___():
+        for i in range(91):
+            line = ___reader___.__next__()
+            yield [line["a"], ("err", line["b"], line["b_err"]), ]
+    return "tab", ["a", "b", ], list(___line_generator___()), None, None
+    "#}
+    test! {csv_table_combined3, r#"@csv_table: src="some/path/idk.csv", columns = ["a", ("b", "b_err")], rows =10..100"#, r#"
+import csv
+with open("some/path/idk.csv") as ___csv_file___:
+    ___dialect___ = csv.Sniffer().sniff(___csv_file___.read(1024))
+    ___csv_file___.seek(0)
+    ___reader___ = csv.DictReader(___csv_file___, dialect=___dialect___, skipinitialspace=True)
     for i in range(9):
         ___reader___.__next__()
     def ___line_generator___():
@@ -1517,25 +1583,13 @@ with open("some/path/idk.csv") as ___csv_file___:
             yield [line["a"], ("err", line["b"], line["b_err"]), ]
     return "tab", ["a", "b", ], list(___line_generator___()), None, None
     "#}
-    test! {csv_table_combined3, r#"@csv_table: src="some/path/idk.csv", columns = ["a", ("b", "b_err")], rows =10..100"#, r#"
-import csv
-with open("some/path/idk.csv") as ___csv_file___:
-    ___reader___ = csv.DictReader(___csv_file___, delimiter=',', skipinitialspace=True, strict=True)
-    for i in range(9):
-        ___reader___.__next__()
-    def ___line_generator___():
-        for i in range(89):
-            line = ___reader___.__next__()
-            yield [line["a"], ("err", line["b"], line["b_err"]), ]
-    return "tab", ["a", "b", ], list(___line_generator___()), None, None
-    "#}
 
     test! {gen_table1, r#"@gen_table: lambda row, col: 1; rows= 5, columns =2"#,
 r#"___generator___ = lambda row, col: 1
-return "tab", [[___generator___(0, 0), ___generator___(0, 1), ], [___generator___(1, 0), ___generator___(1, 1), ], [___generator___(2, 0), ___generator___(2, 1), ], [___generator___(3, 0), ___generator___(3, 1), ], [___generator___(4, 0), ___generator___(4, 1), ], ], None, None"#}
+return "tab", [___generator___(0, 0), ___generator___(0, 1), ], [[___generator___(1, 0), ___generator___(1, 1), ], [___generator___(2, 0), ___generator___(2, 1), ], [___generator___(3, 0), ___generator___(3, 1), ], [___generator___(4, 0), ___generator___(4, 1), ], ], None, None"#}
     test! {gen_table2, r#"@gen_table: lambda row, col: -1;columns =2, rows= 5"#,
 r#"___generator___ = lambda row, col: -1
-return "tab", [[___generator___(0, 0), ___generator___(0, 1), ], [___generator___(1, 0), ___generator___(1, 1), ], [___generator___(2, 0), ___generator___(2, 1), ], [___generator___(3, 0), ___generator___(3, 1), ], [___generator___(4, 0), ___generator___(4, 1), ], ], None, None"#}
+return "tab", [___generator___(0, 0), ___generator___(0, 1), ], [[___generator___(1, 0), ___generator___(1, 1), ], [___generator___(2, 0), ___generator___(2, 1), ], [___generator___(3, 0), ___generator___(3, 1), ], [___generator___(4, 0), ___generator___(4, 1), ], ], None, None"#}
 }
 
 #[derive(Debug, PartialEq, thiserror::Error)]
@@ -1801,8 +1855,8 @@ mod parsing_tests {
     test! {table_nocaption, |py| {
         PyTuple::new(py, [
         "tab".into_py(py),
+        PyList::new(py, ["header1".into_py(py), 1.0.into_py(py)]).into_py(py),
         PyList::new(py, [
-            PyList::new(py, ["header1".into_py(py), 1.0.into_py(py)]),
             PyList::new(py, ["cell_11".into_py(py), 0.25.into_py(py)]),
             PyList::new(py, ["cell_21".into_py(py), (-2).into_py(py)]),
         ]).into_py(py),
@@ -1822,8 +1876,8 @@ mod parsing_tests {
     test! {table_value_error, |py| {
         PyTuple::new(py, [
         "tab".into_py(py),
+        PyList::new(py, ["header1".into_py(py), 1.0.into_py(py)]).into_py(py),
         PyList::new(py, [
-            PyList::new(py, ["header1".into_py(py), 1.0.into_py(py)]),
             PyList::new(py, [PyTuple::new(py, [
                 "err".into_py(py),
                 1.012345.into_py(py),
@@ -1847,8 +1901,8 @@ mod parsing_tests {
     test! {table_caption, |py| {
         PyTuple::new(py, [
         <&'static str as IntoPy<pyo3::Py<PyAny>>>::into_py("tab", py),
+        PyList::new(py, ["header1".into_py(py), 1.0.into_py(py)]).into_py(py),
         PyList::new(py, [
-            PyList::new(py, ["header1".into_py(py), 1.0.into_py(py)]),
             PyList::new(py, ["cell_11".into_py(py), 0.25.into_py(py)]),
             PyList::new(py, ["cell_21".into_py(py), (-2).into_py(py)]),
         ]).into_py(py),
@@ -2780,15 +2834,15 @@ fn parse_columns<'l>(input: &'l str) -> Vec<CsvTableColumn<'l>> {
     static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(REGEX_STR).expect("Bad regex syntax"));
     REGEX
         .captures_iter(input)
-        .map(|cap: Captures<'l>| {
-            match (cap.get(4), cap.get(1), cap.get(2)) {
+        .map(
+            |cap: Captures<'l>| match (cap.get(4), cap.get(1), cap.get(2)) {
                 (Some(col), _, _) => CsvTableColumn::Single(col.as_str().into()),
                 (_, Some(value), Some(error)) => {
                     CsvTableColumn::ValueError(value.as_str(), error.as_str())
                 }
                 _ => unreachable!(),
-            }
-        })
+            },
+        )
         .collect_vec()
 }
 
@@ -2828,5 +2882,4 @@ mod parse_columns_tests {
     test! {doc1, r#"["type",("a", "a_err")]"#, [c!("type"), ve!("a", "a_err")]}
     test! {maybe_bug1, r#"["name", ("value", "err"), "a"]"#, [c!("name"), ve!("value", "err"), c!("a")]}
     test! {bug1, r#"["name", ("value", "err"), "%"]"#, [c!("name"), ve!("value", "err"), c!("%")]}
-    
 }
